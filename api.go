@@ -23,8 +23,8 @@ func (c *CephAPIClient) Configure(ctx context.Context, endpoints []string, usern
 		if endpoint == "" {
 			return fmt.Errorf("endpoint is required")
 		}
-		if !strings.HasSuffix(endpoint, "/api") {
-			return fmt.Errorf("endpoint MUST end with '/api', got: %s", endpoint)
+		if strings.HasSuffix(endpoint, "/api") {
+			return fmt.Errorf("endpoint SHOULD NOT end with '/api', got: %s", endpoint)
 		}
 	}
 
@@ -92,7 +92,7 @@ func queryEndpoints(ctx context.Context, endpoints []string) (string, error) {
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-auth-check>
 
 func (c *CephAPIClient) AuthCheck(ctx context.Context) (bool, error) {
-	url := c.endpoint + "/auth/check?token=" + c.token
+	url := c.endpoint + "/api/auth/check?token=" + c.token
 	jsonPayload := []byte("{}")
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
@@ -141,7 +141,7 @@ func (c *CephAPIClient) Auth(ctx context.Context, username string, password stri
 		return "", fmt.Errorf("unable to encode authentication request: %w", err)
 	}
 
-	url := c.endpoint + "/auth"
+	url := c.endpoint + "/api/auth"
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return "", fmt.Errorf("unable to create authentication request: %w", err)
@@ -195,7 +195,7 @@ func (c *CephAPIClient) ClusterExportUser(ctx context.Context, entity string) (s
 		return "", fmt.Errorf("unable to encode request payload: %w", err)
 	}
 
-	url := c.endpoint + "/cluster/user/export"
+	url := c.endpoint + "/api/cluster/user/export"
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return "", fmt.Errorf("unable to create request: %w", err)
@@ -238,7 +238,7 @@ type CephAPIClusterUser struct {
 }
 
 func (c *CephAPIClient) ClusterListUsers(ctx context.Context) ([]CephAPIClusterUser, error) {
-	url := c.endpoint + "/cluster/user"
+	url := c.endpoint + "/api/cluster/user"
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create request: %w", err)
@@ -303,7 +303,7 @@ func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, ca
 		return fmt.Errorf("unable to encode request payload: %w", err)
 	}
 
-	url := c.endpoint + "/cluster/user"
+	url := c.endpoint + "/api/cluster/user"
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return fmt.Errorf("unable to create request: %w", err)
@@ -353,7 +353,7 @@ func (c *CephAPIClient) ClusterUpdateUser(ctx context.Context, entity string, ca
 		return fmt.Errorf("unable to encode request payload: %w", err)
 	}
 
-	url := c.endpoint + "/cluster/user"
+	url := c.endpoint + "/api/cluster/user"
 	httpReq, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return fmt.Errorf("unable to create request: %w", err)
@@ -380,7 +380,7 @@ func (c *CephAPIClient) ClusterUpdateUser(ctx context.Context, entity string, ca
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-cluster-user-user_entities>
 
 func (c *CephAPIClient) ClusterDeleteUser(ctx context.Context, userEntities string) error {
-	url := c.endpoint + "/cluster/user/" + userEntities
+	url := c.endpoint + "/api/cluster/user/" + userEntities
 	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("unable to create request: %w", err)
@@ -407,7 +407,7 @@ func (c *CephAPIClient) ClusterDeleteUser(ctx context.Context, userEntities stri
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-rgw-bucket>
 
 func (c *CephAPIClient) RGWListBucketNames(ctx context.Context) ([]string, error) {
-	url := c.endpoint + "/rgw/bucket"
+	url := c.endpoint + "/api/rgw/bucket"
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -456,7 +456,7 @@ type CephAPIRGWBucket struct {
 }
 
 func (c *CephAPIClient) RGWGetBucket(ctx context.Context, bucketName string) (CephAPIRGWBucket, error) {
-	url := c.endpoint + "/rgw/bucket/" + bucketName
+	url := c.endpoint + "/api/rgw/bucket/" + bucketName
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -494,7 +494,7 @@ func (c *CephAPIClient) RGWGetBucket(ctx context.Context, bucketName string) (Ce
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-rgw-user>
 
 func (c *CephAPIClient) RGWListUserNames(ctx context.Context) ([]string, error) {
-	url := c.endpoint + "/rgw/user"
+	url := c.endpoint + "/api/rgw/user"
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -550,7 +550,7 @@ type CephAPIRGWUser struct {
 }
 
 func (c *CephAPIClient) RGWGetUser(ctx context.Context, uid string) (CephAPIRGWUser, error) {
-	url := c.endpoint + "/rgw/user/" + uid
+	url := c.endpoint + "/api/rgw/user/" + uid
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
