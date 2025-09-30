@@ -237,6 +237,138 @@ func (c *CephAPIClient) ClusterListUsers(ctx context.Context) ([]CephAPIClusterU
 	return users, nil
 }
 
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-cluster-user>
+
+type CephAPIClusterUserCapability struct {
+	Entity string `json:"entity"`
+	Cap    string `json:"cap"`
+}
+
+type CephAPIClusterUserCreateRequest struct {
+	UserEntity   string                         `json:"user_entity"`
+	Capabilities []CephAPIClusterUserCapability `json:"capabilities"`
+}
+
+func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, capabilities map[string]string) error {
+	capabilitySlice := make([]CephAPIClusterUserCapability, 0, len(capabilities))
+	for entity, cap := range capabilities {
+		capabilitySlice = append(capabilitySlice, CephAPIClusterUserCapability{
+			Entity: entity,
+			Cap:    cap,
+		})
+	}
+
+	requestBody := CephAPIClusterUserCreateRequest{
+		UserEntity:   entity,
+		Capabilities: capabilitySlice,
+	}
+
+	jsonPayload, err := json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("unable to encode request payload: %w", err)
+	}
+
+	url := c.endpoint + "/cluster/user"
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != http.StatusCreated && httpResp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(httpResp.Body)
+		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#put--api-cluster-user>
+
+type CephAPIClusterUserUpdateRequest struct {
+	UserEntity   string                         `json:"user_entity"`
+	Capabilities []CephAPIClusterUserCapability `json:"capabilities"`
+}
+
+func (c *CephAPIClient) ClusterUpdateUser(ctx context.Context, entity string, capabilities map[string]string) error {
+	capabilitySlice := make([]CephAPIClusterUserCapability, 0, len(capabilities))
+	for entity, cap := range capabilities {
+		capabilitySlice = append(capabilitySlice, CephAPIClusterUserCapability{
+			Entity: entity,
+			Cap:    cap,
+		})
+	}
+
+	requestBody := CephAPIClusterUserUpdateRequest{
+		UserEntity:   entity,
+		Capabilities: capabilitySlice,
+	}
+
+	jsonPayload, err := json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("unable to encode request payload: %w", err)
+	}
+
+	url := c.endpoint + "/cluster/user"
+	httpReq, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(httpResp.Body)
+		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-cluster-user-user_entities>
+
+func (c *CephAPIClient) ClusterDeleteUser(ctx context.Context, userEntities string) error {
+	url := c.endpoint + "/cluster/user/" + userEntities
+	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != http.StatusAccepted && httpResp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(httpResp.Body)
+		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-rgw-bucket>
 
 func (c *CephAPIClient) RGWListBucketNames(ctx context.Context) ([]string, error) {
