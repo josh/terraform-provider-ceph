@@ -236,3 +236,90 @@ func (c *CephAPIClient) ClusterListUsers(ctx context.Context) ([]CephAPIClusterU
 
 	return users, nil
 }
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-rgw-bucket>
+
+func (c *CephAPIClient) RGWListBucketNames(ctx context.Context) ([]string, error) {
+	url := c.endpoint + "/rgw/bucket"
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
+	}
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response body: %w", err)
+	}
+
+	var buckets []string
+	err = json.Unmarshal(body, &buckets)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
+	}
+
+	return buckets, nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-rgw-bucket-bucket>
+
+type CephAPIRGWBucket struct {
+	Bucket        string `json:"bucket"`
+	Zonegroup     string `json:"zonegroup"`
+	PlacementRule string `json:"placement_rule"`
+	ID            string `json:"id"`
+	Owner         string `json:"owner"`
+	CreationTime  string `json:"creation_time"`
+	ACL           string `json:"acl"`
+	Bid           string `json:"bid"`
+}
+
+func (c *CephAPIClient) RGWGetBucket(ctx context.Context, bucketName string) (*CephAPIRGWBucket, error) {
+	url := c.endpoint + "/rgw/bucket/" + bucketName
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
+	}
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response body: %w", err)
+	}
+
+	var bucket CephAPIRGWBucket
+	err = json.Unmarshal(body, &bucket)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
+	}
+
+	return &bucket, nil
+}
