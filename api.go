@@ -193,3 +193,46 @@ func (c *CephAPIClient) ClusterExportUser(ctx context.Context, entity string) (s
 
 	return keyringRaw, nil
 }
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-cluster-user>
+
+type CephAPIClusterUser struct {
+	Entity string            `json:"entity"`
+	Caps   map[string]string `json:"caps"`
+	Key    string            `json:"key"`
+}
+
+func (c *CephAPIClient) ClusterListUsers(ctx context.Context) ([]CephAPIClusterUser, error) {
+	url := c.endpoint + "/cluster/user"
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
+	}
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response body: %w", err)
+	}
+
+	var users []CephAPIClusterUser
+	err = json.Unmarshal(body, &users)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
+	}
+
+	return users, nil
+}
