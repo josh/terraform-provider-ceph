@@ -8,30 +8,22 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
+	"net/url"
 	"time"
 )
 
 type CephAPIClient struct {
-	endpoint string
+	endpoint *url.URL
 	token    string
 	client   *http.Client
 }
 
-func (c *CephAPIClient) Configure(ctx context.Context, endpoints []string, username string, password string, token string) error {
-	for _, endpoint := range endpoints {
-		if endpoint == "" {
-			return fmt.Errorf("endpoint is required")
-		}
-		if strings.HasSuffix(endpoint, "/api") {
-			return fmt.Errorf("endpoint SHOULD NOT end with '/api', got: %s", endpoint)
-		}
-	}
-
+func (c *CephAPIClient) Configure(ctx context.Context, endpoints []*url.URL, username string, password string, token string) error {
 	endpoint, err := queryEndpoints(ctx, endpoints)
 	if err != nil {
 		return fmt.Errorf("unable to query endpoints: %w", err)
 	}
+
 	c.endpoint = endpoint
 
 	if c.client == nil {
@@ -63,13 +55,13 @@ func (c *CephAPIClient) Configure(ctx context.Context, endpoints []string, usern
 	return nil
 }
 
-func queryEndpoints(ctx context.Context, endpoints []string) (string, error) {
+func queryEndpoints(ctx context.Context, endpoints []*url.URL) (*url.URL, error) {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 
 	for _, endpoint := range endpoints {
-		httpReq, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+		httpReq, err := http.NewRequestWithContext(ctx, "GET", endpoint.String(), nil)
 		if err != nil {
 			continue
 		}
@@ -86,13 +78,13 @@ func queryEndpoints(ctx context.Context, endpoints []string) (string, error) {
 		return endpoint, nil
 	}
 
-	return "", errors.New("no available endpoints found")
+	return nil, errors.New("no available endpoints found")
 }
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-auth-check>
 
 func (c *CephAPIClient) AuthCheck(ctx context.Context) (bool, error) {
-	url := c.endpoint + "/api/auth/check?token=" + c.token
+	url := c.endpoint.JoinPath("/api/auth/check").String() + "?token=" + c.token
 	jsonPayload := []byte("{}")
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
@@ -141,7 +133,7 @@ func (c *CephAPIClient) Auth(ctx context.Context, username string, password stri
 		return "", fmt.Errorf("unable to encode authentication request: %w", err)
 	}
 
-	url := c.endpoint + "/api/auth"
+	url := c.endpoint.JoinPath("/api/auth").String()
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return "", fmt.Errorf("unable to create authentication request: %w", err)
@@ -195,7 +187,7 @@ func (c *CephAPIClient) ClusterExportUser(ctx context.Context, entity string) (s
 		return "", fmt.Errorf("unable to encode request payload: %w", err)
 	}
 
-	url := c.endpoint + "/api/cluster/user/export"
+	url := c.endpoint.JoinPath("/api/cluster/user/export").String()
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return "", fmt.Errorf("unable to create request: %w", err)
@@ -238,7 +230,7 @@ type CephAPIClusterUser struct {
 }
 
 func (c *CephAPIClient) ClusterListUsers(ctx context.Context) ([]CephAPIClusterUser, error) {
-	url := c.endpoint + "/api/cluster/user"
+	url := c.endpoint.JoinPath("/api/cluster/user").String()
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create request: %w", err)
@@ -303,7 +295,7 @@ func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, ca
 		return fmt.Errorf("unable to encode request payload: %w", err)
 	}
 
-	url := c.endpoint + "/api/cluster/user"
+	url := c.endpoint.JoinPath("/api/cluster/user").String()
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return fmt.Errorf("unable to create request: %w", err)
@@ -353,7 +345,7 @@ func (c *CephAPIClient) ClusterUpdateUser(ctx context.Context, entity string, ca
 		return fmt.Errorf("unable to encode request payload: %w", err)
 	}
 
-	url := c.endpoint + "/api/cluster/user"
+	url := c.endpoint.JoinPath("/api/cluster/user").String()
 	httpReq, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return fmt.Errorf("unable to create request: %w", err)
@@ -380,7 +372,7 @@ func (c *CephAPIClient) ClusterUpdateUser(ctx context.Context, entity string, ca
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-cluster-user-user_entities>
 
 func (c *CephAPIClient) ClusterDeleteUser(ctx context.Context, userEntities string) error {
-	url := c.endpoint + "/api/cluster/user/" + userEntities
+	url := c.endpoint.JoinPath("/api/cluster/user", userEntities).String()
 	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("unable to create request: %w", err)
@@ -407,7 +399,7 @@ func (c *CephAPIClient) ClusterDeleteUser(ctx context.Context, userEntities stri
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-rgw-bucket>
 
 func (c *CephAPIClient) RGWListBucketNames(ctx context.Context) ([]string, error) {
-	url := c.endpoint + "/api/rgw/bucket"
+	url := c.endpoint.JoinPath("/api/rgw/bucket").String()
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -456,7 +448,7 @@ type CephAPIRGWBucket struct {
 }
 
 func (c *CephAPIClient) RGWGetBucket(ctx context.Context, bucketName string) (CephAPIRGWBucket, error) {
-	url := c.endpoint + "/api/rgw/bucket/" + bucketName
+	url := c.endpoint.JoinPath("/api/rgw/bucket", bucketName).String()
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -494,7 +486,7 @@ func (c *CephAPIClient) RGWGetBucket(ctx context.Context, bucketName string) (Ce
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-rgw-user>
 
 func (c *CephAPIClient) RGWListUserNames(ctx context.Context) ([]string, error) {
-	url := c.endpoint + "/api/rgw/user"
+	url := c.endpoint.JoinPath("/api/rgw/user").String()
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -550,7 +542,7 @@ type CephAPIRGWUser struct {
 }
 
 func (c *CephAPIClient) RGWGetUser(ctx context.Context, uid string) (CephAPIRGWUser, error) {
-	url := c.endpoint + "/api/rgw/user/" + uid
+	url := c.endpoint.JoinPath("/api/rgw/user", uid).String()
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {

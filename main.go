@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -110,14 +112,14 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
-	var endpoints []string
+	var endpointStrings []string
 	if endpoint != "" {
-		endpoints = append(endpoints, endpoint)
+		endpointStrings = append(endpointStrings, endpoint)
 	}
 	for _, endpoint := range data.Endpoints.Elements() {
-		endpoints = append(endpoints, endpoint.(types.String).ValueString())
+		endpointStrings = append(endpointStrings, endpoint.(types.String).ValueString())
 	}
-	if len(endpoints) == 0 {
+	if len(endpointStrings) == 0 {
 		resp.Diagnostics.AddError(
 			"Missing Configuration",
 			"A provider endpoint must be configured",
@@ -125,9 +127,38 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
+	// Parse and validate all endpoint strings into URL objects
+	parsedEndpoints := make([]*url.URL, 0, len(endpointStrings))
+	for _, endpointStr := range endpointStrings {
+		if endpointStr == "" {
+			resp.Diagnostics.AddError(
+				"Invalid Configuration",
+				"Endpoint cannot be empty",
+			)
+			return
+		}
+		if strings.HasSuffix(endpointStr, "/api") {
+			resp.Diagnostics.AddError(
+				"Invalid Configuration",
+				fmt.Sprintf("Endpoint SHOULD NOT end with '/api', got: %s", endpointStr),
+			)
+			return
+		}
+
+		parsedURL, err := url.Parse(endpointStr)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Invalid Configuration",
+				fmt.Sprintf("Unable to parse endpoint URL %s: %s", endpointStr, err),
+			)
+			return
+		}
+		parsedEndpoints = append(parsedEndpoints, parsedURL)
+	}
+
 	// Configure the Ceph API client with authentication
 	cephClient := &CephAPIClient{}
-	err := cephClient.Configure(ctx, endpoints, username, password, token)
+	err := cephClient.Configure(ctx, parsedEndpoints, username, password, token)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Authentication Error",
