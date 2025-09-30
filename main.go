@@ -1,14 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -54,30 +49,6 @@ type CephProviderModel struct {
 	Token    types.String `tfsdk:"token"`
 	Username types.String `tfsdk:"username"`
 	Password types.String `tfsdk:"password"`
-}
-
-type CephClient struct {
-	endpoint string
-	token    string
-	username string
-	password string
-	client   *http.Client
-}
-
-// https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-cluster-user-export
-type CephAPIUserExportRequest struct {
-	Entities []string `json:"entities"`
-}
-
-// Ceph API authentication request
-type CephAPIAuthRequest struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-// Ceph API authentication response
-type CephAPIAuthResponse struct {
-	Token string `json:"token"`
 }
 
 func (p *CephProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -141,86 +112,21 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
-	// If token is not provided, authenticate with username/password to get token
-	if token == "" {
-		authToken, err := authenticateWithCredentials(ctx, endpoint, username, password)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"Authentication Error",
-				fmt.Sprintf("Failed to authenticate with Ceph API: %s", err),
-			)
-			return
-		}
-		token = authToken
-	}
-
-	cephClient := &CephClient{
+	// Configure the Ceph API client with authentication
+	cephClient := &CephAPIClient{
 		endpoint: endpoint,
-		token:    token,
-		username: username,
-		password: password,
-		client: &http.Client{
-			Timeout: 10 * time.Second,
-		},
+	}
+	err := cephClient.Configure(ctx, username, password, token)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Authentication Error",
+			fmt.Sprintf("Failed to configure Ceph API client: %s", err),
+		)
+		return
 	}
 
 	resp.DataSourceData = cephClient
 	resp.ResourceData = cephClient
-}
-
-// authenticateWithCredentials authenticates with Ceph API using username/password
-// and returns the authentication token
-func authenticateWithCredentials(ctx context.Context, endpoint string, username string, password string) (string, error) {
-	requestBody := CephAPIAuthRequest{
-		Username: username,
-		Password: password,
-	}
-
-	jsonPayload, err := json.Marshal(requestBody)
-	if err != nil {
-		return "", fmt.Errorf("unable to encode authentication request: %w", err)
-	}
-
-	url := endpoint + "/api/auth"
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		return "", fmt.Errorf("unable to create authentication request: %w", err)
-	}
-
-	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-
-	httpResp, err := client.Do(httpReq)
-	if err != nil {
-		return "", fmt.Errorf("unable to make authentication request: %w", err)
-	}
-	defer httpResp.Body.Close()
-
-	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(httpResp.Body)
-		return "", fmt.Errorf("authentication failed with status %d: %s", httpResp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return "", fmt.Errorf("unable to read authentication response: %w", err)
-	}
-
-	var authResp CephAPIAuthResponse
-	err = json.Unmarshal(body, &authResp)
-	if err != nil {
-		return "", fmt.Errorf("unable to decode authentication response: %w", err)
-	}
-
-	if authResp.Token == "" {
-		return "", fmt.Errorf("authentication response did not contain a token")
-	}
-
-	return authResp.Token, nil
 }
 
 func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource {
@@ -242,7 +148,7 @@ func newAuthDataSource() datasource.DataSource {
 }
 
 type AuthDataSource struct {
-	client *CephClient
+	client *CephAPIClient
 }
 
 type AuthDataSourceModel struct {
@@ -291,7 +197,7 @@ func (d *AuthDataSource) Configure(ctx context.Context, req datasource.Configure
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephClient)
+	client, ok := req.ProviderData.(*CephAPIClient)
 
 	if !ok {
 		resp.Diagnostics.AddError(
@@ -314,71 +220,12 @@ func (d *AuthDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 		return
 	}
 
-	endpoint := d.client.endpoint
-	token := d.client.token
-	httpClient := d.client.client
-
 	entity := data.Entity.ValueString()
-	requestBody := CephAPIUserExportRequest{
-		Entities: []string{entity},
-	}
-
-	jsonPayload, err := json.Marshal(requestBody)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"JSON Encoding Error",
-			fmt.Sprintf("Unable to encode request payload: %s", err),
-		)
-		return
-	}
-
-	url := endpoint + "/api/cluster/user/export"
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Request Creation Error",
-			fmt.Sprintf("Unable to create request: %s", err),
-		)
-		return
-	}
-
-	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+token)
-
-	httpResp, err := httpClient.Do(httpReq)
+	keyringRaw, err := d.client.ClusterExportUser(ctx, entity)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
-			fmt.Sprintf("Unable to make request to Ceph API: %s", err),
-		)
-		return
-	}
-	defer httpResp.Body.Close()
-
-	if httpResp.StatusCode != http.StatusOK {
-		resp.Diagnostics.AddError(
-			"API Response Error",
-			fmt.Sprintf("Ceph API returned status %d", httpResp.StatusCode),
-		)
-		return
-	}
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Response Reading Error",
-			fmt.Sprintf("Unable to read response body: %s", err),
-		)
-		return
-	}
-
-	var keyringRaw string
-	err = json.Unmarshal(body, &keyringRaw)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"JSON Decoding Error",
-			fmt.Sprintf("Unable to decode JSON response: %s", err),
+			fmt.Sprintf("Unable to export user from Ceph API: %s", err),
 		)
 		return
 	}
