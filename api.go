@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,14 +18,21 @@ type CephAPIClient struct {
 	client   *http.Client
 }
 
-func (c *CephAPIClient) Configure(ctx context.Context, username string, password string, token string) error {
-	if c.endpoint == "" {
-		return fmt.Errorf("endpoint is required")
+func (c *CephAPIClient) Configure(ctx context.Context, endpoints []string, username string, password string, token string) error {
+	for _, endpoint := range endpoints {
+		if endpoint == "" {
+			return fmt.Errorf("endpoint is required")
+		}
+		if !strings.HasSuffix(endpoint, "/api") {
+			return fmt.Errorf("endpoint MUST end with '/api', got: %s", endpoint)
+		}
 	}
 
-	if !strings.HasSuffix(c.endpoint, "/api") {
-		return fmt.Errorf("endpoint MUST end with '/api', got: %s", c.endpoint)
+	endpoint, err := queryEndpoints(ctx, endpoints)
+	if err != nil {
+		return fmt.Errorf("unable to query endpoints: %w", err)
 	}
+	c.endpoint = endpoint
 
 	if c.client == nil {
 		c.client = &http.Client{
@@ -55,11 +63,38 @@ func (c *CephAPIClient) Configure(ctx context.Context, username string, password
 	return nil
 }
 
+func queryEndpoints(ctx context.Context, endpoints []string) (string, error) {
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	for _, endpoint := range endpoints {
+		httpReq, err := http.NewRequestWithContext(ctx, "GET", endpoint, nil)
+		if err != nil {
+			continue
+		}
+
+		httpResp, err := client.Do(httpReq)
+		if err != nil {
+			continue
+		}
+
+		if httpResp.StatusCode == http.StatusServiceUnavailable {
+			continue
+		}
+
+		return endpoint, nil
+	}
+
+	return "", errors.New("no available endpoints found")
+}
+
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-auth-check>
 
 func (c *CephAPIClient) AuthCheck(ctx context.Context) (bool, error) {
 	url := c.endpoint + "/auth/check?token=" + c.token
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	jsonPayload := []byte("{}")
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return false, fmt.Errorf("unable to create check request: %w", err)
 	}
@@ -74,7 +109,7 @@ func (c *CephAPIClient) AuthCheck(ctx context.Context) (bool, error) {
 	defer httpResp.Body.Close()
 
 	switch httpResp.StatusCode {
-	case http.StatusCreated, http.StatusAccepted:
+	case http.StatusOK, http.StatusCreated, http.StatusAccepted:
 		return true, nil
 	case http.StatusUnauthorized:
 		return false, fmt.Errorf("token is invalid or expired")

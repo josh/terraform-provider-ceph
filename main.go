@@ -45,10 +45,11 @@ type CephProvider struct {
 }
 
 type CephProviderModel struct {
-	Endpoint types.String `tfsdk:"endpoint"`
-	Token    types.String `tfsdk:"token"`
-	Username types.String `tfsdk:"username"`
-	Password types.String `tfsdk:"password"`
+	Endpoint  types.String `tfsdk:"endpoint"`
+	Endpoints types.List   `tfsdk:"endpoints"`
+	Token     types.String `tfsdk:"token"`
+	Username  types.String `tfsdk:"username"`
+	Password  types.String `tfsdk:"password"`
 }
 
 func (p *CephProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -61,6 +62,11 @@ func (p *CephProvider) Schema(ctx context.Context, req provider.SchemaRequest, r
 		Attributes: map[string]providerSchema.Attribute{
 			"endpoint": providerSchema.StringAttribute{
 				MarkdownDescription: "The Ceph API endpoint URL",
+				Optional:            true,
+			},
+			"endpoints": providerSchema.ListAttribute{
+				ElementType:         types.StringType,
+				MarkdownDescription: "The Ceph API endpoint URLs",
 				Optional:            true,
 			},
 			"token": providerSchema.StringAttribute{
@@ -95,14 +101,6 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	username := data.Username.ValueString()
 	password := data.Password.ValueString()
 
-	if endpoint == "" {
-		resp.Diagnostics.AddError(
-			"Missing Configuration",
-			"The provider endpoint must be configured",
-		)
-		return
-	}
-
 	// Either token or username/password must be provided
 	if token == "" && (username == "" || password == "") {
 		resp.Diagnostics.AddError(
@@ -112,11 +110,24 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
-	// Configure the Ceph API client with authentication
-	cephClient := &CephAPIClient{
-		endpoint: endpoint,
+	var endpoints []string
+	if endpoint != "" {
+		endpoints = append(endpoints, endpoint)
 	}
-	err := cephClient.Configure(ctx, username, password, token)
+	for _, endpoint := range data.Endpoints.Elements() {
+		endpoints = append(endpoints, endpoint.(types.String).ValueString())
+	}
+	if len(endpoints) == 0 {
+		resp.Diagnostics.AddError(
+			"Missing Configuration",
+			"A provider endpoint must be configured",
+		)
+		return
+	}
+
+	// Configure the Ceph API client with authentication
+	cephClient := &CephAPIClient{}
+	err := cephClient.Configure(ctx, endpoints, username, password, token)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Authentication Error",
