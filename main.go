@@ -52,17 +52,32 @@ type CephProvider struct {
 type CephProviderModel struct {
 	Endpoint types.String `tfsdk:"endpoint"`
 	Token    types.String `tfsdk:"token"`
+	Username types.String `tfsdk:"username"`
+	Password types.String `tfsdk:"password"`
 }
 
 type CephClient struct {
 	endpoint string
 	token    string
+	username string
+	password string
 	client   *http.Client
 }
 
 // https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-cluster-user-export
 type CephAPIUserExportRequest struct {
 	Entities []string `json:"entities"`
+}
+
+// Ceph API authentication request
+type CephAPIAuthRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+// Ceph API authentication response
+type CephAPIAuthResponse struct {
+	Token string `json:"token"`
 }
 
 func (p *CephProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -74,12 +89,22 @@ func (p *CephProvider) Schema(ctx context.Context, req provider.SchemaRequest, r
 	resp.Schema = providerSchema.Schema{
 		Attributes: map[string]providerSchema.Attribute{
 			"endpoint": providerSchema.StringAttribute{
-				MarkdownDescription: "Example provider attribute",
+				MarkdownDescription: "The Ceph API endpoint URL",
 				Optional:            true,
 			},
 			"token": providerSchema.StringAttribute{
 				MarkdownDescription: "The token to use for the provider",
 				Optional:            true,
+				Sensitive:           true,
+			},
+			"username": providerSchema.StringAttribute{
+				MarkdownDescription: "The username for Ceph authentication",
+				Optional:            true,
+			},
+			"password": providerSchema.StringAttribute{
+				MarkdownDescription: "The password for Ceph authentication",
+				Optional:            true,
+				Sensitive:           true,
 			},
 		},
 	}
@@ -96,6 +121,8 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 
 	endpoint := data.Endpoint.ValueString()
 	token := data.Token.ValueString()
+	username := data.Username.ValueString()
+	password := data.Password.ValueString()
 
 	if endpoint == "" {
 		resp.Diagnostics.AddError(
@@ -105,17 +132,33 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		return
 	}
 
-	if token == "" {
+	// Either token or username/password must be provided
+	if token == "" && (username == "" || password == "") {
 		resp.Diagnostics.AddError(
 			"Missing Configuration",
-			"The provider token must be configured",
+			"Either token or both username and password must be configured",
 		)
 		return
+	}
+
+	// If token is not provided, authenticate with username/password to get token
+	if token == "" {
+		authToken, err := authenticateWithCredentials(ctx, endpoint, username, password)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Authentication Error",
+				fmt.Sprintf("Failed to authenticate with Ceph API: %s", err),
+			)
+			return
+		}
+		token = authToken
 	}
 
 	cephClient := &CephClient{
 		endpoint: endpoint,
 		token:    token,
+		username: username,
+		password: password,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -123,6 +166,61 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 
 	resp.DataSourceData = cephClient
 	resp.ResourceData = cephClient
+}
+
+// authenticateWithCredentials authenticates with Ceph API using username/password
+// and returns the authentication token
+func authenticateWithCredentials(ctx context.Context, endpoint string, username string, password string) (string, error) {
+	requestBody := CephAPIAuthRequest{
+		Username: username,
+		Password: password,
+	}
+
+	jsonPayload, err := json.Marshal(requestBody)
+	if err != nil {
+		return "", fmt.Errorf("unable to encode authentication request: %w", err)
+	}
+
+	url := endpoint + "/api/auth"
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return "", fmt.Errorf("unable to create authentication request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	httpResp, err := client.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("unable to make authentication request: %w", err)
+	}
+	defer httpResp.Body.Close()
+
+	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(httpResp.Body)
+		return "", fmt.Errorf("authentication failed with status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return "", fmt.Errorf("unable to read authentication response: %w", err)
+	}
+
+	var authResp CephAPIAuthResponse
+	err = json.Unmarshal(body, &authResp)
+	if err != nil {
+		return "", fmt.Errorf("unable to decode authentication response: %w", err)
+	}
+
+	if authResp.Token == "" {
+		return "", fmt.Errorf("authentication response did not contain a token")
+	}
+
+	return authResp.Token, nil
 }
 
 func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource {
