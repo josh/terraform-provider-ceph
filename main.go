@@ -9,10 +9,14 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	providerSchema "github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
+	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -172,7 +176,9 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 }
 
 func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource {
-	return []func() resource.Resource{}
+	return []func() resource.Resource{
+		newAuthResource,
+	}
 }
 
 func (p *CephProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
@@ -225,10 +231,12 @@ func (d *AuthDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 			"key": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The cephx key of the entity",
 				Computed:            true,
+				Sensitive:           true,
 			},
 			"keyring": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The complete cephx keyring as JSON",
 				Computed:            true,
+				Sensitive:           true,
 			},
 		},
 	}
@@ -279,6 +287,12 @@ func (d *AuthDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 			fmt.Sprintf("Unable to parse keyring data: %s", err),
 		)
 		return
+	} else if len(keyringUsers) == 0 {
+		resp.Diagnostics.AddError(
+			"Empty keyring data",
+			fmt.Sprintf("Ceph export returned no users for entity %s", entity),
+		)
+		return
 	} else if len(keyringUsers) > 1 {
 		resp.Diagnostics.AddWarning(
 			"Ceph export return multiple users",
@@ -293,4 +307,232 @@ func (d *AuthDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	data.Keyring = types.StringValue(keyringRaw)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+// auth_resource
+
+var _ resource.Resource = &AuthResource{}
+
+func newAuthResource() resource.Resource {
+	return &AuthResource{}
+}
+
+type AuthResource struct {
+	client *CephAPIClient
+}
+
+type AuthResourceModel struct {
+	Entity  types.String `tfsdk:"entity"`
+	Caps    types.Map    `tfsdk:"caps"`
+	Id      types.String `tfsdk:"id"`
+	Key     types.String `tfsdk:"key"`
+	Keyring types.String `tfsdk:"keyring"`
+}
+
+func (r *AuthResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
+	resp.TypeName = req.ProviderTypeName + "_auth"
+}
+
+func (r *AuthResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
+	resp.Schema = resourceSchema.Schema{
+		MarkdownDescription: "This resource allows you to manage a ceph client authentication.",
+		Attributes: map[string]resourceSchema.Attribute{
+			"entity": resourceSchema.StringAttribute{
+				MarkdownDescription: "The entity name (i.e.: client.admin)",
+				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"caps": resourceSchema.MapAttribute{
+				ElementType:         types.StringType,
+				MarkdownDescription: "The caps of the entity",
+				Required:            true,
+			},
+			"id": resourceSchema.StringAttribute{
+				MarkdownDescription: "The ID of this resource",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"key": resourceSchema.StringAttribute{
+				MarkdownDescription: "The cephx key of the entity",
+				Computed:            true,
+				Sensitive:           true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"keyring": resourceSchema.StringAttribute{
+				MarkdownDescription: "The complete cephx keyring as JSON",
+				Computed:            true,
+				Sensitive:           true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+		},
+	}
+}
+
+func (r *AuthResource) Configure(ctx context.Context, req resource.ConfigureRequest, resp *resource.ConfigureResponse) {
+	if req.ProviderData == nil {
+		return
+	}
+
+	client, ok := req.ProviderData.(*CephAPIClient)
+
+	if !ok {
+		resp.Diagnostics.AddError(
+			"Unexpected Resource Configure Type",
+			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+		)
+		return
+	}
+
+	r.client = client
+}
+
+func (r *AuthResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
+	var data AuthResourceModel
+
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	entity := data.Entity.ValueString()
+
+	var caps map[string]string
+	resp.Diagnostics.Append(data.Caps.ElementsAs(ctx, &caps, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	err := r.client.ClusterCreateUser(ctx, entity, caps)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"API Request Error",
+			fmt.Sprintf("Unable to create user in Ceph API: %s", err),
+		)
+		return
+	}
+
+	updateAuthModelFromCephExport(ctx, r.client, entity, &data, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+func (r *AuthResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
+	var data AuthResourceModel
+
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	entity := data.Entity.ValueString()
+	updateAuthModelFromCephExport(ctx, r.client, entity, &data, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+func (r *AuthResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data AuthResourceModel
+
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	entity := data.Entity.ValueString()
+
+	var caps map[string]string
+	resp.Diagnostics.Append(data.Caps.ElementsAs(ctx, &caps, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	err := r.client.ClusterUpdateUser(ctx, entity, caps)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"API Request Error",
+			fmt.Sprintf("Unable to update user in Ceph API: %s", err),
+		)
+		return
+	}
+
+	updateAuthModelFromCephExport(ctx, r.client, entity, &data, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+func (r *AuthResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
+	var data AuthResourceModel
+
+	resp.Diagnostics.Append(req.State.Get(ctx, &data)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	entity := data.Entity.ValueString()
+	err := r.client.ClusterDeleteUser(ctx, entity)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"API Request Error",
+			fmt.Sprintf("Unable to delete user from Ceph API: %s", err),
+		)
+		return
+	}
+}
+
+func updateAuthModelFromCephExport(ctx context.Context, client *CephAPIClient, entity string, data *AuthResourceModel, diagnostics *diag.Diagnostics) {
+	keyringRaw, err := client.ClusterExportUser(ctx, entity)
+	if err != nil {
+		diagnostics.AddError(
+			"API Request Error",
+			fmt.Sprintf("Unable to export user from Ceph API: %s", err),
+		)
+		return
+	}
+
+	keyringUsers, err := parseCephKeyring(keyringRaw)
+	if err != nil {
+		diagnostics.AddError(
+			"Unable to parse keyring data",
+			fmt.Sprintf("Unable to parse keyring data: %s", err),
+		)
+		return
+	} else if len(keyringUsers) == 0 {
+		diagnostics.AddError(
+			"Empty keyring data",
+			fmt.Sprintf("Ceph export returned no users for entity %s", entity),
+		)
+		return
+	} else if len(keyringUsers) > 1 {
+		diagnostics.AddWarning(
+			"Ceph export returned multiple users",
+			fmt.Sprintf("Ceph export returned multiple users: %s", keyringRaw),
+		)
+	}
+	keyringUser := keyringUsers[0]
+
+	data.Id = types.StringValue(keyringUser.Entity)
+	data.Caps, _ = types.MapValueFrom(ctx, types.StringType, keyringUser.Caps)
+	data.Key = types.StringValue(keyringUser.Key)
+	data.Keyring = types.StringValue(keyringRaw)
 }
