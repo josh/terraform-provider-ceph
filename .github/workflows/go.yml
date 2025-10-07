@@ -11,10 +11,34 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes \
+            ceph \
+            ceph-mgr-dashboard \
+            python3-setuptools
+
+      - uses: hashicorp/setup-terraform@v3.1.2
+        with:
+          terraform_version: 1.13.3
+          terraform_wrapper: false
+
       - uses: actions/setup-go@v6
         with:
           go-version: "^1.24.6"
 
+      - name: Download go modules
+        run: |
+          go mod download
+
       - name: Build
         run: |
           go build
+
+      - name: Tests
+        timeout-minutes: 11
+        run: |
+          go test -v -timeout 10m
+        env:
+          TF_ACC: "1"
