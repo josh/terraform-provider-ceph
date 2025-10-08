@@ -18,7 +18,7 @@ type CephAPIClient struct {
 	client   *http.Client
 }
 
-func (c *CephAPIClient) Configure(ctx context.Context, endpoints []*url.URL, username string, password string, token string) error {
+func (c *CephAPIClient) Configure(ctx context.Context, endpoints []*url.URL, username, password, token string) error {
 	endpoint, err := queryEndpoints(ctx, endpoints)
 	if err != nil {
 		return fmt.Errorf("unable to query endpoints: %w", err)
@@ -98,7 +98,7 @@ func (c *CephAPIClient) AuthCheck(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("unable to make check request: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer httpResp.Body.Close() //nolint:errcheck
 
 	switch httpResp.StatusCode {
 	case http.StatusOK, http.StatusCreated, http.StatusAccepted:
@@ -146,7 +146,7 @@ func (c *CephAPIClient) Auth(ctx context.Context, username string, password stri
 	if err != nil {
 		return "", fmt.Errorf("unable to make authentication request: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer httpResp.Body.Close() //nolint:errcheck
 
 	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusCreated {
 		body, _ := io.ReadAll(httpResp.Body)
@@ -201,7 +201,7 @@ func (c *CephAPIClient) ClusterExportUser(ctx context.Context, entity string) (s
 	if err != nil {
 		return "", fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer httpResp.Body.Close() //nolint:errcheck
 
 	if httpResp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
@@ -244,7 +244,7 @@ func (c *CephAPIClient) ClusterListUsers(ctx context.Context) ([]CephAPIClusterU
 	if err != nil {
 		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer httpResp.Body.Close() //nolint:errcheck
 
 	if httpResp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
@@ -309,7 +309,7 @@ func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, ca
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer httpResp.Body.Close() //nolint:errcheck
 
 	if httpResp.StatusCode != http.StatusCreated && httpResp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(httpResp.Body)
@@ -359,7 +359,7 @@ func (c *CephAPIClient) ClusterUpdateUser(ctx context.Context, entity string, ca
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer httpResp.Body.Close() //nolint:errcheck
 
 	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(httpResp.Body)
@@ -386,7 +386,7 @@ func (c *CephAPIClient) ClusterDeleteUser(ctx context.Context, userEntities stri
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer httpResp.Body.Close() //nolint:errcheck
 
 	if httpResp.StatusCode != http.StatusAccepted && httpResp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(httpResp.Body)
@@ -414,7 +414,7 @@ func (c *CephAPIClient) RGWListBucketNames(ctx context.Context) ([]string, error
 	if err != nil {
 		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer httpResp.Body.Close() //nolint:errcheck
 
 	if httpResp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
@@ -463,7 +463,7 @@ func (c *CephAPIClient) RGWGetBucket(ctx context.Context, bucketName string) (Ce
 	if err != nil {
 		return CephAPIRGWBucket{}, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer httpResp.Body.Close() //nolint:errcheck
 
 	if httpResp.StatusCode != http.StatusOK {
 		return CephAPIRGWBucket{}, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
@@ -501,7 +501,7 @@ func (c *CephAPIClient) RGWListUserNames(ctx context.Context) ([]string, error) 
 	if err != nil {
 		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer httpResp.Body.Close() //nolint:errcheck
 
 	if httpResp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
@@ -557,7 +557,7 @@ func (c *CephAPIClient) RGWGetUser(ctx context.Context, uid string) (CephAPIRGWU
 	if err != nil {
 		return CephAPIRGWUser{}, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer httpResp.Body.Close() //nolint:errcheck
 
 	if httpResp.StatusCode != http.StatusOK {
 		return CephAPIRGWUser{}, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
