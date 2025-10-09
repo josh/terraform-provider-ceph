@@ -1,0 +1,16 @@
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install --yes \
+    ceph \
+    ceph-mgr-dashboard \
+    gcc \
+    golang \
+    python3-setuptools
+
+WORKDIR /src
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN go build
