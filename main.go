@@ -368,9 +368,6 @@ func (r *AuthResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				MarkdownDescription: "The complete cephx keyring as JSON",
 				Computed:            true,
 				Sensitive:           true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 			},
 		},
 	}
