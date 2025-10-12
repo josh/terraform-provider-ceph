@@ -25,6 +25,7 @@ import (
 var (
 	testDashboardURL string
 	testClusterWG    *sync.WaitGroup
+	testConfPath     string
 	testTimeout      = flag.Duration("timeout", 0, "test timeout")
 )
 
@@ -47,12 +48,14 @@ func TestMain(m *testing.M) {
 			os.Exit(1)
 		}
 
-		testDashboardURL, testClusterWG, err = startCephCluster(ctx, tmpDir)
+		var confPath string
+		testDashboardURL, confPath, testClusterWG, err = startCephCluster(ctx, tmpDir)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to start ceph cluster: %v\n", err)
 			os.RemoveAll(tmpDir)
 			os.Exit(1)
 		}
+		testConfPath = confPath
 
 		code = m.Run()
 
@@ -116,39 +119,39 @@ func TestAccCephAuthDataSource(t *testing.T) {
 	})
 }
 
-func startCephCluster(ctx context.Context, tmpDir string) (string, *sync.WaitGroup, error) {
+func startCephCluster(ctx context.Context, tmpDir string) (string, string, *sync.WaitGroup, error) {
 	startupCtx, startupCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer startupCancel()
 
 	confPath, err := setupCephDir(startupCtx, tmpDir)
 	if err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
 	var wg sync.WaitGroup
 
 	if err := startCephMon(&wg, ctx, confPath); err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
 	if err := waitForCephMon(startupCtx, confPath); err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
 	if err := startCephMgr(&wg, ctx, confPath); err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
 	if err := waitForCephMgr(startupCtx, confPath); err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
 	dashboardURL, err := enableCephDashboard(startupCtx, confPath)
 	if err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
-	return dashboardURL, &wg, nil
+	return dashboardURL, confPath, &wg, nil
 }
 
 func setupCephDir(ctx context.Context, tmpDir string) (string, error) {
