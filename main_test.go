@@ -96,11 +96,6 @@ func TestAccCephAuthDataSource(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"data.ceph_auth.client_admin",
-						tfjsonpath.New("id"),
-						knownvalue.StringExact("client.admin"),
-					),
-					statecheck.ExpectKnownValue(
-						"data.ceph_auth.client_admin",
 						tfjsonpath.New("key"),
 						knownvalue.StringExact("AQB5m89objcKIxAAda2ULz/l3NH+mv9XzKePHQ=="),
 					),
@@ -146,11 +141,6 @@ func TestAccCephAuthResource(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_auth.test",
 						tfjsonpath.New("entity"),
-						knownvalue.StringExact("client.foo"),
-					),
-					statecheck.ExpectKnownValue(
-						"ceph_auth.test",
-						tfjsonpath.New("id"),
 						knownvalue.StringExact("client.foo"),
 					),
 					statecheck.ExpectKnownValue(
@@ -201,11 +191,6 @@ func TestAccCephAuthResource(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_auth.test",
 						tfjsonpath.New("entity"),
-						knownvalue.StringExact("client.foo"),
-					),
-					statecheck.ExpectKnownValue(
-						"ceph_auth.test",
-						tfjsonpath.New("id"),
 						knownvalue.StringExact("client.foo"),
 					),
 					statecheck.ExpectKnownValue(

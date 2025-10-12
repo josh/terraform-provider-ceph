@@ -202,7 +202,6 @@ type AuthDataSource struct {
 type AuthDataSourceModel struct {
 	Entity  types.String `tfsdk:"entity"`
 	Caps    types.Map    `tfsdk:"caps"`
-	Id      types.String `tfsdk:"id"`
 	Key     types.String `tfsdk:"key"`
 	Keyring types.String `tfsdk:"keyring"`
 }
@@ -222,10 +221,6 @@ func (d *AuthDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 			"caps": dataSourceSchema.MapAttribute{
 				ElementType:         types.StringType,
 				MarkdownDescription: "The caps of the entity",
-				Computed:            true,
-			},
-			"id": dataSourceSchema.StringAttribute{
-				MarkdownDescription: "The ID of this resource",
 				Computed:            true,
 			},
 			"key": dataSourceSchema.StringAttribute{
@@ -301,7 +296,6 @@ func (d *AuthDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	}
 	keyringUser := keyringUsers[0]
 
-	data.Id = types.StringValue(keyringUser.Entity)
 	data.Caps, _ = types.MapValueFrom(ctx, types.StringType, keyringUser.Caps)
 	data.Key = types.StringValue(keyringUser.Key)
 	data.Keyring = types.StringValue(keyringRaw)
@@ -324,7 +318,6 @@ type AuthResource struct {
 type AuthResourceModel struct {
 	Entity  types.String `tfsdk:"entity"`
 	Caps    types.Map    `tfsdk:"caps"`
-	Id      types.String `tfsdk:"id"`
 	Key     types.String `tfsdk:"key"`
 	Keyring types.String `tfsdk:"keyring"`
 }
@@ -348,13 +341,6 @@ func (r *AuthResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				ElementType:         types.StringType,
 				MarkdownDescription: "The caps of the entity",
 				Required:            true,
-			},
-			"id": resourceSchema.StringAttribute{
-				MarkdownDescription: "The ID of this resource",
-				Computed:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 			},
 			"key": resourceSchema.StringAttribute{
 				MarkdownDescription: "The cephx key of the entity",
@@ -528,7 +514,6 @@ func updateAuthModelFromCephExport(ctx context.Context, client *CephAPIClient, e
 	}
 	keyringUser := keyringUsers[0]
 
-	data.Id = types.StringValue(keyringUser.Entity)
 	data.Caps, _ = types.MapValueFrom(ctx, types.StringType, keyringUser.Caps)
 	data.Key = types.StringValue(keyringUser.Key)
 	data.Keyring = types.StringValue(keyringRaw)
