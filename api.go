@@ -272,12 +272,12 @@ type CephAPIClusterUserCapability struct {
 }
 
 type CephAPIClusterUserCreateRequest struct {
-	UserEntity   string                         `json:"user_entity"`
-	Capabilities []CephAPIClusterUserCapability `json:"capabilities"`
+	UserEntity   string                         `json:"user_entity,omitempty"`
+	Capabilities []CephAPIClusterUserCapability `json:"capabilities,omitempty"`
 	ImportData   string                         `json:"import_data,omitempty"`
 }
 
-func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, capabilities map[string]string, key string) error {
+func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, capabilities map[string]string) error {
 	capabilitySlice := make([]CephAPIClusterUserCapability, 0, len(capabilities))
 	for entity, cap := range capabilities {
 		capabilitySlice = append(capabilitySlice, CephAPIClusterUserCapability{
@@ -289,14 +289,6 @@ func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, ca
 	requestBody := CephAPIClusterUserCreateRequest{
 		UserEntity:   entity,
 		Capabilities: capabilitySlice,
-	}
-
-	if key != "" {
-		importData := fmt.Sprintf("[%s]\n\tkey = %s\n", entity, key)
-		for capEntity, capValue := range capabilities {
-			importData += fmt.Sprintf("\tcaps %s = \"%s\"\n", capEntity, capValue)
-		}
-		requestBody.ImportData = importData
 	}
 
 	jsonPayload, err := json.Marshal(requestBody)
@@ -319,6 +311,40 @@ func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, ca
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusCreated && httpResp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(httpResp.Body)
+		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+func (c *CephAPIClient) ClusterImportUser(ctx context.Context, importData string) error {
+	requestBody := CephAPIClusterUserCreateRequest{
+		ImportData: importData,
+	}
+
+	jsonPayload, err := json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("unable to encode request payload: %w", err)
+	}
+
+	url := c.endpoint.JoinPath("/api/cluster/user").String()
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close()
 
 	if httpResp.StatusCode != http.StatusCreated && httpResp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(httpResp.Body)
