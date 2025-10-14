@@ -26,12 +26,7 @@ caps osd = "allow *"
 		{
 			Entity: "client.admin",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps: map[string]string{
-				"mds": "allow *",
-				"mgr": "allow *",
-				"mon": "allow *",
-				"osd": "allow *",
-			},
+			Caps:   MustCephCapsFromMap(map[string]string{"mds": "allow *", "mgr": "allow *", "mon": "allow *", "osd": "allow *"}),
 		},
 	}
 
@@ -62,20 +57,12 @@ caps osd = "allow *"`
 		{
 			Entity: "osd.0",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps: map[string]string{
-				"mgr": "allow profile osd",
-				"mon": "allow profile osd",
-				"osd": "allow *",
-			},
+			Caps:   MustCephCapsFromMap(map[string]string{"mgr": "allow profile osd", "mon": "allow profile osd", "osd": "allow *"}),
 		},
 		{
 			Entity: "osd.1",
 			Key:    "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB==",
-			Caps: map[string]string{
-				"mgr": "allow profile osd",
-				"mon": "allow profile osd",
-				"osd": "allow *",
-			},
+			Caps:   MustCephCapsFromMap(map[string]string{"mgr": "allow profile osd", "mon": "allow profile osd", "osd": "allow *"}),
 		},
 	}
 
@@ -101,11 +88,7 @@ func TestParseClientFooKeyring(t *testing.T) {
 		{
 			Entity: "client.foo",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps: map[string]string{
-				"mds": "allow rw path=/",
-				"mon": "allow rw",
-				"osd": "allow rwx",
-			},
+			Caps:   MustCephCapsFromMap(map[string]string{"mds": "allow rw path=/", "mon": "allow rw", "osd": "allow rwx"}),
 		},
 	}
 
@@ -127,7 +110,7 @@ func TestParseNoCapsKeyring(t *testing.T) {
 		{
 			Entity: "client.foo",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps:   map[string]string{},
+			Caps:   CephCaps{},
 		},
 	}
 
@@ -166,7 +149,7 @@ func TestIgnoreUnknownProperties(t *testing.T) {
 		{
 			Entity: "client.foo",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps:   map[string]string{},
+			Caps:   CephCaps{},
 		},
 	}
 

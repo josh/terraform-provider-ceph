@@ -6,10 +6,67 @@ import (
 	"strings"
 )
 
+type CephCaps struct {
+	MDS string `json:"mds,omitempty"`
+	MGR string `json:"mgr,omitempty"`
+	MON string `json:"mon,omitempty"`
+	OSD string `json:"osd,omitempty"`
+}
+
+func (c CephCaps) Map() map[string]string {
+	result := make(map[string]string, 4)
+
+	if c.MDS != "" {
+		result["mds"] = c.MDS
+	}
+	if c.MGR != "" {
+		result["mgr"] = c.MGR
+	}
+	if c.MON != "" {
+		result["mon"] = c.MON
+	}
+	if c.OSD != "" {
+		result["osd"] = c.OSD
+	}
+
+	return result
+}
+
+func NewCephCapsFromMap(capabilities map[string]string) (CephCaps, error) {
+	var caps CephCaps
+
+	for capType, capValue := range capabilities {
+		lower := strings.ToLower(capType)
+
+		switch lower {
+		case "mds":
+			caps.MDS = capValue
+		case "mgr":
+			caps.MGR = capValue
+		case "mon":
+			caps.MON = capValue
+		case "osd":
+			caps.OSD = capValue
+		default:
+			return CephCaps{}, fmt.Errorf("caps attribute contains unsupported capability type %q", capType)
+		}
+	}
+
+	return caps, nil
+}
+
+func MustCephCapsFromMap(capabilities map[string]string) CephCaps {
+	caps, err := NewCephCapsFromMap(capabilities)
+	if err != nil {
+		panic(err)
+	}
+	return caps
+}
+
 type CephUser struct {
-	Entity string            `json:"entity"`
-	Key    string            `json:"key"`
-	Caps   map[string]string `json:"caps"`
+	Entity string   `json:"entity"`
+	Key    string   `json:"key"`
+	Caps   CephCaps `json:"caps"`
 }
 
 func parseCephKeyring(content string) ([]CephUser, error) {
@@ -35,14 +92,28 @@ func parseCephKeyring(content string) ([]CephUser, error) {
 			cur = &CephUser{
 				Entity: matches[1],
 				Key:    "",
-				Caps:   make(map[string]string),
+				Caps:   CephCaps{},
 			}
 		} else if cur != nil {
 			if matches := keyRegex.FindStringSubmatch(line); matches != nil {
 				cur.Key = strings.TrimSpace(matches[1])
 			} else if matches := capsRegex.FindStringSubmatch(line); matches != nil {
+				capType := matches[1]
 				capsValue := strings.Trim(strings.TrimSpace(matches[2]), `"`)
-				cur.Caps[matches[1]] = capsValue
+
+				lower := strings.ToLower(capType)
+				switch lower {
+				case "mds":
+					cur.Caps.MDS = capsValue
+				case "mgr":
+					cur.Caps.MGR = capsValue
+				case "mon":
+					cur.Caps.MON = capsValue
+				case "osd":
+					cur.Caps.OSD = capsValue
+				default:
+					return nil, fmt.Errorf("parse error:%d:%s (unsupported capability type %q)", i+1, originalLine, capType)
+				}
 			}
 		} else {
 			return nil, fmt.Errorf("parse error:%d:%s", i+1, originalLine)

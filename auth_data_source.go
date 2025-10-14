@@ -116,7 +116,7 @@ func (d *AuthDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	}
 	keyringUser := keyringUsers[0]
 
-	data.Caps, _ = types.MapValueFrom(ctx, types.StringType, keyringUser.Caps)
+	data.Caps = cephCapsToMapValue(ctx, keyringUser.Caps, &resp.Diagnostics)
 	data.Key = types.StringValue(keyringUser.Key)
 	data.Keyring = types.StringValue(keyringRaw)
 

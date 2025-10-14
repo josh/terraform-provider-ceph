@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"testing"
 	"time"
 
@@ -73,7 +74,7 @@ func TestAccCephAuthResource(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_auth.foo",
 						tfjsonpath.New("caps"),
-						knownvalue.MapExact(map[string]knownvalue.Check{
+						knownvalue.ObjectExact(map[string]knownvalue.Check{
 							"mon": knownvalue.StringExact("allow r"),
 							"osd": knownvalue.StringExact("allow rw pool=foo"),
 						}),
@@ -121,6 +122,7 @@ func TestAccCephAuthResource(t *testing.T) {
 					  entity = "client.foo"
 					  caps = {
 					    mon = "allow rw"
+					    mgr = "allow r"
 					    osd = "allow rw pool=bar"
 					    mds = "allow rw"
 					  }
@@ -135,10 +137,11 @@ func TestAccCephAuthResource(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_auth.foo",
 						tfjsonpath.New("caps"),
-						knownvalue.MapExact(map[string]knownvalue.Check{
+						knownvalue.ObjectExact(map[string]knownvalue.Check{
 							"mon": knownvalue.StringExact("allow rw"),
-							"osd": knownvalue.StringExact("allow rw pool=bar"),
+							"mgr": knownvalue.StringExact("allow r"),
 							"mds": knownvalue.StringExact("allow rw"),
+							"osd": knownvalue.StringExact("allow rw pool=bar"),
 						}),
 					),
 				},
@@ -146,10 +149,68 @@ func TestAccCephAuthResource(t *testing.T) {
 					checkCephAuthExists(t, "client.foo"),
 					checkCephAuthHasCaps(t, "client.foo", map[string]string{
 						"mon": "allow rw",
+						"mgr": "allow r",
 						"osd": "allow rw pool=bar",
 						"mds": "allow rw",
 					}),
 				),
+			},
+		},
+	})
+}
+
+func TestAccCephAuthResource_invalidCapType(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_auth" "invalid" {
+					  entity = "client.invalid"
+					  caps = {
+					    foo = "allow r"
+					  }
+					}
+				`,
+				ExpectError: regexp.MustCompile(`(?i)caps attribute contains unsupported capability type`),
+			},
+		},
+	})
+}
+
+func TestAccCephAuthResource_invalidCapTypeOnUpdate(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
+		},
+		CheckDestroy: testAccCheckCephAuthDestroy,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_auth" "test_update" {
+					  entity = "client.test_update"
+					  caps = {
+					    mon = "allow r"
+					    osd = "allow rw pool=test"
+					  }
+					}
+				`,
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_auth" "test_update" {
+					  entity = "client.test_update"
+					  caps = {
+					    invalid = "allow r"
+					  }
+					}
+				`,
+				ExpectError: regexp.MustCompile(`(?i)caps attribute contains unsupported capability type`),
 			},
 		},
 	})
