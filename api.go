@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 )
 
@@ -16,6 +17,25 @@ type CephAPIClient struct {
 	endpoint *url.URL
 	token    string
 	client   *http.Client
+}
+
+var (
+	validCapabilityTypes = map[string]struct{}{
+		"mds": {},
+		"mgr": {},
+		"mon": {},
+		"osd": {},
+	}
+	validCapabilityTypeList = []string{"mds", "mgr", "mon", "osd"}
+)
+
+func validateCapabilityTypes(capabilities map[string]string) error {
+	for capabilityType := range capabilities {
+		if _, ok := validCapabilityTypes[capabilityType]; !ok {
+			return fmt.Errorf("unknown cap type %q; valid cap types: %s", capabilityType, strings.Join(validCapabilityTypeList, ", "))
+		}
+	}
+	return nil
 }
 
 func (c *CephAPIClient) Configure(ctx context.Context, endpoints []*url.URL, username, password, token string) error {
@@ -278,6 +298,10 @@ type CephAPIClusterUserCreateRequest struct {
 }
 
 func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, capabilities map[string]string) error {
+	if err := validateCapabilityTypes(capabilities); err != nil {
+		return err
+	}
+
 	capabilitySlice := make([]CephAPIClusterUserCapability, 0, len(capabilities))
 	for entity, cap := range capabilities {
 		capabilitySlice = append(capabilitySlice, CephAPIClusterUserCapability{
@@ -362,6 +386,10 @@ type CephAPIClusterUserUpdateRequest struct {
 }
 
 func (c *CephAPIClient) ClusterUpdateUser(ctx context.Context, entity string, capabilities map[string]string) error {
+	if err := validateCapabilityTypes(capabilities); err != nil {
+		return err
+	}
+
 	capabilitySlice := make([]CephAPIClusterUserCapability, 0, len(capabilities))
 	for entity, cap := range capabilities {
 		capabilitySlice = append(capabilitySlice, CephAPIClusterUserCapability{
