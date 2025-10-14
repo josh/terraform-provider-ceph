@@ -12,7 +12,10 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-var _ resource.Resource = &AuthResource{}
+var (
+	_ resource.Resource              = &AuthResource{}
+	_ resource.ResourceWithImportState = &AuthResource{}
+)
 
 func newAuthResource() resource.Resource {
 	return &AuthResource{}
@@ -188,6 +191,19 @@ func (r *AuthResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 		)
 		return
 	}
+}
+
+func (r *AuthResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	data := AuthResourceModel{
+		Entity: types.StringValue(req.ID),
+	}
+
+	updateAuthModelFromCephExport(ctx, r.client, req.ID, &data, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func updateAuthModelFromCephExport(ctx context.Context, client *CephAPIClient, entity string, data *AuthResourceModel, diagnostics *diag.Diagnostics) {
