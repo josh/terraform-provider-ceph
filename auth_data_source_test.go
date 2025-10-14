@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
@@ -19,17 +19,34 @@ func TestAccCephAuthDataSource(t *testing.T) {
 		},
 		Steps: []resource.TestStep{
 			{
-				Config: fmt.Sprintf(`
+				ConfigVariables: config.Variables{
+					"endpoint": config.StringVariable(testDashboardURL),
+					"username": config.StringVariable("admin"),
+					"password": config.StringVariable("password"),
+				},
+				Config: `
+					variable "endpoint" {
+					  type = string
+					}
+
+					variable "username" {
+					  type = string
+					}
+
+					variable "password" {
+					  type = string
+					}
+
 					provider "ceph" {
-					  endpoint = %q
-					  username = "admin"
-					  password = "password"
+					  endpoint = var.endpoint
+					  username = var.username
+					  password = var.password
 					}
 
 					data "ceph_auth" "client_admin" {
 					  entity = "client.admin"
 					}
-				`, testDashboardURL),
+				`,
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"data.ceph_auth.client_admin",
