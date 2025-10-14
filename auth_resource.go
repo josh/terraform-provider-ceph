@@ -53,12 +53,10 @@ func (r *AuthResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Required:            true,
 			},
 			"key": resourceSchema.StringAttribute{
-				MarkdownDescription: "The cephx key of the entity",
+				MarkdownDescription: "The cephx key of the entity. If not specified, Ceph will generate a random key.",
+				Optional:            true,
 				Computed:            true,
 				Sensitive:           true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
-				},
 			},
 			"keyring": resourceSchema.StringAttribute{
 				MarkdownDescription: "The complete cephx keyring as JSON",
@@ -104,7 +102,9 @@ func (r *AuthResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	err := r.client.ClusterCreateUser(ctx, entity, caps)
+	key := data.Key.ValueString()
+
+	err := r.client.ClusterCreateUser(ctx, entity, caps, key)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",

@@ -274,9 +274,10 @@ type CephAPIClusterUserCapability struct {
 type CephAPIClusterUserCreateRequest struct {
 	UserEntity   string                         `json:"user_entity"`
 	Capabilities []CephAPIClusterUserCapability `json:"capabilities"`
+	ImportData   string                         `json:"import_data,omitempty"`
 }
 
-func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, capabilities map[string]string) error {
+func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, capabilities map[string]string, key string) error {
 	capabilitySlice := make([]CephAPIClusterUserCapability, 0, len(capabilities))
 	for entity, cap := range capabilities {
 		capabilitySlice = append(capabilitySlice, CephAPIClusterUserCapability{
@@ -288,6 +289,14 @@ func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, ca
 	requestBody := CephAPIClusterUserCreateRequest{
 		UserEntity:   entity,
 		Capabilities: capabilitySlice,
+	}
+
+	if key != "" {
+		importData := fmt.Sprintf("[%s]\n\tkey = %s\n", entity, key)
+		for capEntity, capValue := range capabilities {
+			importData += fmt.Sprintf("\tcaps %s = \"%s\"\n", capEntity, capValue)
+		}
+		requestBody.ImportData = importData
 	}
 
 	jsonPayload, err := json.Marshal(requestBody)
