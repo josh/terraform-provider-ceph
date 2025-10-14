@@ -18,6 +18,34 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
+func testAccProviderConfig() config.Variables {
+	return config.Variables{
+		"endpoint": config.StringVariable(testDashboardURL),
+		"username": config.StringVariable("admin"),
+		"password": config.StringVariable("password"),
+	}
+}
+
+const testAccProviderConfigBlock = `
+variable "endpoint" {
+  type = string
+}
+
+variable "username" {
+  type = string
+}
+
+variable "password" {
+  type = string
+}
+
+provider "ceph" {
+  endpoint = var.endpoint
+  username = var.username
+  password = var.password
+}
+`
+
 func TestAccCephAuthResource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
@@ -26,31 +54,9 @@ func TestAccCephAuthResource(t *testing.T) {
 		CheckDestroy: testAccCheckCephAuthDestroy,
 		Steps: []resource.TestStep{
 			{
-				ConfigVariables: config.Variables{
-					"endpoint": config.StringVariable(testDashboardURL),
-					"username": config.StringVariable("admin"),
-					"password": config.StringVariable("password"),
-				},
-				Config: `
-					variable "endpoint" {
-					  type = string
-					}
-
-					variable "username" {
-					  type = string
-					}
-
-					variable "password" {
-					  type = string
-					}
-
-					provider "ceph" {
-					  endpoint = var.endpoint
-					  username = var.username
-					  password = var.password
-					}
-
-					resource "ceph_auth" "test" {
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_auth" "foo" {
 					  entity = "client.foo"
 					  caps = {
 					    mon = "allow r"
@@ -60,12 +66,12 @@ func TestAccCephAuthResource(t *testing.T) {
 				`,
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
-						"ceph_auth.test",
+						"ceph_auth.foo",
 						tfjsonpath.New("entity"),
 						knownvalue.StringExact("client.foo"),
 					),
 					statecheck.ExpectKnownValue(
-						"ceph_auth.test",
+						"ceph_auth.foo",
 						tfjsonpath.New("caps"),
 						knownvalue.MapExact(map[string]knownvalue.Check{
 							"mon": knownvalue.StringExact("allow r"),
@@ -73,12 +79,12 @@ func TestAccCephAuthResource(t *testing.T) {
 						}),
 					),
 					statecheck.ExpectKnownValue(
-						"ceph_auth.test",
+						"ceph_auth.foo",
 						tfjsonpath.New("key"),
 						knownvalue.NotNull(),
 					),
 					statecheck.ExpectKnownValue(
-						"ceph_auth.test",
+						"ceph_auth.foo",
 						tfjsonpath.New("keyring"),
 						knownvalue.NotNull(),
 					),
@@ -92,31 +98,26 @@ func TestAccCephAuthResource(t *testing.T) {
 				),
 			},
 			{
-				ConfigVariables: config.Variables{
-					"endpoint": config.StringVariable(testDashboardURL),
-					"username": config.StringVariable("admin"),
-					"password": config.StringVariable("password"),
-				},
-				Config: `
-					variable "endpoint" {
-					  type = string
+				ConfigVariables:   testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_auth" "foo" {
+					  entity = "client.foo"
+					  caps = {
+					    mon = "allow r"
+					    osd = "allow rw pool=foo"
+					  }
 					}
-
-					variable "username" {
-					  type = string
-					}
-
-					variable "password" {
-					  type = string
-					}
-
-					provider "ceph" {
-					  endpoint = var.endpoint
-					  username = var.username
-					  password = var.password
-					}
-
-					resource "ceph_auth" "test" {
+				`,
+				ResourceName:                         "ceph_auth.foo",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "entity",
+				ImportStateId:                        "client.foo",
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_auth" "foo" {
 					  entity = "client.foo"
 					  caps = {
 					    mon = "allow rw"
@@ -127,12 +128,12 @@ func TestAccCephAuthResource(t *testing.T) {
 				`,
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
-						"ceph_auth.test",
+						"ceph_auth.foo",
 						tfjsonpath.New("entity"),
 						knownvalue.StringExact("client.foo"),
 					),
 					statecheck.ExpectKnownValue(
-						"ceph_auth.test",
+						"ceph_auth.foo",
 						tfjsonpath.New("caps"),
 						knownvalue.MapExact(map[string]knownvalue.Check{
 							"mon": knownvalue.StringExact("allow rw"),
@@ -149,6 +150,46 @@ func TestAccCephAuthResource(t *testing.T) {
 						"mds": "allow rw",
 					}),
 				),
+			},
+		},
+	})
+}
+
+func TestAccCephAuthResourceImport(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
+		},
+		CheckDestroy: testAccCheckCephAuthDestroy,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_auth" "bar" {
+					  entity = "client.bar"
+					  caps = {
+					    mon = "allow r"
+					    osd = "allow rw pool=bar"
+					  }
+					}
+				`,
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_auth" "bar" {
+					  entity = "client.bar"
+					  caps = {
+					    mon = "allow r"
+					    osd = "allow rw pool=bar"
+					  }
+					}
+				`,
+				ResourceName:                         "ceph_auth.bar",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "entity",
+				ImportStateId:                        "client.bar",
 			},
 		},
 	})
