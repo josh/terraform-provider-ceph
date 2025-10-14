@@ -282,3 +282,81 @@ func checkCephAuthHasCaps(t *testing.T, entity string, expectedCaps map[string]s
 	}
 }
 
+func checkCephAuthHasKey(t *testing.T, entity string, expectedKey string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "auth", "get", entity, "--format", "json")
+		output, err := cmd.Output()
+		if err != nil {
+			return fmt.Errorf("auth entity %s does not exist: %w", entity, err)
+		}
+
+		var authData []struct {
+			Entity string            `json:"entity"`
+			Key    string            `json:"key"`
+			Caps   map[string]string `json:"caps"`
+		}
+		if err := json.Unmarshal(output, &authData); err != nil {
+			return fmt.Errorf("failed to parse auth output: %w", err)
+		}
+
+		if len(authData) == 0 {
+			return fmt.Errorf("auth entity %s not found in output", entity)
+		}
+
+		actualKey := authData[0].Key
+		if actualKey != expectedKey {
+			return fmt.Errorf("key mismatch for entity %s: expected %q, got %q", entity, expectedKey, actualKey)
+		}
+
+		t.Logf("Verified auth entity %s has expected key", entity)
+		return nil
+	}
+}
+
+func TestAccCephAuthResource_staticKey(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
+		},
+		CheckDestroy: testAccCheckCephAuthDestroy,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_auth" "foo" {
+					  entity = "client.foo"
+					  key    = "AQBvaBVesCMcKRAAoKhLdz8Qh/qPNqF9UGKYfg=="
+					  caps = {
+					    mon = "allow r"
+					    osd = "allow rw pool=test"
+					  }
+					}
+				`,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_auth.foo",
+						tfjsonpath.New("entity"),
+						knownvalue.StringExact("client.foo"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_auth.foo",
+						tfjsonpath.New("key"),
+						knownvalue.StringExact("AQBvaBVesCMcKRAAoKhLdz8Qh/qPNqF9UGKYfg=="),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephAuthExists(t, "client.foo"),
+					checkCephAuthHasKey(t, "client.foo", "AQBvaBVesCMcKRAAoKhLdz8Qh/qPNqF9UGKYfg=="),
+					checkCephAuthHasCaps(t, "client.foo", map[string]string{
+						"mon": "allow r",
+						"osd": "allow rw pool=test",
+					}),
+				),
+			},
+		},
+	})
+}
+
