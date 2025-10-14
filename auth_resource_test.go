@@ -22,6 +22,7 @@ func TestAccCephAuthResource(t *testing.T) {
 		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
 			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
 		},
+		CheckDestroy: testAccCheckCephAuthDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: fmt.Sprintf(`
@@ -114,18 +115,28 @@ func TestAccCephAuthResource(t *testing.T) {
 					}),
 				),
 			},
-			{
-				Config: fmt.Sprintf(`
-					provider "ceph" {
-					  endpoint = %q
-					  username = "admin"
-					  password = "password"
-					}
-				`, testDashboardURL),
-				Check: checkCephAuthNotExists(t, "client.foo"),
-			},
 		},
 	})
+}
+
+func testAccCheckCephAuthDestroy(s *terraform.State) error {
+	for _, rs := range s.RootModule().Resources {
+		if rs.Type != "ceph_auth" {
+			continue
+		}
+
+		entity := rs.Primary.Attributes["entity"]
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "auth", "get", entity, "--format", "json")
+		output, err := cmd.Output()
+		if err == nil {
+			return fmt.Errorf("ceph_auth resource %s still exists (output: %s)", entity, string(output))
+		}
+	}
+	return nil
 }
 
 func checkCephAuthExists(t *testing.T, entity string) resource.TestCheckFunc {
@@ -195,18 +206,3 @@ func checkCephAuthHasCaps(t *testing.T, entity string, expectedCaps map[string]s
 	}
 }
 
-func checkCephAuthNotExists(t *testing.T, entity string) resource.TestCheckFunc {
-	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "auth", "get", entity, "--format", "json")
-		output, err := cmd.Output()
-		if err == nil {
-			return fmt.Errorf("auth entity %s still exists (output: %s)", entity, string(output))
-		}
-
-		t.Logf("Verified auth entity %s does not exist", entity)
-		return nil
-	}
-}
