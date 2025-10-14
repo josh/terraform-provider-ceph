@@ -103,8 +103,16 @@ func (r *AuthResource) Create(ctx context.Context, req resource.CreateRequest, r
 	}
 
 	key := data.Key.ValueString()
-
-	err := r.client.ClusterCreateUser(ctx, entity, caps, key)
+	var err error
+	if key != "" {
+		importData := fmt.Sprintf("[%s]\n\tkey = %s\n", entity, key)
+		for capEntity, capValue := range caps {
+			importData += fmt.Sprintf("\tcaps %s = \"%s\"\n", capEntity, capValue)
+		}
+		err = r.client.ClusterImportUser(ctx, importData)
+	} else {
+		err = r.client.ClusterCreateUser(ctx, entity, caps)
+	}
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
