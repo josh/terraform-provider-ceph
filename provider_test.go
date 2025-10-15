@@ -29,6 +29,10 @@ var (
 	testTimeout      = flag.Duration("timeout", 0, "test timeout")
 )
 
+var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
+	"ceph": providerserver.NewProtocol6WithError(providerFunc()),
+}
+
 func TestMain(m *testing.M) {
 	flag.Parse()
 
@@ -396,9 +400,7 @@ func checkCephStatus(ctx context.Context, confPath string) (cephStatus, error) {
 
 func TestAccProvider_missingAuthentication(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
-		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: config.Variables{
@@ -425,9 +427,7 @@ func TestAccProvider_missingAuthentication(t *testing.T) {
 
 func TestAccProvider_missingEndpoint(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
-		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: `
@@ -448,9 +448,7 @@ func TestAccProvider_missingEndpoint(t *testing.T) {
 
 func TestAccProvider_invalidEndpointURL(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
-		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: `
@@ -472,9 +470,7 @@ func TestAccProvider_invalidEndpointURL(t *testing.T) {
 
 func TestAccProvider_endpointWithApiSuffix(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
-		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: `
@@ -496,9 +492,7 @@ func TestAccProvider_endpointWithApiSuffix(t *testing.T) {
 
 func TestAccProvider_authenticationFailure(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
-		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: config.Variables{
@@ -527,9 +521,7 @@ func TestAccProvider_authenticationFailure(t *testing.T) {
 
 func TestAccProvider_tokenAuthentication(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
-		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
