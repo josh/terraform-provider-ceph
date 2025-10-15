@@ -256,6 +256,31 @@ func TestAccCephAuthResourceImport(t *testing.T) {
 	})
 }
 
+func TestAccCephAuthResourceImport_nonExistent(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_auth" "nonexistent" {
+					  entity = "client.nonexistent"
+					  caps = {
+					    mon = "allow r"
+					  }
+					}
+				`,
+				ResourceName:  "ceph_auth.nonexistent",
+				ImportState:   true,
+				ImportStateId: "client.nonexistent",
+				ExpectError:   regexp.MustCompile(`(?i)unable to export user from ceph api`),
+			},
+		},
+	})
+}
+
 func testAccCheckCephAuthDestroy(s *terraform.State) error {
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "ceph_auth" {
