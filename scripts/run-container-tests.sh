@@ -23,6 +23,9 @@ if [ -z "$CONTAINER_RUNTIME" ]; then
 	exit 1
 fi
 
+rm -rf ./tmp
+mkdir ./tmp
+
 set -o xtrace
 $CONTAINER_RUNTIME build --file Dockerfile-dev --tag terraform-provider-ceph:latest .
-$CONTAINER_RUNTIME run --rm --name terraform-provider-ceph --env TF_ACC=1 terraform-provider-ceph:latest go test "$@"
+$CONTAINER_RUNTIME run --rm --name terraform-provider-ceph --env TF_ACC=1 --volume ./tmp:/tmp/host terraform-provider-ceph:latest go test "$@"
