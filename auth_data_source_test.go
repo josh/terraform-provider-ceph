@@ -1,6 +1,7 @@
 package main
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
@@ -46,6 +47,25 @@ func TestAccCephAuthDataSource(t *testing.T) {
 						}),
 					),
 				},
+			},
+		},
+	})
+}
+
+func TestAccCephAuthDataSource_nonExistent(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					data "ceph_auth" "nonexistent" {
+					  entity = "client.doesnotexist"
+					}
+				`,
+				ExpectError: regexp.MustCompile(`(?i)unable to export user from ceph api`),
 			},
 		},
 	})

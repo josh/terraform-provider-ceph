@@ -5,14 +5,21 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-framework/providerserver"
+	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
+	"github.com/hashicorp/terraform-plugin-testing/config"
+	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 var (
@@ -385,4 +392,187 @@ func checkCephStatus(ctx context.Context, confPath string) (cephStatus, error) {
 	}
 
 	return status, err
+}
+
+func TestAccProvider_missingAuthentication(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: config.Variables{
+					"endpoint": config.StringVariable(testDashboardURL),
+				},
+				Config: `
+					variable "endpoint" {
+					  type = string
+					}
+
+					provider "ceph" {
+					  endpoint = var.endpoint
+					}
+
+					data "ceph_auth" "test" {
+					  entity = "client.admin"
+					}
+				`,
+				ExpectError: regexp.MustCompile(`(?i)either token or both username and password must be configured`),
+			},
+		},
+	})
+}
+
+func TestAccProvider_missingEndpoint(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: `
+					provider "ceph" {
+					  username = "admin"
+					  password = "password"
+					}
+
+					data "ceph_auth" "test" {
+					  entity = "client.admin"
+					}
+				`,
+				ExpectError: regexp.MustCompile(`(?i)a provider endpoint must be configured`),
+			},
+		},
+	})
+}
+
+func TestAccProvider_invalidEndpointURL(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: `
+					provider "ceph" {
+					  endpoint = "://invalid-url"
+					  username = "admin"
+					  password = "password"
+					}
+
+					data "ceph_auth" "test" {
+					  entity = "client.admin"
+					}
+				`,
+				ExpectError: regexp.MustCompile(`(?i)unable to parse endpoint url`),
+			},
+		},
+	})
+}
+
+func TestAccProvider_endpointWithApiSuffix(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: `
+					provider "ceph" {
+					  endpoint = "https://ceph.example.com/api"
+					  username = "admin"
+					  password = "password"
+					}
+
+					data "ceph_auth" "test" {
+					  entity = "client.admin"
+					}
+				`,
+				ExpectError: regexp.MustCompile(`(?i)endpoint should not end with '/api'`),
+			},
+		},
+	})
+}
+
+func TestAccProvider_authenticationFailure(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: config.Variables{
+					"endpoint": config.StringVariable(testDashboardURL),
+				},
+				Config: `
+					variable "endpoint" {
+					  type = string
+					}
+
+					provider "ceph" {
+					  endpoint = var.endpoint
+					  username = "admin"
+					  password = "wrongpassword"
+					}
+
+					data "ceph_auth" "test" {
+					  entity = "client.admin"
+					}
+				`,
+				ExpectError: regexp.MustCompile(`(?i)failed to configure ceph api client`),
+			},
+		},
+	})
+}
+
+func TestAccProvider_tokenAuthentication(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
+			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
+		},
+		PreCheck: func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			client := &CephAPIClient{}
+			endpoint, err := url.Parse(testDashboardURL)
+			if err != nil {
+				t.Fatalf("Failed to parse test dashboard URL: %v", err)
+			}
+
+			if err := client.Configure(ctx, []*url.URL{endpoint}, "admin", "password", ""); err != nil {
+				t.Fatalf("Failed to configure client: %v", err)
+			}
+
+			authToken := client.token
+			if authToken == "" {
+				t.Fatal("Failed to obtain auth token")
+			}
+
+			t.Setenv("TF_VAR_endpoint", testDashboardURL)
+			t.Setenv("TF_VAR_token", authToken)
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: `
+					variable "endpoint" {
+					  type = string
+					}
+
+					variable "token" {
+					  type = string
+					}
+
+					provider "ceph" {
+					  endpoint = var.endpoint
+					  token    = var.token
+					}
+
+					data "ceph_auth" "test" {
+					  entity = "client.admin"
+					}
+				`,
+			},
+		},
+	})
 }
