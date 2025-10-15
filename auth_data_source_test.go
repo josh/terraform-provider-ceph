@@ -38,7 +38,7 @@ func TestAccCephAuthDataSource(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.ceph_auth.client_admin",
 						tfjsonpath.New("caps"),
-						knownvalue.MapExact(map[string]knownvalue.Check{
+						knownvalue.ObjectExact(map[string]knownvalue.Check{
 							"mon": knownvalue.StringExact("allow *"),
 							"mds": knownvalue.StringExact("allow *"),
 							"osd": knownvalue.StringExact("allow *"),

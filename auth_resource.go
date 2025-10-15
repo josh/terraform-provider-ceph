@@ -96,9 +96,8 @@ func (r *AuthResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	entity := data.Entity.ValueString()
 
-	var caps map[string]string
-	resp.Diagnostics.Append(data.Caps.ElementsAs(ctx, &caps, false)...)
-	if resp.Diagnostics.HasError() {
+	caps, ok := mapAttrToCephCaps(ctx, data.Caps, &resp.Diagnostics)
+	if !ok {
 		return
 	}
 
@@ -106,7 +105,7 @@ func (r *AuthResource) Create(ctx context.Context, req resource.CreateRequest, r
 	var err error
 	if key != "" {
 		importData := fmt.Sprintf("[%s]\n\tkey = %s\n", entity, key)
-		for capEntity, capValue := range caps {
+		for capEntity, capValue := range caps.Map() {
 			importData += fmt.Sprintf("\tcaps %s = \"%s\"\n", capEntity, capValue)
 		}
 		err = r.client.ClusterImportUser(ctx, importData)
@@ -158,9 +157,8 @@ func (r *AuthResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	entity := data.Entity.ValueString()
 
-	var caps map[string]string
-	resp.Diagnostics.Append(data.Caps.ElementsAs(ctx, &caps, false)...)
-	if resp.Diagnostics.HasError() {
+	caps, ok := mapAttrToCephCaps(ctx, data.Caps, &resp.Diagnostics)
+	if !ok {
 		return
 	}
 
@@ -245,7 +243,42 @@ func updateAuthModelFromCephExport(ctx context.Context, client *CephAPIClient, e
 	}
 	keyringUser := keyringUsers[0]
 
-	data.Caps, _ = types.MapValueFrom(ctx, types.StringType, keyringUser.Caps)
+	data.Caps = cephCapsToMapValue(ctx, keyringUser.Caps, diagnostics)
 	data.Key = types.StringValue(keyringUser.Key)
 	data.Keyring = types.StringValue(keyringRaw)
+}
+
+func mapAttrToCephCaps(ctx context.Context, caps types.Map, diags *diag.Diagnostics) (CephCaps, bool) {
+	if caps.IsUnknown() {
+		diags.AddError("Invalid Capabilities", "caps must be known")
+		return CephCaps{}, false
+	}
+
+	if caps.IsNull() {
+		diags.AddError("Invalid Capabilities", "caps must be provided")
+		return CephCaps{}, false
+	}
+
+	var raw map[string]string
+	diags.Append(caps.ElementsAs(ctx, &raw, false)...)
+	if diags.HasError() {
+		return CephCaps{}, false
+	}
+
+	result, err := NewCephCapsFromMap(raw)
+	if err != nil {
+		diags.AddError("Invalid Capabilities", err.Error())
+		return CephCaps{}, false
+	}
+
+	return result, true
+}
+
+func cephCapsToMapValue(ctx context.Context, caps CephCaps, diags *diag.Diagnostics) types.Map {
+	value, err := types.MapValueFrom(ctx, types.StringType, caps.Map())
+	if err != nil {
+		diags.AddError("State Error", fmt.Sprintf("unable to encode caps: %s", err))
+		return types.MapNull(types.StringType)
+	}
+	return value
 }

@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 )
 
@@ -17,25 +16,6 @@ type CephAPIClient struct {
 	endpoint *url.URL
 	token    string
 	client   *http.Client
-}
-
-var (
-	validCapabilityTypes = map[string]struct{}{
-		"mds": {},
-		"mgr": {},
-		"mon": {},
-		"osd": {},
-	}
-	validCapabilityTypeList = []string{"mds", "mgr", "mon", "osd"}
-)
-
-func validateCapabilityTypes(capabilities map[string]string) error {
-	for capabilityType := range capabilities {
-		if _, ok := validCapabilityTypes[capabilityType]; !ok {
-			return fmt.Errorf("unknown cap type %q; valid cap types: %s", capabilityType, strings.Join(validCapabilityTypeList, ", "))
-		}
-	}
-	return nil
 }
 
 func (c *CephAPIClient) Configure(ctx context.Context, endpoints []*url.URL, username, password, token string) error {
@@ -297,18 +277,30 @@ type CephAPIClusterUserCreateRequest struct {
 	ImportData   string                         `json:"import_data,omitempty"`
 }
 
-func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, capabilities map[string]string) error {
-	if err := validateCapabilityTypes(capabilities); err != nil {
-		return err
+func (c CephCaps) asClusterCapabilities() []CephAPIClusterUserCapability {
+	capabilitySlice := make([]CephAPIClusterUserCapability, 0, 4)
+
+	if c.MDS != "" {
+		capabilitySlice = append(capabilitySlice, CephAPIClusterUserCapability{Entity: "mds", Cap: c.MDS})
 	}
 
-	capabilitySlice := make([]CephAPIClusterUserCapability, 0, len(capabilities))
-	for entity, cap := range capabilities {
-		capabilitySlice = append(capabilitySlice, CephAPIClusterUserCapability{
-			Entity: entity,
-			Cap:    cap,
-		})
+	if c.MGR != "" {
+		capabilitySlice = append(capabilitySlice, CephAPIClusterUserCapability{Entity: "mgr", Cap: c.MGR})
 	}
+
+	if c.MON != "" {
+		capabilitySlice = append(capabilitySlice, CephAPIClusterUserCapability{Entity: "mon", Cap: c.MON})
+	}
+
+	if c.OSD != "" {
+		capabilitySlice = append(capabilitySlice, CephAPIClusterUserCapability{Entity: "osd", Cap: c.OSD})
+	}
+
+	return capabilitySlice
+}
+
+func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, capabilities CephCaps) error {
+	capabilitySlice := capabilities.asClusterCapabilities()
 
 	requestBody := CephAPIClusterUserCreateRequest{
 		UserEntity:   entity,
@@ -385,18 +377,8 @@ type CephAPIClusterUserUpdateRequest struct {
 	Capabilities []CephAPIClusterUserCapability `json:"capabilities"`
 }
 
-func (c *CephAPIClient) ClusterUpdateUser(ctx context.Context, entity string, capabilities map[string]string) error {
-	if err := validateCapabilityTypes(capabilities); err != nil {
-		return err
-	}
-
-	capabilitySlice := make([]CephAPIClusterUserCapability, 0, len(capabilities))
-	for entity, cap := range capabilities {
-		capabilitySlice = append(capabilitySlice, CephAPIClusterUserCapability{
-			Entity: entity,
-			Cap:    cap,
-		})
-	}
+func (c *CephAPIClient) ClusterUpdateUser(ctx context.Context, entity string, capabilities CephCaps) error {
+	capabilitySlice := capabilities.asClusterCapabilities()
 
 	requestBody := CephAPIClusterUserUpdateRequest{
 		UserEntity:   entity,
