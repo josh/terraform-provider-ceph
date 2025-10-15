@@ -368,7 +368,7 @@ func (c *CephAPIClient) ClusterImportUser(ctx context.Context, importData string
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
-	defer httpResp.Body.Close()
+	defer httpResp.Body.Close() //nolint:errcheck
 
 	if httpResp.StatusCode != http.StatusCreated && httpResp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(httpResp.Body)

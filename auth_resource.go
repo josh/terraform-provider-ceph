@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	_ resource.Resource              = &AuthResource{}
+	_ resource.Resource                = &AuthResource{}
 	_ resource.ResourceWithImportState = &AuthResource{}
 )
 

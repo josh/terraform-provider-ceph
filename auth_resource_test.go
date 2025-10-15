@@ -98,7 +98,7 @@ func TestAccCephAuthResource(t *testing.T) {
 				),
 			},
 			{
-				ConfigVariables:   testAccProviderConfig(),
+				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + `
 					resource "ceph_auth" "foo" {
 					  entity = "client.foo"
@@ -359,4 +359,3 @@ func TestAccCephAuthResource_staticKey(t *testing.T) {
 		},
 	})
 }
-

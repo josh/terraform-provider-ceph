@@ -45,7 +45,9 @@ func TestMain(m *testing.M) {
 		testDashboardURL, confPath, testClusterWG, err = startCephCluster(ctx, tmpDir)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to start ceph cluster: %v\n", err)
-			os.RemoveAll(tmpDir)
+			if err := os.RemoveAll(tmpDir); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to clean up temp dir: %v\n", err)
+			}
 			os.Exit(1)
 		}
 		testConfPath = confPath
@@ -54,7 +56,9 @@ func TestMain(m *testing.M) {
 
 		cancel()
 		testClusterWG.Wait()
-		os.RemoveAll(tmpDir)
+		if err := os.RemoveAll(tmpDir); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to clean up temp dir: %v\n", err)
+		}
 	} else {
 		code = m.Run()
 	}
