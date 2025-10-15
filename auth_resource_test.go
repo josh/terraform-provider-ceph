@@ -9,8 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hashicorp/terraform-plugin-framework/providerserver"
-	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
@@ -49,10 +47,8 @@ provider "ceph" {
 
 func TestAccCephAuthResource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
-		},
-		CheckDestroy: testAccCheckCephAuthDestroy,
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephAuthDestroy,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -161,9 +157,7 @@ func TestAccCephAuthResource(t *testing.T) {
 
 func TestAccCephAuthResource_invalidCapType(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
-		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -183,10 +177,8 @@ func TestAccCephAuthResource_invalidCapType(t *testing.T) {
 
 func TestAccCephAuthResource_invalidCapTypeOnUpdate(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
-		},
-		CheckDestroy: testAccCheckCephAuthDestroy,
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephAuthDestroy,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -218,10 +210,8 @@ func TestAccCephAuthResource_invalidCapTypeOnUpdate(t *testing.T) {
 
 func TestAccCephAuthResourceImport(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
-		},
-		CheckDestroy: testAccCheckCephAuthDestroy,
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephAuthDestroy,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -258,9 +248,7 @@ func TestAccCephAuthResourceImport(t *testing.T) {
 
 func TestAccCephAuthResourceImport_nonExistent(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
-		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -404,10 +392,8 @@ func checkCephAuthHasKey(t *testing.T, entity string, expectedKey string) resour
 
 func TestAccCephAuthResource_staticKey(t *testing.T) {
 	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: map[string]func() (tfprotov6.ProviderServer, error){
-			"ceph": providerserver.NewProtocol6WithError(providerFunc()),
-		},
-		CheckDestroy: testAccCheckCephAuthDestroy,
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephAuthDestroy,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
