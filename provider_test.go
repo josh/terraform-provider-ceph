@@ -96,6 +96,14 @@ func startCephCluster(ctx context.Context, tmpDir string) (string, string, *sync
 		return "", "", nil, err
 	}
 
+	if err := startCephOsd(&wg, ctx, confPath, tmpDir); err != nil {
+		return "", "", nil, err
+	}
+
+	if err := waitForCephOsd(startupCtx, confPath); err != nil {
+		return "", "", nil, err
+	}
+
 	if err := startCephMgr(&wg, ctx, confPath); err != nil {
 		return "", "", nil, err
 	}
@@ -168,6 +176,12 @@ func setupCephDir(ctx context.Context, tmpDir string) (string, error) {
 			"caps mon": "allow *",
 			"caps osd": "allow *",
 			"caps mds": "allow *",
+		},
+		"osd.0": {
+			"key":      "AQCzsPFolNPNNhAAkglWKcr2qZB4lCK/u9A1Zw==",
+			"caps mon": "allow profile osd",
+			"caps mgr": "allow profile osd",
+			"caps osd": "allow *",
 		},
 	}
 
@@ -283,6 +297,53 @@ func waitForCephMon(ctx context.Context, confPath string) error {
 			return ctx.Err()
 		case <-ticker.C:
 			if status, err := checkCephStatus(ctx, confPath); err == nil && status.Monmap.NumMons > 0 {
+				return nil
+			}
+		}
+	}
+}
+
+func startCephOsd(wg *sync.WaitGroup, ctx context.Context, confPath string, tmpDir string) error {
+	cmd := exec.CommandContext(ctx, "ceph-osd", "--conf", confPath, "--id", "0", "--mkfs")
+	if testing.Verbose() {
+		cmd.Stdout = os.Stderr
+		cmd.Stderr = os.Stderr
+	}
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to initialize OSD filesystem: %w", err)
+	}
+
+	cmd = exec.CommandContext(ctx, "ceph-osd", "--conf", confPath, "--id", "0", "--foreground")
+	if testing.Verbose() {
+		cmd.Stdout = os.Stderr
+		cmd.Stderr = os.Stderr
+	}
+
+	err := cmd.Start()
+	if err != nil {
+		return fmt.Errorf("failed to start OSD: %w", err)
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = cmd.Wait()
+	}()
+
+	return nil
+}
+
+func waitForCephOsd(ctx context.Context, confPath string) error {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if status, err := checkCephStatus(ctx, confPath); err == nil && status.Osdmap.NumUpOsds > 0 {
 				return nil
 			}
 		}
