@@ -130,3 +130,31 @@ func parseCephKeyring(content string) ([]CephUser, error) {
 
 	return users, nil
 }
+
+func formatCephKeyring(users []CephUser) string {
+	var result strings.Builder
+
+	for i, user := range users {
+		if i > 0 {
+			result.WriteString("\n")
+		}
+
+		result.WriteString(fmt.Sprintf("[%s]\n", user.Entity))
+		result.WriteString(fmt.Sprintf("\tkey = %s\n", user.Key))
+
+		if user.Caps.MDS != "" {
+			result.WriteString(fmt.Sprintf("\tcaps mds = \"%s\"\n", user.Caps.MDS))
+		}
+		if user.Caps.MGR != "" {
+			result.WriteString(fmt.Sprintf("\tcaps mgr = \"%s\"\n", user.Caps.MGR))
+		}
+		if user.Caps.MON != "" {
+			result.WriteString(fmt.Sprintf("\tcaps mon = \"%s\"\n", user.Caps.MON))
+		}
+		if user.Caps.OSD != "" {
+			result.WriteString(fmt.Sprintf("\tcaps osd = \"%s\"\n", user.Caps.OSD))
+		}
+	}
+
+	return result.String()
+}

@@ -104,10 +104,14 @@ func (r *AuthResource) Create(ctx context.Context, req resource.CreateRequest, r
 	key := data.Key.ValueString()
 	var err error
 	if key != "" {
-		importData := fmt.Sprintf("[%s]\n\tkey = %s\n", entity, key)
-		for capEntity, capValue := range caps.Map() {
-			importData += fmt.Sprintf("\tcaps %s = \"%s\"\n", capEntity, capValue)
+		users := []CephUser{
+			{
+				Entity: entity,
+				Key:    key,
+				Caps:   caps,
+			},
 		}
+		importData := formatCephKeyring(users)
 		err = r.client.ClusterImportUser(ctx, importData)
 	} else {
 		err = r.client.ClusterCreateUser(ctx, entity, caps)
