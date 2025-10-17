@@ -17,7 +17,8 @@ jobs:
           sudo apt-get install --yes \
             ceph \
             ceph-mgr-dashboard \
-            python3-setuptools
+            python3-setuptools \
+            radosgw
 
       - uses: hashicorp/setup-terraform@v3.1.2
         with:

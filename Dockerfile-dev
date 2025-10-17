@@ -5,7 +5,8 @@ RUN apt-get update && apt-get install --yes \
     ceph-mgr-dashboard \
     gcc \
     golang \
-    python3-setuptools
+    python3-setuptools \
+    radosgw
 
 WORKDIR /src
 

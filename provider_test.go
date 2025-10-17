@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -112,6 +113,14 @@ func startCephCluster(ctx context.Context, tmpDir string) (string, string, *sync
 		return "", "", nil, err
 	}
 
+	if err := startCephRgw(&wg, ctx, confPath); err != nil {
+		return "", "", nil, err
+	}
+
+	if err := waitForCephRgw(startupCtx, confPath); err != nil {
+		return "", "", nil, err
+	}
+
 	dashboardURL, err := enableCephDashboard(startupCtx, confPath)
 	if err != nil {
 		return "", "", nil, err
@@ -157,6 +166,10 @@ func setupCephDir(ctx context.Context, tmpDir string) (string, error) {
 			"osd_data":        filepath.Join(tmpDir, "osd", "ceph-$id"),
 			"osd_objectstore": "memstore",
 		},
+		"client.rgw.rgw1": {
+			"rgw_data":      filepath.Join(tmpDir, "rgw", "ceph-rgw1"),
+			"rgw_frontends": "beast port=7480",
+		},
 	}
 
 	keyringConfig := map[string]map[string]string{
@@ -183,6 +196,12 @@ func setupCephDir(ctx context.Context, tmpDir string) (string, error) {
 			"caps mgr": "allow profile osd",
 			"caps osd": "allow *",
 		},
+		"client.rgw.rgw1": {
+			"key":      "AQDRm89oNP7bAxAA6TgZ1toOkhDjUNEkRL18Gg==",
+			"caps mon": "allow rw",
+			"caps osd": "allow rwx",
+			"caps mgr": "allow rw",
+		},
 	}
 
 	err := os.MkdirAll(filepath.Join(tmpDir, "mon"), 0o755)
@@ -196,6 +215,11 @@ func setupCephDir(ctx context.Context, tmpDir string) (string, error) {
 	}
 
 	err = os.MkdirAll(filepath.Join(tmpDir, "osd", "ceph-0"), 0o755)
+	if err != nil {
+		return confPath, err
+	}
+
+	err = os.MkdirAll(filepath.Join(tmpDir, "rgw", "ceph-rgw1"), 0o755)
 	if err != nil {
 		return confPath, err
 	}
@@ -382,6 +406,50 @@ func waitForCephMgr(ctx context.Context, confPath string) error {
 			return ctx.Err()
 		case <-ticker.C:
 			if status, err := checkCephStatus(ctx, confPath); err == nil && status.Mgrmap.Available {
+				return nil
+			}
+		}
+	}
+}
+
+func startCephRgw(wg *sync.WaitGroup, ctx context.Context, confPath string) error {
+	cmd := exec.CommandContext(ctx, "radosgw", "--conf", confPath, "--id", "rgw.rgw1", "--foreground")
+
+	if testing.Verbose() {
+		cmd.Stdout = os.Stderr
+		cmd.Stderr = os.Stderr
+	}
+
+	err := cmd.Start()
+	if err != nil {
+		return fmt.Errorf("failed to start RGW: %w", err)
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = cmd.Wait()
+	}()
+
+	return nil
+}
+
+func waitForCephRgw(ctx context.Context, confPath string) error {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	client := &http.Client{Timeout: 500 * time.Millisecond}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			resp, err := client.Head("http://127.0.0.1:7480/")
+			if resp != nil {
+				_ = resp.Body.Close()
+			}
+			if err == nil {
 				return nil
 			}
 		}
