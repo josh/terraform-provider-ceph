@@ -582,7 +582,6 @@ type CephAPIRGWUser struct {
 	Keys        []CephAPIRGWUserKey `json:"keys"`
 	System      bool                `json:"system"`
 	Admin       bool                `json:"admin"`
-	CreateDate  string              `json:"create_date"`
 	UID         string              `json:"uid"`
 }
 
