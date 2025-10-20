@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -53,16 +55,23 @@ func TestMain(m *testing.M) {
 			os.Exit(1)
 		}
 
+		bufferedLog := &BufferedLog{target: os.Stderr}
 		var confPath string
-		testDashboardURL, confPath, testClusterWG, err = startCephCluster(ctx, tmpDir)
+		testDashboardURL, confPath, testClusterWG, err = startCephCluster(ctx, tmpDir, bufferedLog)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to start ceph cluster: %v\n", err)
+			fmt.Fprintln(os.Stderr, "\n=== Ceph cluster setup logs ===")
+			if err := bufferedLog.Flush(); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to flush setup log: %v\n", err)
+			}
 			if err := os.RemoveAll(tmpDir); err != nil {
 				fmt.Fprintf(os.Stderr, "failed to clean up temp dir: %v\n", err)
 			}
 			os.Exit(1)
 		}
 		testConfPath = confPath
+
+		bufferedLog.EnableStream()
 
 		code = m.Run()
 
@@ -78,18 +87,18 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func startCephCluster(ctx context.Context, tmpDir string) (string, string, *sync.WaitGroup, error) {
+func startCephCluster(ctx context.Context, tmpDir string, out io.Writer) (string, string, *sync.WaitGroup, error) {
 	startupCtx, startupCancel := context.WithTimeout(ctx, 30*time.Second)
 	defer startupCancel()
 
-	confPath, err := setupCephDir(startupCtx, tmpDir)
+	confPath, err := setupCephDir(startupCtx, tmpDir, out)
 	if err != nil {
 		return "", "", nil, err
 	}
 
 	var wg sync.WaitGroup
 
-	if err := startCephMon(&wg, ctx, confPath); err != nil {
+	if err := startCephMon(&wg, ctx, confPath, out); err != nil {
 		return "", "", nil, err
 	}
 
@@ -97,7 +106,7 @@ func startCephCluster(ctx context.Context, tmpDir string) (string, string, *sync
 		return "", "", nil, err
 	}
 
-	if err := startCephOsd(&wg, ctx, confPath, tmpDir); err != nil {
+	if err := startCephOsd(&wg, ctx, confPath, tmpDir, out); err != nil {
 		return "", "", nil, err
 	}
 
@@ -105,7 +114,7 @@ func startCephCluster(ctx context.Context, tmpDir string) (string, string, *sync
 		return "", "", nil, err
 	}
 
-	if err := startCephMgr(&wg, ctx, confPath); err != nil {
+	if err := startCephMgr(&wg, ctx, confPath, out); err != nil {
 		return "", "", nil, err
 	}
 
@@ -113,7 +122,7 @@ func startCephCluster(ctx context.Context, tmpDir string) (string, string, *sync
 		return "", "", nil, err
 	}
 
-	if err := startCephRgw(&wg, ctx, confPath); err != nil {
+	if err := startCephRgw(&wg, ctx, confPath, out); err != nil {
 		return "", "", nil, err
 	}
 
@@ -121,7 +130,7 @@ func startCephCluster(ctx context.Context, tmpDir string) (string, string, *sync
 		return "", "", nil, err
 	}
 
-	dashboardURL, err := enableCephDashboard(startupCtx, confPath)
+	dashboardURL, err := enableCephDashboard(startupCtx, confPath, out)
 	if err != nil {
 		return "", "", nil, err
 	}
@@ -129,7 +138,7 @@ func startCephCluster(ctx context.Context, tmpDir string) (string, string, *sync
 	return dashboardURL, confPath, &wg, nil
 }
 
-func setupCephDir(ctx context.Context, tmpDir string) (string, error) {
+func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, error) {
 	fsid := "6bb5784d-86b1-4b48-aff7-04d5dd22ef07"
 	confPath := filepath.Join(tmpDir, "ceph.conf")
 
@@ -243,16 +252,22 @@ func setupCephDir(ctx context.Context, tmpDir string) (string, error) {
 
 	monmapPath := filepath.Join(tmpDir, "monmap")
 	cmd := exec.CommandContext(ctx, "monmaptool", "--conf", confPath, monmapPath, "--create", "--fsid", fsid)
+	cmd.Stdout = out
+	cmd.Stderr = out
 	if err := cmd.Run(); err != nil {
 		return confPath, fmt.Errorf("failed to create monitor map: %w", err)
 	}
 
 	cmd = exec.CommandContext(ctx, "monmaptool", "--conf", confPath, monmapPath, "--add", "mon1", "127.0.0.1:6789")
+	cmd.Stdout = out
+	cmd.Stderr = out
 	if err := cmd.Run(); err != nil {
 		return confPath, fmt.Errorf("failed to add monitor to map: %w", err)
 	}
 
 	cmd = exec.CommandContext(ctx, "ceph-mon", "--conf", confPath, "--mkfs", "--id", "mon1", "--monmap", monmapPath, "--keyring", filepath.Join(tmpDir, "keyring"))
+	cmd.Stdout = out
+	cmd.Stderr = out
 	if err := cmd.Run(); err != nil {
 		return confPath, fmt.Errorf("failed to initialize monitor filesystem: %w", err)
 	}
@@ -294,13 +309,10 @@ func generateINIConfig(config map[string]map[string]string) string {
 	return result.String()
 }
 
-func startCephMon(wg *sync.WaitGroup, ctx context.Context, confPath string) error {
+func startCephMon(wg *sync.WaitGroup, ctx context.Context, confPath string, out io.Writer) error {
 	cmd := exec.CommandContext(ctx, "ceph-mon", "--conf", confPath, "--id", "mon1", "--foreground")
-
-	if testing.Verbose() {
-		cmd.Stdout = os.Stderr
-		cmd.Stderr = os.Stderr
-	}
+	cmd.Stdout = out
+	cmd.Stderr = out
 
 	err := cmd.Start()
 	if err != nil {
@@ -332,22 +344,18 @@ func waitForCephMon(ctx context.Context, confPath string) error {
 	}
 }
 
-func startCephOsd(wg *sync.WaitGroup, ctx context.Context, confPath string, tmpDir string) error {
+func startCephOsd(wg *sync.WaitGroup, ctx context.Context, confPath string, tmpDir string, out io.Writer) error {
 	cmd := exec.CommandContext(ctx, "ceph-osd", "--conf", confPath, "--id", "0", "--mkfs")
-	if testing.Verbose() {
-		cmd.Stdout = os.Stderr
-		cmd.Stderr = os.Stderr
-	}
+	cmd.Stdout = out
+	cmd.Stderr = out
 
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to initialize OSD filesystem: %w", err)
 	}
 
 	cmd = exec.CommandContext(ctx, "ceph-osd", "--conf", confPath, "--id", "0", "--foreground")
-	if testing.Verbose() {
-		cmd.Stdout = os.Stderr
-		cmd.Stderr = os.Stderr
-	}
+	cmd.Stdout = out
+	cmd.Stderr = out
 
 	err := cmd.Start()
 	if err != nil {
@@ -379,13 +387,10 @@ func waitForCephOsd(ctx context.Context, confPath string) error {
 	}
 }
 
-func startCephMgr(wg *sync.WaitGroup, ctx context.Context, confPath string) error {
+func startCephMgr(wg *sync.WaitGroup, ctx context.Context, confPath string, out io.Writer) error {
 	cmd := exec.CommandContext(ctx, "ceph-mgr", "--conf", confPath, "--id", "mgr1", "--foreground")
-
-	if testing.Verbose() {
-		cmd.Stdout = os.Stderr
-		cmd.Stderr = os.Stderr
-	}
+	cmd.Stdout = out
+	cmd.Stderr = out
 
 	err := cmd.Start()
 	if err != nil {
@@ -417,13 +422,10 @@ func waitForCephMgr(ctx context.Context, confPath string) error {
 	}
 }
 
-func startCephRgw(wg *sync.WaitGroup, ctx context.Context, confPath string) error {
+func startCephRgw(wg *sync.WaitGroup, ctx context.Context, confPath string, out io.Writer) error {
 	cmd := exec.CommandContext(ctx, "radosgw", "--conf", confPath, "--id", "rgw.rgw1", "--foreground")
-
-	if testing.Verbose() {
-		cmd.Stdout = os.Stderr
-		cmd.Stderr = os.Stderr
-	}
+	cmd.Stdout = out
+	cmd.Stderr = out
 
 	err := cmd.Start()
 	if err != nil {
@@ -461,19 +463,25 @@ func waitForCephRgw(ctx context.Context, confPath string) error {
 	}
 }
 
-func enableCephDashboard(ctx context.Context, confPath string) (string, error) {
+func enableCephDashboard(ctx context.Context, confPath string, out io.Writer) (string, error) {
 	cmd := exec.CommandContext(ctx, "ceph", "--conf", confPath, "mgr", "module", "enable", "dashboard")
+	cmd.Stdout = out
+	cmd.Stderr = out
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("failed to enable dashboard module: %w", err)
 	}
 
 	cmd = exec.CommandContext(ctx, "ceph", "--conf", confPath, "config", "set", "mgr", "mgr/dashboard/ssl", "false")
+	cmd.Stdout = out
+	cmd.Stderr = out
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("failed to disable dashboard SSL: %w", err)
 	}
 
 	cmd = exec.CommandContext(ctx, "ceph", "--conf", confPath, "dashboard", "ac-user-create", "admin", "-i", "/dev/stdin", "administrator")
 	cmd.Stdin = strings.NewReader("password")
+	cmd.Stdout = out
+	cmd.Stderr = out
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("failed to create dashboard user: %w", err)
 	}
@@ -530,6 +538,41 @@ func checkCephStatus(ctx context.Context, confPath string) (cephStatus, error) {
 	}
 
 	return status, err
+}
+
+type BufferedLog struct {
+	mu        sync.Mutex
+	buffer    bytes.Buffer
+	streaming bool
+	target    io.Writer
+}
+
+func (bl *BufferedLog) Write(p []byte) (n int, err error) {
+	bl.mu.Lock()
+	defer bl.mu.Unlock()
+
+	if bl.streaming {
+		return bl.target.Write(p)
+	}
+	return bl.buffer.Write(p)
+}
+
+func (bl *BufferedLog) EnableStream() {
+	bl.mu.Lock()
+	defer bl.mu.Unlock()
+	bl.streaming = true
+}
+
+func (bl *BufferedLog) Flush() error {
+	bl.mu.Lock()
+	defer bl.mu.Unlock()
+
+	if bl.buffer.Len() > 0 {
+		_, err := io.Copy(bl.target, &bl.buffer)
+		bl.buffer.Reset()
+		return err
+	}
+	return nil
 }
 
 func TestAccProvider_missingAuthentication(t *testing.T) {
