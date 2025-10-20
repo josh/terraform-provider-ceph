@@ -147,6 +147,7 @@ func setupCephDir(ctx context.Context, tmpDir string) (string, error) {
 			"keyring":                               filepath.Join(tmpDir, "keyring"),
 			"log_to_file":                           "false",
 			"log_to_stderr":                         "true",
+			"debug_ms":                              "0",
 			"osd_pool_default_size":                 "1",
 			"osd_pool_default_min_size":             "1",
 			"osd_crush_chooseleaf_type":             "0",
@@ -158,17 +159,21 @@ func setupCephDir(ctx context.Context, tmpDir string) (string, error) {
 			"mon_cluster_log_to_file":   "false",
 			"mon_cluster_log_to_stderr": "true",
 			"mon_allow_pool_delete":     "true",
+			"debug_mon":                 "0",
 		},
 		"mgr": {
 			"mgr_data": filepath.Join(tmpDir, "mgr", "ceph-$id"),
+			"debug_mgr": "0",
 		},
 		"osd": {
 			"osd_data":        filepath.Join(tmpDir, "osd", "ceph-$id"),
 			"osd_objectstore": "memstore",
+			"debug_osd":       "0",
 		},
 		"client.rgw.rgw1": {
 			"rgw_data":      filepath.Join(tmpDir, "rgw", "ceph-rgw1"),
 			"rgw_frontends": "beast port=7480",
+			"debug_rgw":     "0",
 		},
 	}
 
