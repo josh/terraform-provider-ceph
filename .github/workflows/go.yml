@@ -43,3 +43,4 @@ jobs:
           go test -v -timeout 10m
         env:
           TF_ACC: "1"
+          TF_LOG_PROVIDER_CEPH: "trace"
