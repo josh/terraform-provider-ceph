@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 type CephAPIClient struct {
@@ -25,6 +27,9 @@ func (c *CephAPIClient) Configure(ctx context.Context, endpoints []*url.URL, use
 	}
 
 	c.endpoint = endpoint
+	tflog.Info(ctx, "Using ceph mgr endpoint", map[string]interface{}{
+		"endpoint": endpoint.String(),
+	})
 
 	if c.client == nil {
 		c.client = &http.Client{
