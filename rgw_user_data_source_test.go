@@ -59,6 +59,7 @@ func TestAccCephRGWUserDataSource_nonExistent(t *testing.T) {
 }
 
 func createTestRGWUser(t *testing.T, uid, displayName string) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
