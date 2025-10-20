@@ -363,7 +363,6 @@ func TestAccCephRGWUserResource_minimalConfig(t *testing.T) {
 	})
 }
 
-
 func testAccCheckCephRGWUserDestroy(s *terraform.State) error {
 	for _, rs := range s.RootModule().Resources {
 		if rs.Type != "ceph_rgw_user" {

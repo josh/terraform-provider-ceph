@@ -162,7 +162,7 @@ func setupCephDir(ctx context.Context, tmpDir string) (string, error) {
 			"debug_mon":                 "0",
 		},
 		"mgr": {
-			"mgr_data": filepath.Join(tmpDir, "mgr", "ceph-$id"),
+			"mgr_data":  filepath.Join(tmpDir, "mgr", "ceph-$id"),
 			"debug_mgr": "0",
 		},
 		"osd": {

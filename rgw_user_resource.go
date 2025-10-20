@@ -36,13 +36,12 @@ type RGWUserResourceModel struct {
 	UserID      types.String `tfsdk:"user_id"`
 }
 
-
 func (r *RGWUserResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_rgw_user"
 }
 
 func (r *RGWUserResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
-		resp.Schema = resourceSchema.Schema{
+	resp.Schema = resourceSchema.Schema{
 		MarkdownDescription: "This resource allows you to manage a Ceph RGW user.",
 		Attributes: map[string]resourceSchema.Attribute{
 			"uid": resourceSchema.StringAttribute{
@@ -145,7 +144,6 @@ func (r *RGWUserResource) Create(ctx context.Context, req resource.CreateRequest
 		createReq.Suspended = &suspended
 	}
 
-
 	user, err := r.client.RGWCreateUser(ctx, createReq)
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -223,7 +221,6 @@ func (r *RGWUserResource) Update(ctx context.Context, req resource.UpdateRequest
 		}
 		updateReq.Suspended = &suspended
 	}
-
 
 	if !data.Suspended.IsNull() && !data.Suspended.IsUnknown() {
 		suspended := 0
