@@ -685,7 +685,6 @@ type CephAPIRGWUserCreateRequest struct {
 	MaxBuckets  *int   `json:"max_buckets,omitempty"`
 	Suspended   *int   `json:"suspended,omitempty"`
 	System      *bool  `json:"system,omitempty"`
-	Admin       *bool  `json:"admin,omitempty"`
 }
 
 func (c *CephAPIClient) RGWCreateUser(ctx context.Context, req CephAPIRGWUserCreateRequest) (CephAPIRGWUser, error) {
@@ -737,7 +736,6 @@ type CephAPIRGWUserUpdateRequest struct {
 	MaxBuckets  *int    `json:"max_buckets,omitempty"`
 	Suspended   *int    `json:"suspended,omitempty"`
 	System      *bool   `json:"system,omitempty"`
-	Admin       *bool   `json:"admin,omitempty"`
 }
 
 func (c *CephAPIClient) RGWUpdateUser(ctx context.Context, uid string, req CephAPIRGWUserUpdateRequest) (CephAPIRGWUser, error) {
