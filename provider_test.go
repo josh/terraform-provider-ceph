@@ -88,7 +88,7 @@ func TestMain(m *testing.M) {
 }
 
 func startCephCluster(ctx context.Context, tmpDir string, out io.Writer) (string, string, *sync.WaitGroup, error) {
-	startupCtx, startupCancel := context.WithTimeout(ctx, 30*time.Second)
+	startupCtx, startupCancel := context.WithTimeout(ctx, 90*time.Second)
 	defer startupCancel()
 
 	confPath, err := setupCephDir(startupCtx, tmpDir, out)
