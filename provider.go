@@ -154,6 +154,7 @@ func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource
 	return []func() resource.Resource{
 		newAuthResource,
 		newRGWUserResource,
+		newRGWS3KeyResource,
 	}
 }
 
