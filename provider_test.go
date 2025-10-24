@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -30,6 +31,8 @@ var (
 	testClusterWG    *sync.WaitGroup
 	testConfPath     string
 	testTimeout      = flag.Duration("timeout", 0, "test timeout")
+	testSeed         = flag.Int64("seed", 0, "random seed for test names (0 = use current time)")
+	testRand         *rand.Rand
 )
 
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
@@ -38,6 +41,13 @@ var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServe
 
 func TestMain(m *testing.M) {
 	flag.Parse()
+
+	seed := *testSeed
+	if seed == 0 {
+		seed = time.Now().UnixNano()
+	}
+	testRand = rand.New(rand.NewSource(seed))
+	fmt.Fprintf(os.Stderr, "Using random seed: %d (rerun with -seed=%d to reproduce)\n", seed, seed)
 
 	var code int
 
