@@ -578,17 +578,24 @@ func (c *CephAPIClient) RGWListUserNames(ctx context.Context) ([]string, error) 
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-rgw-user-ratelimit>
 
-type CephAPIRGWUserKey struct {
-	User      string `json:"user"`
-	AccessKey string `json:"access_key"`
-	SecretKey string `json:"secret_key"`
-	Active    bool   `json:"active"`
+type CephAPIRGWS3Key struct {
+	User       string `json:"user"`
+	AccessKey  string `json:"access_key"`
+	SecretKey  string `json:"secret_key"`
+	Active     bool   `json:"active"`
+	CreateDate string `json:"create_date"`
 }
 
 type CephAPIRGWSwiftKey struct {
-	User      string `json:"user"`
-	SecretKey string `json:"secret_key"`
-	AccessKey string `json:"access_key,omitempty"`
+	User       string `json:"user"`
+	SecretKey  string `json:"secret_key"`
+	Active     bool   `json:"active"`
+	CreateDate string `json:"create_date"`
+}
+
+type CephAPIRGWSubuser struct {
+	ID          string `json:"id"`
+	Permissions string `json:"permissions"`
 }
 
 type CephAPIRGWCaps struct {
@@ -621,8 +628,8 @@ type CephAPIRGWUser struct {
 	Email               string               `json:"email"`
 	Suspended           int                  `json:"suspended"`
 	MaxBuckets          int                  `json:"max_buckets"`
-	Subusers            []json.RawMessage    `json:"subusers"`
-	Keys                []CephAPIRGWUserKey  `json:"keys"`
+	Subusers            []CephAPIRGWSubuser  `json:"subusers"`
+	Keys                []CephAPIRGWS3Key    `json:"keys"`
 	SwiftKeys           []CephAPIRGWSwiftKey `json:"swift_keys"`
 	Caps                []CephAPIRGWCaps     `json:"caps"`
 	OpMask              string               `json:"op_mask"`

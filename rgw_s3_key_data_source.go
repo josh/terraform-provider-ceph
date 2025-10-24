@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -20,11 +21,11 @@ type RGWS3KeyDataSource struct {
 }
 
 type RGWS3KeyDataSourceModel struct {
-	UID       types.String `tfsdk:"uid"`
-	AccessKey types.String `tfsdk:"access_key"`
-	SecretKey types.String `tfsdk:"secret_key"`
-	User      types.String `tfsdk:"user"`
-	Active    types.Bool   `tfsdk:"active"`
+	User       types.String `tfsdk:"user"`
+	AccessKey  types.String `tfsdk:"access_key"`
+	SecretKey  types.String `tfsdk:"secret_key"`
+	Active     types.Bool   `tfsdk:"active"`
+	CreateDate types.String `tfsdk:"create_date"`
 }
 
 func (d *RGWS3KeyDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -35,25 +36,25 @@ func (d *RGWS3KeyDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 	resp.Schema = dataSourceSchema.Schema{
 		MarkdownDescription: "This data source allows you to get information about a Ceph RGW S3 access key.",
 		Attributes: map[string]dataSourceSchema.Attribute{
-			"uid": dataSourceSchema.StringAttribute{
-				MarkdownDescription: "The user ID that owns the S3 key",
+			"user": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The user or subuser ID that owns the S3 key (format: 'user' or 'user:subuser')",
 				Required:            true,
 			},
 			"access_key": dataSourceSchema.StringAttribute{
-				MarkdownDescription: "The S3 access key ID to look up",
-				Required:            true,
+				MarkdownDescription: "The S3 access key ID to look up (required if user has multiple S3 keys)",
+				Optional:            true,
 			},
 			"secret_key": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The S3 secret key",
 				Computed:            true,
 				Sensitive:           true,
 			},
-			"user": dataSourceSchema.StringAttribute{
-				MarkdownDescription: "The user associated with the key",
-				Computed:            true,
-			},
 			"active": dataSourceSchema.BoolAttribute{
 				MarkdownDescription: "Whether the key is active",
+				Computed:            true,
+			},
+			"create_date": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The creation date of the key",
 				Computed:            true,
 			},
 		},
@@ -88,10 +89,13 @@ func (d *RGWS3KeyDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	uid := data.UID.ValueString()
+	userID := data.User.ValueString()
 	accessKey := data.AccessKey.ValueString()
 
-	user, err := d.client.RGWGetUser(ctx, uid)
+	parts := strings.SplitN(userID, ":", 2)
+	parentUID := parts[0]
+
+	user, err := d.client.RGWGetUser(ctx, parentUID)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
@@ -100,25 +104,55 @@ func (d *RGWS3KeyDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	var foundKey *CephAPIRGWUserKey
+	var matchingKeys []CephAPIRGWS3Key
 	for i := range user.Keys {
-		if user.Keys[i].AccessKey == accessKey {
-			foundKey = &user.Keys[i]
-			break
+		if user.Keys[i].User == userID {
+			matchingKeys = append(matchingKeys, user.Keys[i])
 		}
 	}
 
-	if foundKey == nil {
+	if accessKey != "" {
+		var filteredKeys []CephAPIRGWS3Key
+		for i := range matchingKeys {
+			if matchingKeys[i].AccessKey == accessKey {
+				filteredKeys = append(filteredKeys, matchingKeys[i])
+			}
+		}
+		matchingKeys = filteredKeys
+	}
+
+	if len(matchingKeys) == 0 {
+		if accessKey != "" {
+			resp.Diagnostics.AddError(
+				"Key Not Found",
+				fmt.Sprintf("S3 access key %s not found for user %s", accessKey, userID),
+			)
+		} else {
+			resp.Diagnostics.AddError(
+				"Key Not Found",
+				fmt.Sprintf("No S3 keys found for user %s", userID),
+			)
+		}
+		return
+	}
+
+	if len(matchingKeys) > 1 {
 		resp.Diagnostics.AddError(
-			"Key Not Found",
-			fmt.Sprintf("S3 access key %s not found for user %s", accessKey, uid),
+			"Multiple Keys Found",
+			fmt.Sprintf("User %s has %d S3 keys. Please specify the access_key parameter to disambiguate.", userID, len(matchingKeys)),
 		)
 		return
 	}
 
+	foundKey := matchingKeys[0]
+	data.AccessKey = types.StringValue(foundKey.AccessKey)
 	data.SecretKey = types.StringValue(foundKey.SecretKey)
-	data.User = types.StringValue(foundKey.User)
 	data.Active = types.BoolValue(foundKey.Active)
+	if foundKey.CreateDate != "" {
+		data.CreateDate = types.StringValue(foundKey.CreateDate)
+	} else {
+		data.CreateDate = types.StringNull()
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
