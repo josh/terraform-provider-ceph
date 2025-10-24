@@ -11,6 +11,9 @@ import (
 )
 
 func TestAccCephRGWSubuserDataSource(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := acctest.RandomWithPrefix("test-subuser-ds-user")
 	testSubuser := "testsub"
 	testSubuserID := fmt.Sprintf("%s:%s", testUID, testSubuser)
@@ -38,6 +41,9 @@ func TestAccCephRGWSubuserDataSource(t *testing.T) {
 }
 
 func TestAccCephRGWSubuserDataSource_nonExistent(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := acctest.RandomWithPrefix("test-subuser-ds-nonexist")
 
 	resource.Test(t, resource.TestCase{

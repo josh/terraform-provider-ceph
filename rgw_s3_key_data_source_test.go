@@ -11,6 +11,9 @@ import (
 )
 
 func TestAccCephRGWS3KeyDataSource(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := acctest.RandomWithPrefix("test-s3-key-ds-user")
 	testAccessKey := "TESTDSACCESSKEY12345"
 	testSecretKey := "TestDSSecretKey1234567890123456789012"
@@ -41,6 +44,9 @@ func TestAccCephRGWS3KeyDataSource(t *testing.T) {
 }
 
 func TestAccCephRGWS3KeyDataSource_nonExistent(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := acctest.RandomWithPrefix("test-s3-key-ds-nonexist")
 	testAccessKey := "TESTNONEXISTKEY12345"
 	testSecretKey := "TestNonExistSecretKey123456789012345"
@@ -66,6 +72,9 @@ func TestAccCephRGWS3KeyDataSource_nonExistent(t *testing.T) {
 }
 
 func TestAccCephRGWS3KeyDataSource_singleKeyNoAccessKey(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := acctest.RandomWithPrefix("test-s3-key-ds-single")
 	testAccessKey := "TESTSINGLEDSAKEY12345"
 	testSecretKey := "TestSingleDSSecretKey1234567890123"
@@ -94,6 +103,9 @@ func TestAccCephRGWS3KeyDataSource_singleKeyNoAccessKey(t *testing.T) {
 }
 
 func TestAccCephRGWS3KeyDataSource_subuserWithParentKeys(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := acctest.RandomWithPrefix("test-s3-key-ds-subuser")
 	testSubuser := "testsub"
 	testSubuserID := fmt.Sprintf("%s:%s", testUID, testSubuser)
@@ -127,6 +139,9 @@ func TestAccCephRGWS3KeyDataSource_subuserWithParentKeys(t *testing.T) {
 }
 
 func TestAccCephRGWS3KeyDataSource_multipleKeys(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := acctest.RandomWithPrefix("test-s3-key-ds-multi")
 	testAccessKey1 := "TESTMULTIKEY1ACCESSK"
 	testSecretKey1 := "TestMultiKey1SecretKey12345678901"

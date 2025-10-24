@@ -13,6 +13,9 @@ import (
 )
 
 func TestAccCephRGWUserDataSource(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := "test-user-datasource"
 
 	resource.Test(t, resource.TestCase{
@@ -45,6 +48,9 @@ func TestAccCephRGWUserDataSource(t *testing.T) {
 }
 
 func TestAccCephRGWUserDataSource_nonExistent(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
@@ -62,6 +68,9 @@ func TestAccCephRGWUserDataSource_nonExistent(t *testing.T) {
 }
 
 func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := "test-admin-flag-user"
 
 	resource.Test(t, resource.TestCase{

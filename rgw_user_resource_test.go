@@ -16,6 +16,9 @@ import (
 )
 
 func TestAccCephRGWUserResource(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := "test-user-resource"
 
 	resource.Test(t, resource.TestCase{
@@ -134,6 +137,9 @@ func TestAccCephRGWUserResource(t *testing.T) {
 }
 
 func TestAccCephRGWUserResource_fullConfig(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := "test-full-config-user"
 
 	resource.Test(t, resource.TestCase{
@@ -202,6 +208,9 @@ func TestAccCephRGWUserResource_fullConfig(t *testing.T) {
 }
 
 func TestAccCephRGWUserResource_suspendedUser(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := "test-suspended-user"
 
 	resource.Test(t, resource.TestCase{
@@ -248,6 +257,9 @@ func TestAccCephRGWUserResource_suspendedUser(t *testing.T) {
 }
 
 func TestAccCephRGWUserResource_systemUser(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := "test-system-user"
 
 	resource.Test(t, resource.TestCase{
@@ -280,6 +292,9 @@ func TestAccCephRGWUserResource_systemUser(t *testing.T) {
 }
 
 func TestAccCephRGWUserResourceImport(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := "test-import-user"
 
 	resource.Test(t, resource.TestCase{
@@ -316,6 +331,9 @@ func TestAccCephRGWUserResourceImport(t *testing.T) {
 }
 
 func TestAccCephRGWUserResourceImport_nonExistent(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCephRGWUserDestroy,
@@ -338,6 +356,9 @@ func TestAccCephRGWUserResourceImport_nonExistent(t *testing.T) {
 }
 
 func TestAccCephRGWUserResource_minimalConfig(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := "test-minimal-user"
 
 	resource.Test(t, resource.TestCase{
