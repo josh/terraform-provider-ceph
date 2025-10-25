@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
@@ -16,7 +17,7 @@ func TestAccCephRGWUserDataSource(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
-	testUID := "test-user-datasource"
+	testUID := acctest.RandomWithPrefix("test-user-ds")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -71,7 +72,7 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
-	testUID := "test-admin-flag-user"
+	testUID := acctest.RandomWithPrefix("test-admin-flag")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,

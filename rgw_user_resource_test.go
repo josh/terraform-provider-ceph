@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
@@ -19,7 +20,7 @@ func TestAccCephRGWUserResource(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
-	testUID := "test-user-resource"
+	testUID := acctest.RandomWithPrefix("test-user-resource")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -140,7 +141,7 @@ func TestAccCephRGWUserResource_fullConfig(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
-	testUID := "test-full-config-user"
+	testUID := acctest.RandomWithPrefix("test-full-config")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -211,7 +212,7 @@ func TestAccCephRGWUserResource_suspendedUser(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
-	testUID := "test-suspended-user"
+	testUID := acctest.RandomWithPrefix("test-suspended")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -260,7 +261,7 @@ func TestAccCephRGWUserResource_systemUser(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
-	testUID := "test-system-user"
+	testUID := acctest.RandomWithPrefix("test-system")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -295,7 +296,7 @@ func TestAccCephRGWUserResourceImport(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
-	testUID := "test-import-user"
+	testUID := acctest.RandomWithPrefix("test-import")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -334,21 +335,23 @@ func TestAccCephRGWUserResourceImport_nonExistent(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
+	testUID := acctest.RandomWithPrefix("test-nonexist")
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCephRGWUserDestroy,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
-				Config: testAccProviderConfigBlock + `
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_user" "nonexistent" {
-					  uid          = "nonexistent-user-12345"
+					  uid          = %q
 					  display_name = "Non-existent User"
 					}
-				`,
+				`, testUID),
 				ResourceName:  "ceph_rgw_user.nonexistent",
 				ImportState:   true,
-				ImportStateId: "nonexistent-user-12345",
+				ImportStateId: testUID,
 				ExpectError:   regexp.MustCompile(`(?i)unable to read rgw user during import`),
 			},
 		},
@@ -359,7 +362,7 @@ func TestAccCephRGWUserResource_minimalConfig(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
-	testUID := "test-minimal-user"
+	testUID := acctest.RandomWithPrefix("test-minimal")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
