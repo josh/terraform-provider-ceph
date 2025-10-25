@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
+	"os/exec"
 	"regexp"
 	"testing"
 	"time"
@@ -438,6 +440,91 @@ func checkCephRGWUserExists(t *testing.T, uid string) resource.TestCheckFunc {
 		}
 
 		t.Logf("Verified RGW user %s exists with display_name: %s", uid, user.DisplayName)
+		return nil
+	}
+}
+
+func TestAccCephRGWUserResource_noKeys(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-user-no-keys")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  uid          = %q
+					  display_name = "Test User No Keys"
+					}
+				`, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					checkCephRGWUserKeyCount(t, testUID, 0),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "uid", testUID),
+				),
+			},
+		},
+	})
+}
+
+func TestAccCephRGWUserResource_managedS3Keys(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-user-managed-key")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  uid          = %q
+					  display_name = "Test User with Managed S3 Key"
+					}
+
+					resource "ceph_rgw_s3_key" "test" {
+					  uid = ceph_rgw_user.test.uid
+					}
+				`, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					checkCephRGWUserKeyCount(t, testUID, 1),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "uid", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "uid", testUID),
+				),
+			},
+		},
+	})
+}
+
+func checkCephRGWUserKeyCount(t *testing.T, uid string, expectedCount int) resource.TestCheckFunc {
+	t.Helper()
+	return func(s *terraform.State) error {
+		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "info", "--uid="+uid)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("radosgw-admin failed to get user info: %v\nOutput: %s", err, string(output))
+		}
+
+		var userInfo CephAPIRGWUser
+		if err := json.Unmarshal(output, &userInfo); err != nil {
+			return fmt.Errorf("failed to parse radosgw-admin output: %v\nOutput: %s", err, string(output))
+		}
+
+		actualCount := len(userInfo.Keys)
+		if actualCount != expectedCount {
+			return fmt.Errorf("Expected user %s to have %d keys, but found %d keys", uid, expectedCount, actualCount)
+		}
+
+		t.Logf("Verified RGW user %s has %d keys as expected", uid, actualCount)
 		return nil
 	}
 }
