@@ -27,11 +27,11 @@ func TestAccCephRGWSwiftKeyDataSource(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					data "ceph_rgw_swift_key" "test" {
-					  user = %q
+					  user_id = %q
 					}
 				`, testSubuserID),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("data.ceph_rgw_swift_key.test", "user", testSubuserID),
+					resource.TestCheckResourceAttr("data.ceph_rgw_swift_key.test", "user_id", testSubuserID),
 					resource.TestCheckResourceAttrSet("data.ceph_rgw_swift_key.test", "secret_key"),
 					resource.TestCheckResourceAttr("data.ceph_rgw_swift_key.test", "active", "true"),
 				),
@@ -56,7 +56,7 @@ func TestAccCephRGWSwiftKeyDataSource_nonExistent(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					data "ceph_rgw_swift_key" "nonexistent" {
-					  user = %q
+					  user_id = %q
 					}
 				`, testUID+":nonexistent"),
 				ExpectError: regexp.MustCompile(`(?i)swift key not found`),
@@ -73,7 +73,7 @@ func TestAccCephRGWSwiftKeyDataSource_invalidFormat(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + `
 					data "ceph_rgw_swift_key" "invalid" {
-					  user = "invalid_format_without_colon"
+					  user_id = "invalid_format_without_colon"
 					}
 				`,
 				ExpectError: regexp.MustCompile(`(?i)parent_user:subuser`),

@@ -32,7 +32,7 @@ func TestAccCephRGWUserResource(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_user" "test" {
-					  uid          = %q
+					  user_id      = %q
 					  display_name = "Test User"
 					  email        = "test@example.com"
 					  max_buckets  = 100
@@ -43,7 +43,7 @@ func TestAccCephRGWUserResource(t *testing.T) {
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"ceph_rgw_user.test",
-						tfjsonpath.New("uid"),
+						tfjsonpath.New("user_id"),
 						knownvalue.StringExact(testUID),
 					),
 					statecheck.ExpectKnownValue(
@@ -79,7 +79,7 @@ func TestAccCephRGWUserResource(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					checkCephRGWUserExists(t, testUID),
-					resource.TestCheckResourceAttr("ceph_rgw_user.test", "uid", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "user_id", testUID),
 					resource.TestCheckResourceAttr("ceph_rgw_user.test", "display_name", "Test User"),
 					resource.TestCheckResourceAttr("ceph_rgw_user.test", "user_id", testUID),
 					resource.TestCheckResourceAttr("ceph_rgw_user.test", "suspended", "false"),
@@ -91,7 +91,7 @@ func TestAccCephRGWUserResource(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_user" "test" {
-					  uid          = %q
+					  user_id      = %q
 					  display_name = "Updated Test User"
 					  email        = "updated@example.com"
 					  max_buckets  = 200
@@ -153,7 +153,7 @@ func TestAccCephRGWUserResource_fullConfig(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_user" "full" {
-					  uid          = %q
+					  user_id      = %q
 					  display_name = "Full Config User"
 					  email        = "full@example.com"
 					  max_buckets  = 500
@@ -164,7 +164,7 @@ func TestAccCephRGWUserResource_fullConfig(t *testing.T) {
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"ceph_rgw_user.full",
-						tfjsonpath.New("uid"),
+						tfjsonpath.New("user_id"),
 						knownvalue.StringExact(testUID),
 					),
 					statecheck.ExpectKnownValue(
@@ -195,7 +195,7 @@ func TestAccCephRGWUserResource_fullConfig(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					checkCephRGWUserExists(t, testUID),
-					resource.TestCheckResourceAttr("ceph_rgw_user.full", "uid", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.full", "user_id", testUID),
 					resource.TestCheckResourceAttr("ceph_rgw_user.full", "display_name", "Full Config User"),
 					resource.TestCheckResourceAttr("ceph_rgw_user.full", "email", "full@example.com"),
 					resource.TestCheckResourceAttr("ceph_rgw_user.full", "max_buckets", "500"),
@@ -224,7 +224,7 @@ func TestAccCephRGWUserResource_suspendedUser(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_user" "suspended" {
-					  uid          = %q
+					  user_id      = %q
 					  display_name = "Suspended User"
 					  email        = "suspended@example.com"
 					  max_buckets  = 100
@@ -232,7 +232,7 @@ func TestAccCephRGWUserResource_suspendedUser(t *testing.T) {
 				`, testUID),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					checkCephRGWUserExists(t, testUID),
-					resource.TestCheckResourceAttr("ceph_rgw_user.suspended", "uid", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.suspended", "user_id", testUID),
 					resource.TestCheckResourceAttr("ceph_rgw_user.suspended", "display_name", "Suspended User"),
 					resource.TestCheckResourceAttr("ceph_rgw_user.suspended", "suspended", "false"),
 				),
@@ -241,7 +241,7 @@ func TestAccCephRGWUserResource_suspendedUser(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_user" "suspended" {
-					  uid          = %q
+					  user_id      = %q
 					  display_name = "Suspended User"
 					  email        = "suspended@example.com"
 					  max_buckets  = 100
@@ -249,7 +249,7 @@ func TestAccCephRGWUserResource_suspendedUser(t *testing.T) {
 				`, testUID),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					checkCephRGWUserExists(t, testUID),
-					resource.TestCheckResourceAttr("ceph_rgw_user.suspended", "uid", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.suspended", "user_id", testUID),
 					resource.TestCheckResourceAttr("ceph_rgw_user.suspended", "display_name", "Suspended User"),
 					resource.TestCheckResourceAttrSet("ceph_rgw_user.suspended", "suspended"),
 					resource.TestCheckResourceAttrSet("ceph_rgw_user.suspended", "admin"),
@@ -273,7 +273,7 @@ func TestAccCephRGWUserResource_systemUser(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_user" "system" {
-					  uid          = %q
+					  user_id      = %q
 					  display_name = "System User"
 					  system       = true
 					}
@@ -308,7 +308,7 @@ func TestAccCephRGWUserResourceImport(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_user" "import" {
-					  uid          = %q
+					  user_id      = %q
 					  display_name = "Import Test User"
 					  max_buckets  = 50
 					}
@@ -318,7 +318,7 @@ func TestAccCephRGWUserResourceImport(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_user" "import" {
-					  uid          = %q
+					  user_id      = %q
 					  display_name = "Import Test User"
 					  max_buckets  = 50
 					}
@@ -326,7 +326,7 @@ func TestAccCephRGWUserResourceImport(t *testing.T) {
 				ResourceName:                         "ceph_rgw_user.import",
 				ImportState:                          true,
 				ImportStateVerify:                    true,
-				ImportStateVerifyIdentifierAttribute: "uid",
+				ImportStateVerifyIdentifierAttribute: "user_id",
 				ImportStateId:                        testUID,
 			},
 		},
@@ -347,7 +347,7 @@ func TestAccCephRGWUserResourceImport_nonExistent(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_user" "nonexistent" {
-					  uid          = %q
+					  user_id      = %q
 					  display_name = "Non-existent User"
 					}
 				`, testUID),
@@ -374,13 +374,13 @@ func TestAccCephRGWUserResource_minimalConfig(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_user" "minimal" {
-					  uid          = %q
+					  user_id      = %q
 					  display_name = "Minimal User"
 					}
 				`, testUID),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					checkCephRGWUserExists(t, testUID),
-					resource.TestCheckResourceAttr("ceph_rgw_user.minimal", "uid", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.minimal", "user_id", testUID),
 					resource.TestCheckResourceAttr("ceph_rgw_user.minimal", "display_name", "Minimal User"),
 					resource.TestCheckResourceAttrSet("ceph_rgw_user.minimal", "user_id"),
 				),
@@ -395,7 +395,7 @@ func testAccCheckCephRGWUserDestroy(s *terraform.State) error {
 			continue
 		}
 
-		uid := rs.Primary.Attributes["uid"]
+		userID := rs.Primary.Attributes["user_id"]
 
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
@@ -410,15 +410,15 @@ func testAccCheckCephRGWUserDestroy(s *terraform.State) error {
 			return fmt.Errorf("failed to configure client: %v", err)
 		}
 
-		_, err = client.RGWGetUser(ctx, uid)
+		_, err = client.RGWGetUser(ctx, userID)
 		if err == nil {
-			return fmt.Errorf("ceph_rgw_user resource %s still exists", uid)
+			return fmt.Errorf("ceph_rgw_user resource %s still exists", userID)
 		}
 	}
 	return nil
 }
 
-func checkCephRGWUserExists(t *testing.T, uid string) resource.TestCheckFunc {
+func checkCephRGWUserExists(t *testing.T, userID string) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -434,12 +434,12 @@ func checkCephRGWUserExists(t *testing.T, uid string) resource.TestCheckFunc {
 			return fmt.Errorf("failed to configure client: %v", err)
 		}
 
-		user, err := client.RGWGetUser(ctx, uid)
+		user, err := client.RGWGetUser(ctx, userID)
 		if err != nil {
-			return fmt.Errorf("RGW user %s does not exist: %w", uid, err)
+			return fmt.Errorf("RGW user %s does not exist: %w", userID, err)
 		}
 
-		t.Logf("Verified RGW user %s exists with display_name: %s", uid, user.DisplayName)
+		t.Logf("Verified RGW user %s exists with display_name: %s", userID, user.DisplayName)
 		return nil
 	}
 }
@@ -458,14 +458,14 @@ func TestAccCephRGWUserResource_noKeys(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_user" "test" {
-					  uid          = %q
+					  user_id      = %q
 					  display_name = "Test User No Keys"
 					}
 				`, testUID),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					checkCephRGWUserExists(t, testUID),
 					checkCephRGWUserKeyCount(t, testUID, 0),
-					resource.TestCheckResourceAttr("ceph_rgw_user.test", "uid", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "user_id", testUID),
 				),
 			},
 		},
@@ -486,29 +486,29 @@ func TestAccCephRGWUserResource_managedS3Keys(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_user" "test" {
-					  uid          = %q
+					  user_id      = %q
 					  display_name = "Test User with Managed S3 Key"
 					}
 
 					resource "ceph_rgw_s3_key" "test" {
-					  uid = ceph_rgw_user.test.uid
+					  user_id = ceph_rgw_user.test.user_id
 					}
 				`, testUID),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					checkCephRGWUserExists(t, testUID),
 					checkCephRGWUserKeyCount(t, testUID, 1),
-					resource.TestCheckResourceAttr("ceph_rgw_user.test", "uid", testUID),
-					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "uid", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "user_id", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "user_id", testUID),
 				),
 			},
 		},
 	})
 }
 
-func checkCephRGWUserKeyCount(t *testing.T, uid string, expectedCount int) resource.TestCheckFunc {
+func checkCephRGWUserKeyCount(t *testing.T, userID string, expectedCount int) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "info", "--uid="+uid)
+		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "info", "--uid="+userID)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("radosgw-admin failed to get user info: %v\nOutput: %s", err, string(output))
@@ -521,10 +521,10 @@ func checkCephRGWUserKeyCount(t *testing.T, uid string, expectedCount int) resou
 
 		actualCount := len(userInfo.Keys)
 		if actualCount != expectedCount {
-			return fmt.Errorf("Expected user %s to have %d keys, but found %d keys", uid, expectedCount, actualCount)
+			return fmt.Errorf("Expected user %s to have %d keys, but found %d keys", userID, expectedCount, actualCount)
 		}
 
-		t.Logf("Verified RGW user %s has %d keys as expected", uid, actualCount)
+		t.Logf("Verified RGW user %s has %d keys as expected", userID, actualCount)
 		return nil
 	}
 }

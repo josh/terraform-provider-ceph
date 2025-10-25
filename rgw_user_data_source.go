@@ -20,7 +20,6 @@ type RGWUserDataSource struct {
 }
 
 type RGWUserDataSourceModel struct {
-	UID         types.String `tfsdk:"uid"`
 	UserID      types.String `tfsdk:"user_id"`
 	DisplayName types.String `tfsdk:"display_name"`
 	Email       types.String `tfsdk:"email"`
@@ -39,13 +38,9 @@ func (d *RGWUserDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 	resp.Schema = dataSourceSchema.Schema{
 		MarkdownDescription: "This data source allows you to get information about a Ceph RGW user.",
 		Attributes: map[string]dataSourceSchema.Attribute{
-			"uid": dataSourceSchema.StringAttribute{
-				MarkdownDescription: "The user ID",
-				Required:            true,
-			},
 			"user_id": dataSourceSchema.StringAttribute{
-				MarkdownDescription: "The user ID returned by the API",
-				Computed:            true,
+				MarkdownDescription: "The user identifier for this RGW user",
+				Required:            true,
 			},
 			"display_name": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The display name of the user",
@@ -68,11 +63,11 @@ func (d *RGWUserDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 				Computed:            true,
 			},
 			"tenant": dataSourceSchema.StringAttribute{
-				MarkdownDescription: "Tenant for multi-tenancy support",
+				MarkdownDescription: "The tenant this user belongs to (empty string for default tenant in multi-tenancy configurations)",
 				Computed:            true,
 			},
 			"admin": dataSourceSchema.BoolAttribute{
-				MarkdownDescription: "Whether this user has admin privileges (read-only, can only be set via radosgw-admin CLI)",
+				MarkdownDescription: "Whether this user has admin privileges (can only be set via radosgw-admin CLI)",
 				Computed:            true,
 			},
 		},
@@ -107,8 +102,8 @@ func (d *RGWUserDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 
-	uid := data.UID.ValueString()
-	user, err := d.client.RGWGetUser(ctx, uid)
+	userID := data.UserID.ValueString()
+	user, err := d.client.RGWGetUser(ctx, userID)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",

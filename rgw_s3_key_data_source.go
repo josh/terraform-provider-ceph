@@ -21,7 +21,7 @@ type RGWS3KeyDataSource struct {
 }
 
 type RGWS3KeyDataSourceModel struct {
-	User       types.String `tfsdk:"user"`
+	UserID     types.String `tfsdk:"user_id"`
 	AccessKey  types.String `tfsdk:"access_key"`
 	SecretKey  types.String `tfsdk:"secret_key"`
 	Active     types.Bool   `tfsdk:"active"`
@@ -36,8 +36,8 @@ func (d *RGWS3KeyDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 	resp.Schema = dataSourceSchema.Schema{
 		MarkdownDescription: "This data source allows you to get information about a Ceph RGW S3 access key.",
 		Attributes: map[string]dataSourceSchema.Attribute{
-			"user": dataSourceSchema.StringAttribute{
-				MarkdownDescription: "The user or subuser ID that owns the S3 key (format: 'user' or 'user:subuser')",
+			"user_id": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The user or subuser ID that owns the S3 key (format: 'user_id' or 'user_id:subuser')",
 				Required:            true,
 			},
 			"access_key": dataSourceSchema.StringAttribute{
@@ -89,7 +89,7 @@ func (d *RGWS3KeyDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	userID := data.User.ValueString()
+	userID := data.UserID.ValueString()
 	accessKey := data.AccessKey.ValueString()
 
 	parts := strings.SplitN(userID, ":", 2)

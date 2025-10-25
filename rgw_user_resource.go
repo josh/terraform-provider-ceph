@@ -25,7 +25,7 @@ type RGWUserResource struct {
 }
 
 type RGWUserResourceModel struct {
-	UID         types.String `tfsdk:"uid"`
+	UserID      types.String `tfsdk:"user_id"`
 	DisplayName types.String `tfsdk:"display_name"`
 	Email       types.String `tfsdk:"email"`
 	MaxBuckets  types.Int64  `tfsdk:"max_buckets"`
@@ -33,7 +33,6 @@ type RGWUserResourceModel struct {
 	Suspended   types.Bool   `tfsdk:"suspended"`
 	Tenant      types.String `tfsdk:"tenant"`
 	Admin       types.Bool   `tfsdk:"admin"`
-	UserID      types.String `tfsdk:"user_id"`
 }
 
 func (r *RGWUserResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -44,8 +43,8 @@ func (r *RGWUserResource) Schema(ctx context.Context, req resource.SchemaRequest
 	resp.Schema = resourceSchema.Schema{
 		MarkdownDescription: "This resource allows you to manage a Ceph RGW user.",
 		Attributes: map[string]resourceSchema.Attribute{
-			"uid": resourceSchema.StringAttribute{
-				MarkdownDescription: "The user ID",
+			"user_id": resourceSchema.StringAttribute{
+				MarkdownDescription: "The user identifier for this RGW user",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -75,15 +74,11 @@ func (r *RGWUserResource) Schema(ctx context.Context, req resource.SchemaRequest
 				Computed:            true,
 			},
 			"tenant": resourceSchema.StringAttribute{
-				MarkdownDescription: "Tenant for multi-tenancy support",
+				MarkdownDescription: "The tenant this user belongs to (empty string for default tenant in multi-tenancy configurations)",
 				Computed:            true,
 			},
 			"admin": resourceSchema.BoolAttribute{
-				MarkdownDescription: "Whether this user has admin privileges (read-only, can only be set via radosgw-admin CLI)",
-				Computed:            true,
-			},
-			"user_id": resourceSchema.StringAttribute{
-				MarkdownDescription: "The user ID returned by the API",
+				MarkdownDescription: "Whether this user has admin privileges (can only be set via radosgw-admin CLI)",
 				Computed:            true,
 			},
 		},
@@ -118,7 +113,7 @@ func (r *RGWUserResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	createReq := CephAPIRGWUserCreateRequest{
-		UID:         data.UID.ValueString(),
+		UID:         data.UserID.ValueString(),
 		DisplayName: data.DisplayName.ValueString(),
 	}
 
@@ -169,8 +164,8 @@ func (r *RGWUserResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	uid := data.UID.ValueString()
-	user, err := r.client.RGWGetUser(ctx, uid)
+	userID := data.UserID.ValueString()
+	user, err := r.client.RGWGetUser(ctx, userID)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
@@ -193,7 +188,7 @@ func (r *RGWUserResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	uid := data.UID.ValueString()
+	userID := data.UserID.ValueString()
 	updateReq := CephAPIRGWUserUpdateRequest{}
 
 	if !data.DisplayName.IsNull() && !data.DisplayName.IsUnknown() {
@@ -232,7 +227,7 @@ func (r *RGWUserResource) Update(ctx context.Context, req resource.UpdateRequest
 		updateReq.Suspended = &suspended
 	}
 
-	user, err := r.client.RGWUpdateUser(ctx, uid, updateReq)
+	user, err := r.client.RGWUpdateUser(ctx, userID, updateReq)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
@@ -255,8 +250,8 @@ func (r *RGWUserResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	uid := data.UID.ValueString()
-	err := r.client.RGWDeleteUser(ctx, uid)
+	userID := data.UserID.ValueString()
+	err := r.client.RGWDeleteUser(ctx, userID)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
@@ -267,9 +262,9 @@ func (r *RGWUserResource) Delete(ctx context.Context, req resource.DeleteRequest
 }
 
 func (r *RGWUserResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	uid := req.ID
+	userID := req.ID
 
-	user, err := r.client.RGWGetUser(ctx, uid)
+	user, err := r.client.RGWGetUser(ctx, userID)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
@@ -279,7 +274,7 @@ func (r *RGWUserResource) ImportState(ctx context.Context, req resource.ImportSt
 	}
 
 	data := RGWUserResourceModel{
-		UID: types.StringValue(uid),
+		UserID: types.StringValue(userID),
 	}
 	updateModelFromAPIUser(ctx, &data, user)
 
@@ -289,6 +284,11 @@ func (r *RGWUserResource) ImportState(ctx context.Context, req resource.ImportSt
 func updateModelFromAPIUser(ctx context.Context, data *RGWUserResourceModel, user CephAPIRGWUser) {
 	data.UserID = types.StringValue(user.UserID)
 	data.DisplayName = types.StringValue(user.DisplayName)
+	if user.Email != "" {
+		data.Email = types.StringValue(user.Email)
+	} else {
+		data.Email = types.StringNull()
+	}
 	data.MaxBuckets = types.Int64Value(int64(user.MaxBuckets))
 	data.System = types.BoolValue(user.System)
 	data.Admin = types.BoolValue(user.Admin)
