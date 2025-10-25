@@ -647,6 +647,22 @@ type CephAPIRGWUser struct {
 	UID                 string               `json:"uid"`
 }
 
+type CephAPIRGWS3KeyCreateRequest struct {
+	UID         string  `json:"uid"`
+	SubUser     *string `json:"subuser,omitempty"`
+	KeyType     string  `json:"key_type"`
+	AccessKey   *string `json:"access_key,omitempty"`
+	SecretKey   *string `json:"secret_key,omitempty"`
+	GenerateKey *bool   `json:"generate_key,omitempty"`
+}
+
+type CephAPIRGWS3KeyDeleteRequest struct {
+	UID       string  `json:"uid"`
+	SubUser   *string `json:"subuser,omitempty"`
+	KeyType   string  `json:"key_type"`
+	AccessKey string  `json:"access_key"`
+}
+
 func (c *CephAPIClient) RGWGetUser(ctx context.Context, uid string) (CephAPIRGWUser, error) {
 	url := c.endpoint.JoinPath("/api/rgw/user", uid).String()
 
@@ -791,6 +807,84 @@ func (c *CephAPIClient) RGWUpdateUser(ctx context.Context, uid string, req CephA
 func (c *CephAPIClient) RGWDeleteUser(ctx context.Context, uid string) error {
 	url := c.endpoint.JoinPath("/api/rgw/user", uid).String()
 	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusAccepted && httpResp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(httpResp.Body)
+		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-rgw-user-uid-key>
+
+func (c *CephAPIClient) RGWCreateKey(ctx context.Context, req CephAPIRGWS3KeyCreateRequest) ([]CephAPIRGWS3Key, error) {
+	jsonPayload, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("unable to encode request payload: %w", err)
+	}
+
+	url := c.endpoint.JoinPath("/api/rgw/user", req.UID, "key").String()
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return nil, fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusCreated {
+		body, _ := io.ReadAll(httpResp.Body)
+		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response body: %w", err)
+	}
+
+	var keys []CephAPIRGWS3Key
+	err = json.Unmarshal(body, &keys)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
+	}
+
+	return keys, nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-rgw-user-uid-key>
+
+func (c *CephAPIClient) RGWDeleteKey(ctx context.Context, req CephAPIRGWS3KeyDeleteRequest) error {
+	endpoint := c.endpoint.JoinPath("/api/rgw/user", req.UID, "key")
+	query := url.Values{}
+	query.Add("key_type", req.KeyType)
+	query.Add("access_key", req.AccessKey)
+	if req.SubUser != nil {
+		query.Add("subuser", *req.SubUser)
+	}
+	endpoint.RawQuery = query.Encode()
+
+	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", endpoint.String(), nil)
 	if err != nil {
 		return fmt.Errorf("unable to create request: %w", err)
 	}
