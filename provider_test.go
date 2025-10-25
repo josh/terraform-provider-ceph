@@ -30,6 +30,7 @@ var (
 	testClusterWG    *sync.WaitGroup
 	testConfPath     string
 	testTimeout      = flag.Duration("timeout", 0, "test timeout")
+	cephDaemonLogs   *LogDemux
 )
 
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
@@ -55,13 +56,15 @@ func TestMain(m *testing.M) {
 			os.Exit(1)
 		}
 
-		bufferedLog := &BufferedLog{target: os.Stderr}
+		cephDaemonLogs = &LogDemux{}
 		var confPath string
-		testDashboardURL, confPath, testClusterWG, err = startCephCluster(ctx, tmpDir, bufferedLog)
+		var setupBuffer bytes.Buffer
+		detachLogs := cephDaemonLogs.Attach(&setupBuffer)
+		testDashboardURL, confPath, testClusterWG, err = startCephCluster(ctx, tmpDir, cephDaemonLogs)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "failed to start ceph cluster: %v\n", err)
 			fmt.Fprintln(os.Stderr, "\n=== Ceph cluster setup logs ===")
-			if err := bufferedLog.Flush(); err != nil {
+			if _, err := io.Copy(os.Stderr, &setupBuffer); err != nil {
 				fmt.Fprintf(os.Stderr, "failed to flush setup log: %v\n", err)
 			}
 			if err := os.RemoveAll(tmpDir); err != nil {
@@ -69,9 +72,8 @@ func TestMain(m *testing.M) {
 			}
 			os.Exit(1)
 		}
+		detachLogs()
 		testConfPath = confPath
-
-		bufferedLog.EnableStream()
 
 		code = m.Run()
 
@@ -540,42 +542,64 @@ func checkCephStatus(ctx context.Context, confPath string) (cephStatus, error) {
 	return status, err
 }
 
-type BufferedLog struct {
-	mu        sync.Mutex
-	buffer    bytes.Buffer
-	streaming bool
-	target    io.Writer
+type TestWriter struct {
+	t *testing.T
 }
 
-func (bl *BufferedLog) Write(p []byte) (n int, err error) {
-	bl.mu.Lock()
-	defer bl.mu.Unlock()
+func (tw *TestWriter) Write(p []byte) (n int, err error) {
+	tw.t.Helper()
+	tw.t.Log(strings.TrimSpace(string(p)))
+	return len(p), nil
+}
 
-	if bl.streaming {
-		return bl.target.Write(p)
+type LogDemux struct {
+	mu   sync.Mutex
+	outs sync.Map
+}
+
+func (log *LogDemux) Write(p []byte) (n int, err error) {
+	log.mu.Lock()
+	defer log.mu.Unlock()
+
+	var writeErr error
+	log.outs.Range(func(key, _ interface{}) bool {
+		if writer, ok := key.(io.Writer); ok {
+			if written, err := writer.Write(p); err != nil {
+				writeErr = err
+				return false
+			} else if written != len(p) {
+				writeErr = fmt.Errorf("short write: expected %d, got %d", len(p), written)
+				return false
+			}
+		}
+		return true
+	})
+
+	if writeErr != nil {
+		return 0, writeErr
 	}
-	return bl.buffer.Write(p)
+	return len(p), nil
 }
 
-func (bl *BufferedLog) EnableStream() {
-	bl.mu.Lock()
-	defer bl.mu.Unlock()
-	bl.streaming = true
-}
-
-func (bl *BufferedLog) Flush() error {
-	bl.mu.Lock()
-	defer bl.mu.Unlock()
-
-	if bl.buffer.Len() > 0 {
-		_, err := io.Copy(bl.target, &bl.buffer)
-		bl.buffer.Reset()
-		return err
+func (log *LogDemux) Attach(writer io.Writer) func() {
+	log.outs.Store(writer, struct{}{})
+	return func() {
+		log.outs.Delete(writer)
 	}
-	return nil
+}
+
+func (log *LogDemux) AttachTestFunction(t *testing.T) func() {
+	w := &TestWriter{t: t}
+	log.outs.Store(w, struct{}{})
+	return func() {
+		log.outs.Delete(w)
+	}
 }
 
 func TestAccProvider_missingAuthentication(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
@@ -603,6 +627,9 @@ func TestAccProvider_missingAuthentication(t *testing.T) {
 }
 
 func TestAccProvider_missingEndpoint(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
@@ -624,6 +651,9 @@ func TestAccProvider_missingEndpoint(t *testing.T) {
 }
 
 func TestAccProvider_invalidEndpointURL(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
@@ -646,6 +676,9 @@ func TestAccProvider_invalidEndpointURL(t *testing.T) {
 }
 
 func TestAccProvider_endpointWithApiSuffix(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
@@ -668,6 +701,9 @@ func TestAccProvider_endpointWithApiSuffix(t *testing.T) {
 }
 
 func TestAccProvider_authenticationFailure(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
@@ -697,6 +733,9 @@ func TestAccProvider_authenticationFailure(t *testing.T) {
 }
 
 func TestAccProvider_tokenAuthentication(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {

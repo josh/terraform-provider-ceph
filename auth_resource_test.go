@@ -46,6 +46,9 @@ provider "ceph" {
 `
 
 func TestAccCephAuthResource(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCephAuthDestroy,
@@ -156,6 +159,9 @@ func TestAccCephAuthResource(t *testing.T) {
 }
 
 func TestAccCephAuthResource_invalidCapType(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
@@ -176,6 +182,9 @@ func TestAccCephAuthResource_invalidCapType(t *testing.T) {
 }
 
 func TestAccCephAuthResource_invalidCapTypeOnUpdate(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCephAuthDestroy,
@@ -209,6 +218,9 @@ func TestAccCephAuthResource_invalidCapTypeOnUpdate(t *testing.T) {
 }
 
 func TestAccCephAuthResourceImport(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCephAuthDestroy,
@@ -247,6 +259,9 @@ func TestAccCephAuthResourceImport(t *testing.T) {
 }
 
 func TestAccCephAuthResourceImport_nonExistent(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
@@ -394,6 +409,9 @@ func checkCephAuthHasKey(t *testing.T, entity string, expectedKey string) resour
 }
 
 func TestAccCephAuthResource_staticKey(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCephAuthDestroy,

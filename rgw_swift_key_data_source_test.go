@@ -10,6 +10,9 @@ import (
 )
 
 func TestAccCephRGWSwiftKeyDataSource(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := acctest.RandomWithPrefix("test-swift-key-ds-user")
 	testSubuser := "swiftsub"
 	testSubuserID := fmt.Sprintf("%s:%s", testUID, testSubuser)
@@ -38,6 +41,9 @@ func TestAccCephRGWSwiftKeyDataSource(t *testing.T) {
 }
 
 func TestAccCephRGWSwiftKeyDataSource_nonExistent(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
 	testUID := acctest.RandomWithPrefix("test-swift-key-ds-nonexist")
 
 	resource.Test(t, resource.TestCase{
