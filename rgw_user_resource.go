@@ -144,6 +144,8 @@ func (r *RGWUserResource) Create(ctx context.Context, req resource.CreateRequest
 		createReq.Suspended = &suspended
 	}
 
+	createReq.GenerateKey = false
+
 	user, err := r.client.RGWCreateUser(ctx, createReq)
 	if err != nil {
 		resp.Diagnostics.AddError(
