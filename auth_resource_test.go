@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/config"
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
@@ -49,26 +50,28 @@ func TestAccCephAuthResource(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
+	testEntity := acctest.RandomWithPrefix("client.test-auth")
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCephAuthDestroy,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
-				Config: testAccProviderConfigBlock + `
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_auth" "foo" {
-					  entity = "client.foo"
+					  entity = %q
 					  caps = {
 					    mon = "allow r"
 					    osd = "allow rw pool=foo"
 					  }
 					}
-				`,
+				`, testEntity),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"ceph_auth.foo",
 						tfjsonpath.New("entity"),
-						knownvalue.StringExact("client.foo"),
+						knownvalue.StringExact(testEntity),
 					),
 					statecheck.ExpectKnownValue(
 						"ceph_auth.foo",
@@ -90,8 +93,8 @@ func TestAccCephAuthResource(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephAuthExists(t, "client.foo"),
-					checkCephAuthHasCaps(t, "client.foo", map[string]string{
+					checkCephAuthExists(t, testEntity),
+					checkCephAuthHasCaps(t, testEntity, map[string]string{
 						"mon": "allow r",
 						"osd": "allow rw pool=foo",
 					}),
@@ -99,26 +102,26 @@ func TestAccCephAuthResource(t *testing.T) {
 			},
 			{
 				ConfigVariables: testAccProviderConfig(),
-				Config: testAccProviderConfigBlock + `
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_auth" "foo" {
-					  entity = "client.foo"
+					  entity = %q
 					  caps = {
 					    mon = "allow r"
 					    osd = "allow rw pool=foo"
 					  }
 					}
-				`,
+				`, testEntity),
 				ResourceName:                         "ceph_auth.foo",
 				ImportState:                          true,
 				ImportStateVerify:                    true,
 				ImportStateVerifyIdentifierAttribute: "entity",
-				ImportStateId:                        "client.foo",
+				ImportStateId:                        testEntity,
 			},
 			{
 				ConfigVariables: testAccProviderConfig(),
-				Config: testAccProviderConfigBlock + `
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_auth" "foo" {
-					  entity = "client.foo"
+					  entity = %q
 					  caps = {
 					    mon = "allow rw"
 					    mgr = "allow r"
@@ -126,12 +129,12 @@ func TestAccCephAuthResource(t *testing.T) {
 					    mds = "allow rw"
 					  }
 					}
-				`,
+				`, testEntity),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"ceph_auth.foo",
 						tfjsonpath.New("entity"),
-						knownvalue.StringExact("client.foo"),
+						knownvalue.StringExact(testEntity),
 					),
 					statecheck.ExpectKnownValue(
 						"ceph_auth.foo",
@@ -145,8 +148,8 @@ func TestAccCephAuthResource(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephAuthExists(t, "client.foo"),
-					checkCephAuthHasCaps(t, "client.foo", map[string]string{
+					checkCephAuthExists(t, testEntity),
+					checkCephAuthHasCaps(t, testEntity, map[string]string{
 						"mon": "allow rw",
 						"mgr": "allow r",
 						"osd": "allow rw pool=bar",
@@ -162,19 +165,21 @@ func TestAccCephAuthResource_invalidCapType(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
+	testEntity := acctest.RandomWithPrefix("client.test-invalid")
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
-				Config: testAccProviderConfigBlock + `
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_auth" "invalid" {
-					  entity = "client.invalid"
+					  entity = %q
 					  caps = {
 					    foo = "allow r"
 					  }
 					}
-				`,
+				`, testEntity),
 				ExpectError: regexp.MustCompile(`(?i)caps attribute contains unsupported capability type`),
 			},
 		},
@@ -185,32 +190,34 @@ func TestAccCephAuthResource_invalidCapTypeOnUpdate(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
+	testEntity := acctest.RandomWithPrefix("client.test-update")
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCephAuthDestroy,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
-				Config: testAccProviderConfigBlock + `
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_auth" "test_update" {
-					  entity = "client.test_update"
+					  entity = %q
 					  caps = {
 					    mon = "allow r"
 					    osd = "allow rw pool=test"
 					  }
 					}
-				`,
+				`, testEntity),
 			},
 			{
 				ConfigVariables: testAccProviderConfig(),
-				Config: testAccProviderConfigBlock + `
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_auth" "test_update" {
-					  entity = "client.test_update"
+					  entity = %q
 					  caps = {
 					    invalid = "allow r"
 					  }
 					}
-				`,
+				`, testEntity),
 				ExpectError: regexp.MustCompile(`(?i)caps attribute contains unsupported capability type`),
 			},
 		},
@@ -221,38 +228,40 @@ func TestAccCephAuthResourceImport(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
+	testEntity := acctest.RandomWithPrefix("client.test-import")
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCephAuthDestroy,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
-				Config: testAccProviderConfigBlock + `
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_auth" "bar" {
-					  entity = "client.bar"
+					  entity = %q
 					  caps = {
 					    mon = "allow r"
 					    osd = "allow rw pool=bar"
 					  }
 					}
-				`,
+				`, testEntity),
 			},
 			{
 				ConfigVariables: testAccProviderConfig(),
-				Config: testAccProviderConfigBlock + `
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_auth" "bar" {
-					  entity = "client.bar"
+					  entity = %q
 					  caps = {
 					    mon = "allow r"
 					    osd = "allow rw pool=bar"
 					  }
 					}
-				`,
+				`, testEntity),
 				ResourceName:                         "ceph_auth.bar",
 				ImportState:                          true,
 				ImportStateVerify:                    true,
 				ImportStateVerifyIdentifierAttribute: "entity",
-				ImportStateId:                        "client.bar",
+				ImportStateId:                        testEntity,
 			},
 		},
 	})
@@ -262,22 +271,24 @@ func TestAccCephAuthResourceImport_nonExistent(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
+	testEntity := acctest.RandomWithPrefix("client.test-nonexist")
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
-				Config: testAccProviderConfigBlock + `
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_auth" "nonexistent" {
-					  entity = "client.nonexistent"
+					  entity = %q
 					  caps = {
 					    mon = "allow r"
 					  }
 					}
-				`,
+				`, testEntity),
 				ResourceName:  "ceph_auth.nonexistent",
 				ImportState:   true,
-				ImportStateId: "client.nonexistent",
+				ImportStateId: testEntity,
 				ExpectError:   regexp.MustCompile(`(?i)unable to export user from ceph api`),
 			},
 		},
@@ -412,27 +423,29 @@ func TestAccCephAuthResource_staticKey(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
+	testEntity := acctest.RandomWithPrefix("client.test-static-key")
+
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCephAuthDestroy,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
-				Config: testAccProviderConfigBlock + `
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_auth" "foo" {
-					  entity = "client.foo"
+					  entity = %q
 					  key    = "AQBvaBVesCMcKRAAoKhLdz8Qh/qPNqF9UGKYfg=="
 					  caps = {
 					    mon = "allow r"
 					    osd = "allow rw pool=test"
 					  }
 					}
-				`,
+				`, testEntity),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"ceph_auth.foo",
 						tfjsonpath.New("entity"),
-						knownvalue.StringExact("client.foo"),
+						knownvalue.StringExact(testEntity),
 					),
 					statecheck.ExpectKnownValue(
 						"ceph_auth.foo",
@@ -441,9 +454,9 @@ func TestAccCephAuthResource_staticKey(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephAuthExists(t, "client.foo"),
-					checkCephAuthHasKey(t, "client.foo", "AQBvaBVesCMcKRAAoKhLdz8Qh/qPNqF9UGKYfg=="),
-					checkCephAuthHasCaps(t, "client.foo", map[string]string{
+					checkCephAuthExists(t, testEntity),
+					checkCephAuthHasKey(t, testEntity, "AQBvaBVesCMcKRAAoKhLdz8Qh/qPNqF9UGKYfg=="),
+					checkCephAuthHasCaps(t, testEntity, map[string]string{
 						"mon": "allow r",
 						"osd": "allow rw pool=test",
 					}),
