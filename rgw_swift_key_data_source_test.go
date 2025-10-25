@@ -2,15 +2,15 @@ package main
 
 import (
 	"fmt"
-	"math/rand/v2"
 	"regexp"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccCephRGWSwiftKeyDataSource(t *testing.T) {
-	testUID := fmt.Sprintf("test-swift-key-ds-user-%d", rand.Int32())
+	testUID := acctest.RandomWithPrefix("test-swift-key-ds-user")
 	testSubuser := "swiftsub"
 	testSubuserID := fmt.Sprintf("%s:%s", testUID, testSubuser)
 
@@ -38,7 +38,7 @@ func TestAccCephRGWSwiftKeyDataSource(t *testing.T) {
 }
 
 func TestAccCephRGWSwiftKeyDataSource_nonExistent(t *testing.T) {
-	testUID := fmt.Sprintf("test-swift-key-ds-nonexist-%d", rand.Int32())
+	testUID := acctest.RandomWithPrefix("test-swift-key-ds-nonexist")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,

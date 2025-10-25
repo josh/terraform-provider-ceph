@@ -2,16 +2,16 @@ package main
 
 import (
 	"fmt"
-	"math/rand/v2"
 	"os/exec"
 	"regexp"
 	"testing"
 
+	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
 func TestAccCephRGWS3KeyDataSource(t *testing.T) {
-	testUID := fmt.Sprintf("test-s3-key-ds-user-%d", rand.Int32())
+	testUID := acctest.RandomWithPrefix("test-s3-key-ds-user")
 	testAccessKey := "TESTDSACCESSKEY12345"
 	testSecretKey := "TestDSSecretKey1234567890123456789012"
 
@@ -41,7 +41,7 @@ func TestAccCephRGWS3KeyDataSource(t *testing.T) {
 }
 
 func TestAccCephRGWS3KeyDataSource_nonExistent(t *testing.T) {
-	testUID := fmt.Sprintf("test-s3-key-ds-nonexist-%d", rand.Int32())
+	testUID := acctest.RandomWithPrefix("test-s3-key-ds-nonexist")
 	testAccessKey := "TESTNONEXISTKEY12345"
 	testSecretKey := "TestNonExistSecretKey123456789012345"
 
@@ -66,7 +66,7 @@ func TestAccCephRGWS3KeyDataSource_nonExistent(t *testing.T) {
 }
 
 func TestAccCephRGWS3KeyDataSource_singleKeyNoAccessKey(t *testing.T) {
-	testUID := fmt.Sprintf("test-s3-key-ds-single-%d", rand.Int32())
+	testUID := acctest.RandomWithPrefix("test-s3-key-ds-single")
 	testAccessKey := "TESTSINGLEDSAKEY12345"
 	testSecretKey := "TestSingleDSSecretKey1234567890123"
 
@@ -94,7 +94,7 @@ func TestAccCephRGWS3KeyDataSource_singleKeyNoAccessKey(t *testing.T) {
 }
 
 func TestAccCephRGWS3KeyDataSource_subuserWithParentKeys(t *testing.T) {
-	testUID := fmt.Sprintf("test-s3-key-ds-subuser-%d", rand.Int32())
+	testUID := acctest.RandomWithPrefix("test-s3-key-ds-subuser")
 	testSubuser := "testsub"
 	testSubuserID := fmt.Sprintf("%s:%s", testUID, testSubuser)
 	testParentAccessKey := "TESTPARENTKEY1234567"
@@ -127,7 +127,7 @@ func TestAccCephRGWS3KeyDataSource_subuserWithParentKeys(t *testing.T) {
 }
 
 func TestAccCephRGWS3KeyDataSource_multipleKeys(t *testing.T) {
-	testUID := fmt.Sprintf("test-s3-key-ds-multi-%d", rand.Int32())
+	testUID := acctest.RandomWithPrefix("test-s3-key-ds-multi")
 	testAccessKey1 := "TESTMULTIKEY1ACCESSK"
 	testSecretKey1 := "TestMultiKey1SecretKey12345678901"
 	testAccessKey2 := "TESTMULTIKEY2ACCESSK"
