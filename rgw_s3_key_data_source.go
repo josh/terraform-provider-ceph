@@ -43,6 +43,7 @@ func (d *RGWS3KeyDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 			"access_key": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The S3 access key ID to look up (required if user has multiple S3 keys)",
 				Optional:            true,
+				Sensitive:           true,
 			},
 			"secret_key": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The S3 secret key",
