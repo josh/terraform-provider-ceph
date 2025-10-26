@@ -29,13 +29,13 @@ func TestAccCephRGWS3KeyResource(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_s3_key" "test" {
-					  uid = %q
+					  user_id = %q
 					}
 				`, testUID),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"ceph_rgw_s3_key.test",
-						tfjsonpath.New("uid"),
+						tfjsonpath.New("user_id"),
 						knownvalue.StringExact(testUID),
 					),
 					statecheck.ExpectKnownValue(
@@ -50,7 +50,7 @@ func TestAccCephRGWS3KeyResource(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "uid", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "user_id", testUID),
 					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.test", "access_key"),
 					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.test", "secret_key"),
 					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "user", testUID),
@@ -79,13 +79,13 @@ func TestAccCephRGWS3KeyResource_customKeys(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_s3_key" "custom" {
-					  uid        = %q
+					  user_id    = %q
 					  access_key = %q
 					  secret_key = %q
 					}
 				`, testUID, customAccessKey, customSecretKey),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("ceph_rgw_s3_key.custom", "uid", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.custom", "user_id", testUID),
 					resource.TestCheckResourceAttr("ceph_rgw_s3_key.custom", "access_key", customAccessKey),
 					resource.TestCheckResourceAttr("ceph_rgw_s3_key.custom", "secret_key", customSecretKey),
 					resource.TestCheckResourceAttr("ceph_rgw_s3_key.custom", "active", "true"),
@@ -111,17 +111,17 @@ func TestAccCephRGWS3KeyResource_multipleKeys(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_s3_key" "key1" {
-					  uid = %q
+					  user_id = %q
 					}
 
 					resource "ceph_rgw_s3_key" "key2" {
-					  uid = %q
+					  user_id = %q
 					}
 				`, testUID, testUID),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key1", "uid", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key1", "user_id", testUID),
 					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.key1", "access_key"),
-					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key2", "uid", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key2", "user_id", testUID),
 					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.key2", "access_key"),
 				),
 			},
@@ -147,11 +147,11 @@ func TestAccCephRGWS3KeyResource_subuser(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_s3_key" "subuser" {
-					  uid = %q
+					  user_id = %q
 					}
 				`, testSubuserID),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("ceph_rgw_s3_key.subuser", "uid", testSubuserID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.subuser", "user_id", testSubuserID),
 					resource.TestCheckResourceAttr("ceph_rgw_s3_key.subuser", "user", testSubuserID),
 					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.subuser", "access_key"),
 					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.subuser", "secret_key"),
@@ -173,7 +173,7 @@ func TestAccCephRGWS3KeyResource_nonExistentUser(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + `
 					resource "ceph_rgw_s3_key" "nonexistent" {
-					  uid = "nonexistent-user-12345"
+					  user_id = "nonexistent-user-12345"
 					}
 				`,
 				ExpectError: regexp.MustCompile(`(?i)unable to create rgw s3 key`),

@@ -644,7 +644,6 @@ type CephAPIRGWUser struct {
 	Type                string               `json:"type"`
 	MFAIDs              []string             `json:"mfa_ids"`
 	Stats               *CephAPIRGWUserStats `json:"stats,omitempty"`
-	UID                 string               `json:"uid"`
 }
 
 func (c *CephAPIClient) RGWGetUser(ctx context.Context, uid string) (CephAPIRGWUser, error) {

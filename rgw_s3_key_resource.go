@@ -35,7 +35,7 @@ func (r *RGWS3KeyResource) getUserLock(uid string) *sync.RWMutex {
 }
 
 type RGWS3KeyResourceModel struct {
-	UID        types.String `tfsdk:"uid"`
+	UserID     types.String `tfsdk:"user_id"`
 	AccessKey  types.String `tfsdk:"access_key"`
 	SecretKey  types.String `tfsdk:"secret_key"`
 	User       types.String `tfsdk:"user"`
@@ -51,8 +51,8 @@ func (r *RGWS3KeyResource) Schema(ctx context.Context, req resource.SchemaReques
 	resp.Schema = resourceSchema.Schema{
 		MarkdownDescription: "This resource allows you to manage a Ceph RGW S3 access key. Similar to AWS IAM access keys, these keys provide programmatic access to the RGW S3 API.",
 		Attributes: map[string]resourceSchema.Attribute{
-			"uid": resourceSchema.StringAttribute{
-				MarkdownDescription: "The user or subuser ID that owns the S3 key (format: 'uid' or 'uid:subuser')",
+			"user_id": resourceSchema.StringAttribute{
+				MarkdownDescription: "The user or subuser ID that owns this S3 key (format: 'user_id' for users or 'user_id:subuser' for subusers)",
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
@@ -79,7 +79,7 @@ func (r *RGWS3KeyResource) Schema(ctx context.Context, req resource.SchemaReques
 				},
 			},
 			"user": resourceSchema.StringAttribute{
-				MarkdownDescription: "The user associated with the key",
+				MarkdownDescription: "The user identifier returned by the API (matches user_id for regular users)",
 				Computed:            true,
 			},
 			"active": resourceSchema.BoolAttribute{
@@ -121,7 +121,7 @@ func (r *RGWS3KeyResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	userID := data.UID.ValueString()
+	userID := data.UserID.ValueString()
 	parts := strings.SplitN(userID, ":", 2)
 	parentUID := parts[0]
 
@@ -224,7 +224,7 @@ func (r *RGWS3KeyResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	userID := data.UID.ValueString()
+	userID := data.UserID.ValueString()
 	accessKey := data.AccessKey.ValueString()
 
 	parts := strings.SplitN(userID, ":", 2)
@@ -277,7 +277,7 @@ func (r *RGWS3KeyResource) Delete(ctx context.Context, req resource.DeleteReques
 		return
 	}
 
-	userID := data.UID.ValueString()
+	userID := data.UserID.ValueString()
 	accessKey := data.AccessKey.ValueString()
 
 	parts := strings.SplitN(userID, ":", 2)
@@ -328,23 +328,23 @@ func (r *RGWS3KeyResource) Delete(ctx context.Context, req resource.DeleteReques
 func (r *RGWS3KeyResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
 	parts := strings.Split(req.ID, ":")
 
-	var uid, accessKey string
+	var userID, accessKey string
 
 	if len(parts) == 2 {
-		uid = parts[0]
+		userID = parts[0]
 		accessKey = parts[1]
 	} else if len(parts) == 3 {
-		uid = parts[0] + ":" + parts[1]
+		userID = parts[0] + ":" + parts[1]
 		accessKey = parts[2]
 	} else {
 		resp.Diagnostics.AddError(
 			"Invalid Import ID",
-			fmt.Sprintf("Expected import ID in format 'uid:access_key' or 'uid:subuser:access_key', got: %s", req.ID),
+			fmt.Sprintf("Expected import ID in format 'user_id:access_key' or 'user_id:subuser:access_key', got: %s", req.ID),
 		)
 		return
 	}
 
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("uid"), uid)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("user_id"), userID)...)
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("access_key"), accessKey)...)
 }
 

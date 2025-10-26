@@ -29,11 +29,10 @@ func TestAccCephRGWUserDataSource(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					data "ceph_rgw_user" "test" {
-					  uid = %q
+					  user_id = %q
 					}
 				`, testUID),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "uid", testUID),
 					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "user_id", testUID),
 					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "display_name", "Test User DataSource"),
 					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "email", ""),
@@ -59,7 +58,7 @@ func TestAccCephRGWUserDataSource_nonExistent(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + `
 					data "ceph_rgw_user" "nonexistent" {
-					  uid = "nonexistent-user-12345"
+					  user_id = "nonexistent-user-12345"
 					}
 				`,
 				ExpectError: regexp.MustCompile(`(?i)unable to get rgw user from ceph api`),
@@ -84,11 +83,11 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					data "ceph_rgw_user" "test" {
-					  uid = %q
+					  user_id = %q
 					}
 				`, testUID),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "uid", testUID),
+					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "user_id", testUID),
 					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "admin", "false"),
 				),
 			},
@@ -105,11 +104,11 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					data "ceph_rgw_user" "test" {
-					  uid = %q
+					  user_id = %q
 					}
 				`, testUID),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "uid", testUID),
+					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "user_id", testUID),
 					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "admin", "true"),
 				),
 			},
@@ -126,11 +125,11 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					data "ceph_rgw_user" "test" {
-					  uid = %q
+					  user_id = %q
 					}
 				`, testUID),
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "uid", testUID),
+					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "user_id", testUID),
 					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "admin", "false"),
 				),
 			},

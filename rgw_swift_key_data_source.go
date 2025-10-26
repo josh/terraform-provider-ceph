@@ -21,7 +21,7 @@ type RGWSwiftKeyDataSource struct {
 }
 
 type RGWSwiftKeyDataSourceModel struct {
-	User       types.String `tfsdk:"user"`
+	UserID     types.String `tfsdk:"user_id"`
 	SecretKey  types.String `tfsdk:"secret_key"`
 	Active     types.Bool   `tfsdk:"active"`
 	CreateDate types.String `tfsdk:"create_date"`
@@ -35,8 +35,8 @@ func (d *RGWSwiftKeyDataSource) Schema(ctx context.Context, req datasource.Schem
 	resp.Schema = dataSourceSchema.Schema{
 		MarkdownDescription: "This data source allows you to get information about a Ceph RGW Swift key.",
 		Attributes: map[string]dataSourceSchema.Attribute{
-			"user": dataSourceSchema.StringAttribute{
-				MarkdownDescription: "The subuser ID that owns the Swift key (format: 'user:subuser')",
+			"user_id": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The subuser ID that owns the Swift key (format: 'user_id:subuser')",
 				Required:            true,
 			},
 			"secret_key": dataSourceSchema.StringAttribute{
@@ -84,13 +84,13 @@ func (d *RGWSwiftKeyDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
-	subuserID := data.User.ValueString()
+	subuserID := data.UserID.ValueString()
 
 	parts := strings.SplitN(subuserID, ":", 2)
 	if len(parts) != 2 {
 		resp.Diagnostics.AddError(
 			"Invalid Subuser ID",
-			fmt.Sprintf("Swift keys are associated with subusers. The user parameter must be in the format 'parent_user:subuser', got: %s", subuserID),
+			fmt.Sprintf("Swift keys are associated with subusers. The user_id parameter must be in the format 'parent_user:subuser', got: %s", subuserID),
 		)
 		return
 	}
