@@ -528,3 +528,54 @@ func checkCephRGWUserKeyCount(t *testing.T, uid string, expectedCount int) resou
 		return nil
 	}
 }
+
+func TestAccCephRGWUserResource_alreadyExists(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-user-exists")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			createTestRGWUserDirectly(t, testUID, "Pre-existing User")
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "existing" {
+					  uid          = %q
+					  display_name = "Attempt to Create Existing User"
+					}
+				`, testUID),
+				ExpectError: regexp.MustCompile(`(?i)(unable to create rgw user|ceph api returned status)`),
+			},
+		},
+	})
+}
+
+func createTestRGWUserDirectly(t *testing.T, uid, displayName string) {
+	t.Helper()
+
+	cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "create",
+		"--uid="+uid,
+		"--display-name="+displayName,
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to pre-create test RGW user: %v\nOutput: %s", err, string(output))
+	}
+
+	t.Logf("Pre-created test RGW user: %s", uid)
+
+	t.Cleanup(func() {
+		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+uid, "--purge-data")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Logf("Warning: Failed to cleanup test RGW user %s: %v\nOutput: %s", uid, err, string(output))
+		} else {
+			t.Logf("Cleaned up test RGW user: %s", uid)
+		}
+	})
+}
