@@ -1,13 +1,10 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"net/url"
 	"os/exec"
 	"regexp"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -139,39 +136,23 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 
 func createTestRGWUser(t *testing.T, uid, displayName string) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
-	client := &CephAPIClient{}
-	endpoint, err := url.Parse(testDashboardURL)
+	cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "create",
+		"--uid="+uid,
+		"--display-name="+displayName,
+	)
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("Failed to parse test dashboard URL: %v", err)
-	}
-
-	if err := client.Configure(ctx, []*url.URL{endpoint}, "admin", "password", ""); err != nil {
-		t.Fatalf("Failed to configure client: %v", err)
-	}
-
-	_ = client.RGWDeleteUser(ctx, uid)
-
-	req := CephAPIRGWUserCreateRequest{
-		UID:         uid,
-		DisplayName: displayName,
-	}
-
-	_, err = client.RGWCreateUser(ctx, req)
-	if err != nil {
-		t.Fatalf("Failed to create test RGW user: %v", err)
+		t.Fatalf("Failed to create test RGW user: %v\nOutput: %s", err, string(output))
 	}
 
 	t.Logf("Created test RGW user: %s", uid)
 
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cleanupCancel()
-
-		if err := client.RGWDeleteUser(cleanupCtx, uid); err != nil {
-			t.Logf("Warning: Failed to cleanup test RGW user %s: %v", uid, err)
+		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+uid, "--purge-data")
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Logf("Warning: Failed to cleanup test RGW user %s: %v\nOutput: %s", uid, err, string(output))
 		} else {
 			t.Logf("Cleaned up test RGW user: %s", uid)
 		}
