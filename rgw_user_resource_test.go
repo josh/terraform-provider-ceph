@@ -1,14 +1,11 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os/exec"
 	"regexp"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -17,6 +14,15 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
+
+type RadosgwUserInfo struct {
+	DisplayName string         `json:"display_name"`
+	Keys        []RadosgwS3Key `json:"keys"`
+}
+
+type RadosgwS3Key struct {
+	AccessKey string `json:"access_key"`
+}
 
 func TestAccCephRGWUserResource(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
@@ -397,22 +403,10 @@ func testAccCheckCephRGWUserDestroy(s *terraform.State) error {
 
 		userID := rs.Primary.Attributes["user_id"]
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		client := &CephAPIClient{}
-		endpoint, err := url.Parse(testDashboardURL)
-		if err != nil {
-			return fmt.Errorf("failed to parse test dashboard URL: %v", err)
-		}
-
-		if err := client.Configure(ctx, []*url.URL{endpoint}, "admin", "password", ""); err != nil {
-			return fmt.Errorf("failed to configure client: %v", err)
-		}
-
-		_, err = client.RGWGetUser(ctx, userID)
+		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "info", "--uid="+userID)
+		output, err := cmd.CombinedOutput()
 		if err == nil {
-			return fmt.Errorf("ceph_rgw_user resource %s still exists", userID)
+			return fmt.Errorf("ceph_rgw_user resource %s still exists (output: %s)", userID, string(output))
 		}
 	}
 	return nil
@@ -421,22 +415,15 @@ func testAccCheckCephRGWUserDestroy(s *terraform.State) error {
 func checkCephRGWUserExists(t *testing.T, userID string) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-
-		client := &CephAPIClient{}
-		endpoint, err := url.Parse(testDashboardURL)
-		if err != nil {
-			return fmt.Errorf("failed to parse test dashboard URL: %v", err)
-		}
-
-		if err := client.Configure(ctx, []*url.URL{endpoint}, "admin", "password", ""); err != nil {
-			return fmt.Errorf("failed to configure client: %v", err)
-		}
-
-		user, err := client.RGWGetUser(ctx, userID)
+		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "info", "--uid="+userID)
+		output, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("RGW user %s does not exist: %w", userID, err)
+		}
+
+		var user RadosgwUserInfo
+		if err := json.Unmarshal(output, &user); err != nil {
+			return fmt.Errorf("failed to parse radosgw-admin output: %w", err)
 		}
 
 		t.Logf("Verified RGW user %s exists with display_name: %s", userID, user.DisplayName)
@@ -514,7 +501,7 @@ func checkCephRGWUserKeyCount(t *testing.T, userID string, expectedCount int) re
 			return fmt.Errorf("radosgw-admin failed to get user info: %v\nOutput: %s", err, string(output))
 		}
 
-		var userInfo CephAPIRGWUser
+		var userInfo RadosgwUserInfo
 		if err := json.Unmarshal(output, &userInfo); err != nil {
 			return fmt.Errorf("failed to parse radosgw-admin output: %v\nOutput: %s", err, string(output))
 		}
@@ -545,7 +532,7 @@ func TestAccCephRGWUserResource_alreadyExists(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_rgw_user" "existing" {
-					  uid          = %q
+					  user_id      = %q
 					  display_name = "Attempt to Create Existing User"
 					}
 				`, testUID),
