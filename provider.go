@@ -153,6 +153,7 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		newAuthResource,
+		newConfigResource,
 		newRGWUserResource,
 		newRGWS3KeyResource,
 	}
