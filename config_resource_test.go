@@ -323,3 +323,106 @@ func TestAccCephConfigResource_removeConfig(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephConfigResource_import(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testValue := acctest.RandIntRange(100, 999)
+	configName := "mon_max_pg_per_osd"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "test" {
+						configs = {
+							"global" = {
+								%q = "%d"
+							}
+						}
+					}
+				`, configName, testValue),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_config.test",
+						tfjsonpath.New("configs"),
+						knownvalue.NotNull(),
+					),
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "test" {
+						configs = {
+							"global" = {
+								%q = "%d"
+							}
+						}
+					}
+				`, configName, testValue),
+				ResourceName:  "ceph_config.test",
+				ImportState:   true,
+				ImportStateId: fmt.Sprintf("global.%s", configName),
+			},
+		},
+	})
+}
+
+func TestAccCephConfigResource_importMultiple(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	value1 := acctest.RandIntRange(100, 999)
+	value2 := acctest.RandIntRange(1000, 9999)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "test" {
+						configs = {
+							"global" = {
+								"mon_max_pg_per_osd" = "%d"
+							}
+							"osd" = {
+								"osd_recovery_sleep" = "%d.000000"
+							}
+						}
+					}
+				`, value1, value2),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_config.test",
+						tfjsonpath.New("configs"),
+						knownvalue.NotNull(),
+					),
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "test" {
+						configs = {
+							"global" = {
+								"mon_max_pg_per_osd" = "%d"
+							}
+							"osd" = {
+								"osd_recovery_sleep" = "%d.000000"
+							}
+						}
+					}
+				`, value1, value2),
+				ResourceName:  "ceph_config.test",
+				ImportState:   true,
+				ImportStateId: "global.mon_max_pg_per_osd,osd.osd_recovery_sleep",
+			},
+		},
+	})
+}
+

@@ -3,13 +3,17 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-var _ resource.Resource = &ConfigResource{}
+var (
+	_ resource.Resource                = &ConfigResource{}
+	_ resource.ResourceWithImportState = &ConfigResource{}
+)
 
 func newConfigResource() resource.Resource {
 	return &ConfigResource{}
@@ -314,4 +318,112 @@ func (r *ConfigResource) Delete(ctx context.Context, req resource.DeleteRequest,
 			}
 		}
 	}
+}
+
+func (r *ConfigResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
+	importPairs := strings.Split(req.ID, ",")
+	if len(importPairs) == 0 {
+		resp.Diagnostics.AddError(
+			"Invalid Import ID",
+			"Import ID cannot be empty. Expected format: 'section.key' or 'section1.key1,section2.key2'",
+		)
+		return
+	}
+
+	configsBySection := make(map[string]map[string]string)
+
+	for _, pair := range importPairs {
+		pair = strings.TrimSpace(pair)
+		parts := strings.Split(pair, ".")
+
+		if len(parts) != 2 {
+			resp.Diagnostics.AddError(
+				"Invalid Import ID Format",
+				fmt.Sprintf("Expected format 'section.key', got: %s. Full import ID: %s", pair, req.ID),
+			)
+			return
+		}
+
+		section := strings.TrimSpace(parts[0])
+		name := strings.TrimSpace(parts[1])
+
+		if section == "" || name == "" {
+			resp.Diagnostics.AddError(
+				"Invalid Import ID",
+				fmt.Sprintf("Section and key cannot be empty in: %s", pair),
+			)
+			return
+		}
+
+		if configsBySection[section] == nil {
+			configsBySection[section] = make(map[string]string)
+		}
+
+		if _, exists := configsBySection[section][name]; exists {
+			resp.Diagnostics.AddError(
+				"Duplicate Import Entry",
+				fmt.Sprintf("Config %s/%s appears multiple times in import ID", section, name),
+			)
+			return
+		}
+
+		configsBySection[section][name] = ""
+	}
+
+	importedSections := make(map[string]map[string]string)
+
+	for section, configs := range configsBySection {
+		for name := range configs {
+			apiConfig, err := r.client.ClusterGetConf(ctx, name)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"API Request Error",
+					fmt.Sprintf("Unable to read cluster configuration %s/%s during import: %s", section, name, err),
+				)
+				return
+			}
+
+			found := false
+			for _, v := range apiConfig.Value {
+				if v.Section == section {
+					if importedSections[section] == nil {
+						importedSections[section] = make(map[string]string)
+					}
+					importedSections[section][name] = v.Value
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				resp.Diagnostics.AddError(
+					"Configuration Not Found",
+					fmt.Sprintf("Configuration %s/%s does not exist in the cluster or has no value set for section %s", section, name, section),
+				)
+				return
+			}
+		}
+	}
+
+	sectionMaps := make(map[string]types.Map)
+	for section, configs := range importedSections {
+		configMap, diags := types.MapValueFrom(ctx, types.StringType, configs)
+		resp.Diagnostics.Append(diags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		sectionMaps[section] = configMap
+	}
+
+	configsValue, diags := types.MapValueFrom(ctx, types.MapType{ElemType: types.StringType}, sectionMaps)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	data := ConfigResourceModel{
+		Configs: configsValue,
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
