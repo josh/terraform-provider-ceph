@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -426,3 +427,26 @@ func TestAccCephConfigResource_importMultiple(t *testing.T) {
 	})
 }
 
+func TestAccCephConfigResource_MgrConfigRejection(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_config" "test" {
+						configs = {
+							"mgr" = {
+								"mgr/dashboard/ssl" = "false"
+							}
+						}
+					}
+				`,
+				ExpectError: regexp.MustCompile("cannot be managed via ceph_config"),
+			},
+		},
+	})
+}

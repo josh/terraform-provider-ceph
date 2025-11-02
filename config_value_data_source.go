@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -78,6 +79,14 @@ func (d *ConfigValueDataSource) Read(ctx context.Context, req datasource.ReadReq
 
 	name := data.Name.ValueString()
 	section := data.Section.ValueString()
+
+	if strings.HasPrefix(name, "mgr/") {
+		resp.Diagnostics.AddError(
+			"Invalid Configuration Name",
+			fmt.Sprintf("Configuration '%s' is not available via ceph_config_value. Use ceph_mgr_module_config instead.", name),
+		)
+		return
+	}
 
 	config, err := d.client.ClusterGetConf(ctx, name)
 	if err != nil {
