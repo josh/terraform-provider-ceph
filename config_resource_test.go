@@ -450,3 +450,111 @@ func TestAccCephConfigResource_MgrConfigRejection(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephConfigResource_bulkImportEmpty(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	value1 := acctest.RandIntRange(100, 999)
+	value2 := acctest.RandIntRange(1000, 9999)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "test" {
+						configs = {
+							"global" = {
+								"mon_max_pg_per_osd" = "%d"
+							}
+							"osd" = {
+								"osd_recovery_sleep" = "%d.000000"
+							}
+						}
+					}
+				`, value1, value2),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_config.test",
+						tfjsonpath.New("configs"),
+						knownvalue.NotNull(),
+					),
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "test" {
+						configs = {
+							"global" = {
+								"mon_max_pg_per_osd" = "%d"
+							}
+							"osd" = {
+								"osd_recovery_sleep" = "%d.000000"
+							}
+						}
+					}
+				`, value1, value2),
+				ResourceName:  "ceph_config.test",
+				ImportState:   true,
+				ImportStateId: "",
+			},
+		},
+	})
+}
+
+func TestAccCephConfigResource_bulkImportWildcard(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	value1 := acctest.RandIntRange(100, 999)
+	value2 := acctest.RandIntRange(1000, 9999)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "test" {
+						configs = {
+							"global" = {
+								"mon_max_pg_per_osd" = "%d"
+							}
+							"osd" = {
+								"osd_recovery_sleep" = "%d.000000"
+							}
+						}
+					}
+				`, value1, value2),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_config.test",
+						tfjsonpath.New("configs"),
+						knownvalue.NotNull(),
+					),
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "test" {
+						configs = {
+							"global" = {
+								"mon_max_pg_per_osd" = "%d"
+							}
+							"osd" = {
+								"osd_recovery_sleep" = "%d.000000"
+							}
+						}
+					}
+				`, value1, value2),
+				ResourceName:  "ceph_config.test",
+				ImportState:   true,
+				ImportStateId: "*",
+			},
+		},
+	})
+}
