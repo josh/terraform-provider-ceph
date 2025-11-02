@@ -337,86 +337,126 @@ func (r *ConfigResource) Delete(ctx context.Context, req resource.DeleteRequest,
 }
 
 func (r *ConfigResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	importPairs := strings.Split(req.ID, ",")
-	if len(importPairs) == 0 {
-		resp.Diagnostics.AddError(
-			"Invalid Import ID",
-			"Import ID cannot be empty. Expected format: 'section.key' or 'section1.key1,section2.key2'",
-		)
-		return
-	}
+	var importedSections map[string]map[string]string
 
-	configsBySection := make(map[string]map[string]string)
-
-	for _, pair := range importPairs {
-		pair = strings.TrimSpace(pair)
-		parts := strings.Split(pair, ".")
-
-		if len(parts) != 2 {
+	if req.ID == "" || req.ID == "*" || req.ID == "id-attribute-not-set" {
+		allConfigs, err := r.client.ClusterListConf(ctx)
+		if err != nil {
 			resp.Diagnostics.AddError(
-				"Invalid Import ID Format",
-				fmt.Sprintf("Expected format 'section.key', got: %s. Full import ID: %s", pair, req.ID),
+				"API Request Error",
+				fmt.Sprintf("Unable to list cluster configurations during bulk import: %s", err),
 			)
 			return
 		}
 
-		section := strings.TrimSpace(parts[0])
-		name := strings.TrimSpace(parts[1])
+		importedSections = make(map[string]map[string]string)
 
-		if section == "" || name == "" {
+		for _, config := range allConfigs {
+			if len(config.Value) == 0 {
+				continue
+			}
+
+			if strings.HasPrefix(config.Name, "mgr/") {
+				continue
+			}
+
+			for _, v := range config.Value {
+				if importedSections[v.Section] == nil {
+					importedSections[v.Section] = make(map[string]string)
+				}
+				importedSections[v.Section][config.Name] = v.Value
+			}
+		}
+
+		if len(importedSections) == 0 {
+			resp.Diagnostics.AddError(
+				"No Configurations Found",
+				"No non-default configurations found to import. The cluster may only have default values set.",
+			)
+			return
+		}
+	} else {
+		importPairs := strings.Split(req.ID, ",")
+		if len(importPairs) == 0 {
 			resp.Diagnostics.AddError(
 				"Invalid Import ID",
-				fmt.Sprintf("Section and key cannot be empty in: %s", pair),
+				"Import ID cannot be empty. Expected format: 'section.key' or 'section1.key1,section2.key2'",
 			)
 			return
 		}
 
-		if configsBySection[section] == nil {
-			configsBySection[section] = make(map[string]string)
-		}
+		configsBySection := make(map[string]map[string]string)
 
-		if _, exists := configsBySection[section][name]; exists {
-			resp.Diagnostics.AddError(
-				"Duplicate Import Entry",
-				fmt.Sprintf("Config %s/%s appears multiple times in import ID", section, name),
-			)
-			return
-		}
+		for _, pair := range importPairs {
+			pair = strings.TrimSpace(pair)
+			parts := strings.Split(pair, ".")
 
-		configsBySection[section][name] = ""
-	}
-
-	importedSections := make(map[string]map[string]string)
-
-	for section, configs := range configsBySection {
-		for name := range configs {
-			apiConfig, err := r.client.ClusterGetConf(ctx, name)
-			if err != nil {
+			if len(parts) != 2 {
 				resp.Diagnostics.AddError(
-					"API Request Error",
-					fmt.Sprintf("Unable to read cluster configuration %s/%s during import: %s", section, name, err),
+					"Invalid Import ID Format",
+					fmt.Sprintf("Expected format 'section.key', got: %s. Full import ID: %s. Use empty string or '*' for bulk import.", pair, req.ID),
 				)
 				return
 			}
 
-			found := false
-			for _, v := range apiConfig.Value {
-				if v.Section == section {
-					if importedSections[section] == nil {
-						importedSections[section] = make(map[string]string)
-					}
-					importedSections[section][name] = v.Value
-					found = true
-					break
+			section := strings.TrimSpace(parts[0])
+			name := strings.TrimSpace(parts[1])
+
+			if section == "" || name == "" {
+				resp.Diagnostics.AddError(
+					"Invalid Import ID",
+					fmt.Sprintf("Section and key cannot be empty in: %s", pair),
+				)
+				return
+			}
+
+			if configsBySection[section] == nil {
+				configsBySection[section] = make(map[string]string)
+			}
+
+			if _, exists := configsBySection[section][name]; exists {
+				resp.Diagnostics.AddError(
+					"Duplicate Import Entry",
+					fmt.Sprintf("Config %s/%s appears multiple times in import ID", section, name),
+				)
+				return
+			}
+
+			configsBySection[section][name] = ""
+		}
+
+		importedSections = make(map[string]map[string]string)
+
+		for section, configs := range configsBySection {
+			for name := range configs {
+				apiConfig, err := r.client.ClusterGetConf(ctx, name)
+				if err != nil {
+					resp.Diagnostics.AddError(
+						"API Request Error",
+						fmt.Sprintf("Unable to read cluster configuration %s/%s during import: %s", section, name, err),
+					)
+					return
 				}
-			}
 
-			if !found {
-				resp.Diagnostics.AddError(
-					"Configuration Not Found",
-					fmt.Sprintf("Configuration %s/%s does not exist in the cluster or has no value set for section %s", section, name, section),
-				)
-				return
+				found := false
+				for _, v := range apiConfig.Value {
+					if v.Section == section {
+						if importedSections[section] == nil {
+							importedSections[section] = make(map[string]string)
+						}
+						importedSections[section][name] = v.Value
+						found = true
+						break
+					}
+				}
+
+				if !found {
+					resp.Diagnostics.AddError(
+						"Configuration Not Found",
+						fmt.Sprintf("Configuration %s/%s does not exist in the cluster or has no value set for section %s", section, name, section),
+					)
+					return
+				}
 			}
 		}
 	}
