@@ -94,6 +94,14 @@ func (r *ConfigResource) Create(ctx context.Context, req resource.CreateRequest,
 		}
 
 		for name, value := range configs {
+			if strings.HasPrefix(name, "mgr/") {
+				resp.Diagnostics.AddError(
+					"Invalid Configuration Name",
+					fmt.Sprintf("Configuration '%s' cannot be managed via ceph_config. Use ceph_mgr_module_config instead.", name),
+				)
+				return
+			}
+
 			err := r.client.ClusterUpdateConf(ctx, name, section, value)
 			if err != nil {
 				resp.Diagnostics.AddError(
@@ -241,6 +249,14 @@ func (r *ConfigResource) Update(ctx context.Context, req resource.UpdateRequest,
 		}
 
 		for name, value := range configs {
+			if strings.HasPrefix(name, "mgr/") {
+				resp.Diagnostics.AddError(
+					"Invalid Configuration Name",
+					fmt.Sprintf("Configuration '%s' cannot be managed via ceph_config. Use ceph_mgr_module_config instead.", name),
+				)
+				return
+			}
+
 			key := configKey{section: section, name: name}
 			newConfigMap[key] = value
 		}

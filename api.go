@@ -1174,3 +1174,240 @@ func (c *CephAPIClient) ClusterDeleteConf(ctx context.Context, name string, sect
 
 	return nil
 }
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-mgr-module>
+
+type CephAPIMgrModule struct {
+	Name     string                            `json:"name"`
+	Enabled  bool                              `json:"enabled"`
+	AlwaysOn bool                              `json:"always_on"`
+	Options  map[string]CephAPIMgrModuleOption `json:"options"`
+}
+
+type CephAPIMgrModuleOption struct {
+	Name         string      `json:"name"`
+	Type         string      `json:"type"`
+	Level        string      `json:"level"`
+	Flags        int         `json:"flags"`
+	DefaultValue interface{} `json:"default_value"`
+	Min          interface{} `json:"min"`
+	Max          interface{} `json:"max"`
+	EnumAllowed  []string    `json:"enum_allowed"`
+	Desc         string      `json:"desc"`
+	LongDesc     string      `json:"long_desc"`
+	Tags         []string    `json:"tags"`
+	SeeAlso      []string    `json:"see_also"`
+}
+
+func (c *CephAPIClient) MgrListModules(ctx context.Context) ([]CephAPIMgrModule, error) {
+	url := c.endpoint.JoinPath("/api/mgr/module").String()
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(httpResp.Body)
+		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response body: %w", err)
+	}
+
+	var modules []CephAPIMgrModule
+	err = json.Unmarshal(body, &modules)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
+	}
+
+	return modules, nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-mgr-module-module_name>
+
+type CephAPIMgrModuleConfig map[string]interface{}
+
+func (c *CephAPIClient) MgrGetModuleConfig(ctx context.Context, moduleName string) (CephAPIMgrModuleConfig, error) {
+	url := c.endpoint.JoinPath("/api/mgr/module", moduleName).String()
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(httpResp.Body)
+		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response body: %w", err)
+	}
+
+	var config CephAPIMgrModuleConfig
+	err = json.Unmarshal(body, &config)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
+	}
+
+	return config, nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#put--api-mgr-module-module_name>
+
+type CephAPIMgrModuleConfigRequest struct {
+	Config CephAPIMgrModuleConfig `json:"config"`
+}
+
+func (c *CephAPIClient) MgrSetModuleConfig(ctx context.Context, moduleName string, config CephAPIMgrModuleConfig) error {
+	requestBody := CephAPIMgrModuleConfigRequest{
+		Config: config,
+	}
+
+	jsonPayload, err := json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("unable to encode request payload: %w", err)
+	}
+
+	url := c.endpoint.JoinPath("/api/mgr/module", moduleName).String()
+	httpReq, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusCreated && httpResp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(httpResp.Body)
+		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-mgr-module-module_name-disable>
+
+func (c *CephAPIClient) MgrDisableModule(ctx context.Context, moduleName string) error {
+	url := c.endpoint.JoinPath("/api/mgr/module", moduleName, "disable").String()
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		return fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusCreated && httpResp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(httpResp.Body)
+		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-mgr-module-module_name-enable>
+
+func (c *CephAPIClient) MgrEnableModule(ctx context.Context, moduleName string) error {
+	url := c.endpoint.JoinPath("/api/mgr/module", moduleName, "enable").String()
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, nil)
+	if err != nil {
+		return fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusCreated && httpResp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(httpResp.Body)
+		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-mgr-module-module_name-options>
+
+func (c *CephAPIClient) MgrGetModuleOptions(ctx context.Context, moduleName string) (map[string]CephAPIMgrModuleOption, error) {
+	url := c.endpoint.JoinPath("/api/mgr/module", moduleName, "options").String()
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	httpResp, err := c.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(httpResp.Body)
+		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response body: %w", err)
+	}
+
+	var options map[string]CephAPIMgrModuleOption
+	err = json.Unmarshal(body, &options)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
+	}
+
+	return options, nil
+}

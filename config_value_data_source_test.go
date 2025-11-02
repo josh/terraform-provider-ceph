@@ -148,3 +148,24 @@ func TestAccCephConfigValueDataSource_multipleSections(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephConfigValueDataSource_MgrConfigRejection(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					data "ceph_config_value" "test" {
+					  name    = "mgr/dashboard/ssl"
+					  section = "mgr"
+					}
+				`,
+				ExpectError: regexp.MustCompile("is not available via ceph_config_value"),
+			},
+		},
+	})
+}

@@ -154,6 +154,7 @@ func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource
 	return []func() resource.Resource{
 		newAuthResource,
 		newConfigResource,
+		newMgrModuleConfigResource,
 		newRGWUserResource,
 		newRGWS3KeyResource,
 	}
@@ -164,6 +165,7 @@ func (p *CephProvider) DataSources(ctx context.Context) []func() datasource.Data
 		newAuthDataSource,
 		newConfigDataSource,
 		newConfigValueDataSource,
+		newMgrModuleConfigDataSource,
 		newRGWUserDataSource,
 		newRGWSubuserDataSource,
 		newRGWS3KeyDataSource,
