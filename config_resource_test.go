@@ -57,12 +57,16 @@ func TestAccCephConfigResource(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_config.global",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							configName1: knownvalue.StringExact(fmt.Sprintf("%d", testValue1)),
+						}),
 					),
 					statecheck.ExpectKnownValue(
 						"ceph_config.osd",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							configName2: knownvalue.StringExact(fmt.Sprintf("%d.000000", testValue2)),
+						}),
 					),
 					statecheck.ExpectKnownValue(
 						"data.ceph_config_value.mon_value",
@@ -111,7 +115,9 @@ func TestAccCephConfigResource_update(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_config.test",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							configName: knownvalue.StringExact(fmt.Sprintf("%d", testValue1)),
+						}),
 					),
 					statecheck.ExpectKnownValue(
 						"data.ceph_config_value.test_value",
@@ -140,7 +146,9 @@ func TestAccCephConfigResource_update(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_config.test",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							configName: knownvalue.StringExact(fmt.Sprintf("%d", testValue2)),
+						}),
 					),
 					statecheck.ExpectKnownValue(
 						"data.ceph_config_value.test_value",
@@ -169,7 +177,9 @@ func TestAccCephConfigResource_update(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_config.test",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							configName: knownvalue.StringExact(fmt.Sprintf("%d", testValue2)),
+						}),
 					),
 					statecheck.ExpectKnownValue(
 						"data.ceph_config_value.test_value",
@@ -225,12 +235,16 @@ func TestAccCephConfigResource_multipleConfigs(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_config.global",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							"mon_max_pg_per_osd": knownvalue.StringExact(fmt.Sprintf("%d", value1)),
+						}),
 					),
 					statecheck.ExpectKnownValue(
 						"ceph_config.osd",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							"osd_recovery_sleep": knownvalue.StringExact(fmt.Sprintf("%d.000000", value2)),
+						}),
 					),
 					statecheck.ExpectKnownValue(
 						"data.ceph_config_value.mon_value",
@@ -291,12 +305,16 @@ func TestAccCephConfigResource_removeConfig(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_config.global",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							"mon_max_pg_per_osd": knownvalue.StringExact(fmt.Sprintf("%d", customValue1)),
+						}),
 					),
 					statecheck.ExpectKnownValue(
 						"ceph_config.osd",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							"osd_recovery_sleep": knownvalue.StringExact(fmt.Sprintf("%d.000000", customValue2)),
+						}),
 					),
 					statecheck.ExpectKnownValue(
 						"data.ceph_config_value.mon_value",
@@ -369,7 +387,9 @@ func TestAccCephConfigResource_import(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_config.test",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							configName: knownvalue.StringExact(fmt.Sprintf("%d", testValue)),
+						}),
 					),
 				},
 			},
@@ -415,7 +435,10 @@ func TestAccCephConfigResource_importMultiple(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_config.global",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							"mon_max_pg_per_osd": knownvalue.StringExact(fmt.Sprintf("%d", value1)),
+							"osd_recovery_sleep":  knownvalue.StringExact("0.100000"),
+						}),
 					),
 				},
 			},
@@ -492,12 +515,16 @@ func TestAccCephConfigResource_bulkImport(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_config.global",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							"mon_max_pg_per_osd": knownvalue.StringExact(fmt.Sprintf("%d", value1)),
+						}),
 					),
 					statecheck.ExpectKnownValue(
 						"ceph_config.osd",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							"osd_recovery_sleep": knownvalue.StringExact(fmt.Sprintf("%d.000000", value2)),
+						}),
 					),
 				},
 			},
@@ -557,7 +584,9 @@ func TestAccCephConfigResource_nativeIntValue(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_config.test",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							configName: knownvalue.StringExact(fmt.Sprintf("%d", testValue1)),
+						}),
 					),
 					statecheck.ExpectKnownValue(
 						"data.ceph_config_value.test_value",
@@ -589,7 +618,9 @@ func TestAccCephConfigResource_nativeIntValue(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_config.test",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							configName: knownvalue.StringExact(fmt.Sprintf("%d", testValue2)),
+						}),
 					),
 					statecheck.ExpectKnownValue(
 						"data.ceph_config_value.test_value",
@@ -634,7 +665,9 @@ func TestAccCephConfigResource_nativeBoolValue(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_config.test",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							configName: knownvalue.StringExact("true"),
+						}),
 					),
 					statecheck.ExpectKnownValue(
 						"data.ceph_config_value.test_value",
@@ -666,7 +699,9 @@ func TestAccCephConfigResource_nativeBoolValue(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"ceph_config.test",
 						tfjsonpath.New("config"),
-						knownvalue.NotNull(),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							configName: knownvalue.StringExact("false"),
+						}),
 					),
 					statecheck.ExpectKnownValue(
 						"data.ceph_config_value.test_value",
