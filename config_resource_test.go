@@ -27,33 +27,41 @@ func TestAccCephConfigResource(t *testing.T) {
 			{
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
-					resource "ceph_config" "test" {
-						configs = {
-							"global" = {
-								%q = "%d"
-							}
-							"osd" = {
-								%q = "%d.000000"
-							}
+					resource "ceph_config" "global" {
+						section = "global"
+						config = {
+							%q = "%d"
+						}
+					}
+
+					resource "ceph_config" "osd" {
+						section = "osd"
+						config = {
+							%q = "%d.000000"
 						}
 					}
 
 					data "ceph_config_value" "mon_value" {
 						name    = %q
 						section = "global"
-						depends_on = [ceph_config.test]
+						depends_on = [ceph_config.global]
 					}
 
 					data "ceph_config_value" "osd_value" {
 						name    = %q
 						section = "osd"
-						depends_on = [ceph_config.test]
+						depends_on = [ceph_config.osd]
 					}
 				`, configName1, testValue1, configName2, testValue2, configName1, configName2),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
-						"ceph_config.test",
-						tfjsonpath.New("configs"),
+						"ceph_config.global",
+						tfjsonpath.New("config"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_config.osd",
+						tfjsonpath.New("config"),
 						knownvalue.NotNull(),
 					),
 					statecheck.ExpectKnownValue(
@@ -87,10 +95,9 @@ func TestAccCephConfigResource_update(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_config" "test" {
-						configs = {
-							"global" = {
-								%q = "%d"
-							}
+						section = "global"
+						config = {
+							%q = "%d"
 						}
 					}
 
@@ -103,7 +110,7 @@ func TestAccCephConfigResource_update(t *testing.T) {
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"ceph_config.test",
-						tfjsonpath.New("configs"),
+						tfjsonpath.New("config"),
 						knownvalue.NotNull(),
 					),
 					statecheck.ExpectKnownValue(
@@ -117,10 +124,9 @@ func TestAccCephConfigResource_update(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_config" "test" {
-						configs = {
-							"global" = {
-								%q = "%d"
-							}
+						section = "global"
+						config = {
+							%q = "%d"
 						}
 					}
 
@@ -133,7 +139,7 @@ func TestAccCephConfigResource_update(t *testing.T) {
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"ceph_config.test",
-						tfjsonpath.New("configs"),
+						tfjsonpath.New("config"),
 						knownvalue.NotNull(),
 					),
 					statecheck.ExpectKnownValue(
@@ -147,10 +153,9 @@ func TestAccCephConfigResource_update(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_config" "test" {
-						configs = {
-							"osd" = {
-								%q = "%d"
-							}
+						section = "osd"
+						config = {
+							%q = "%d"
 						}
 					}
 
@@ -163,7 +168,7 @@ func TestAccCephConfigResource_update(t *testing.T) {
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"ceph_config.test",
-						tfjsonpath.New("configs"),
+						tfjsonpath.New("config"),
 						knownvalue.NotNull(),
 					),
 					statecheck.ExpectKnownValue(
@@ -190,33 +195,41 @@ func TestAccCephConfigResource_multipleConfigs(t *testing.T) {
 			{
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
-					resource "ceph_config" "test" {
-						configs = {
-							"global" = {
-								"mon_max_pg_per_osd" = "%d"
-							}
-							"osd" = {
-								"osd_recovery_sleep" = "%d.000000"
-							}
+					resource "ceph_config" "global" {
+						section = "global"
+						config = {
+							"mon_max_pg_per_osd" = "%d"
+						}
+					}
+
+					resource "ceph_config" "osd" {
+						section = "osd"
+						config = {
+							"osd_recovery_sleep" = "%d.000000"
 						}
 					}
 
 					data "ceph_config_value" "mon_value" {
 						name    = "mon_max_pg_per_osd"
 						section = "global"
-						depends_on = [ceph_config.test]
+						depends_on = [ceph_config.global]
 					}
 
 					data "ceph_config_value" "osd_value" {
 						name    = "osd_recovery_sleep"
 						section = "osd"
-						depends_on = [ceph_config.test]
+						depends_on = [ceph_config.osd]
 					}
 				`, value1, value2),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
-						"ceph_config.test",
-						tfjsonpath.New("configs"),
+						"ceph_config.global",
+						tfjsonpath.New("config"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_config.osd",
+						tfjsonpath.New("config"),
 						knownvalue.NotNull(),
 					),
 					statecheck.ExpectKnownValue(
@@ -248,33 +261,41 @@ func TestAccCephConfigResource_removeConfig(t *testing.T) {
 			{
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
-					resource "ceph_config" "test" {
-						configs = {
-							"global" = {
-								"mon_max_pg_per_osd" = "%d"
-							}
-							"osd" = {
-								"osd_recovery_sleep" = "%d.000000"
-							}
+					resource "ceph_config" "global" {
+						section = "global"
+						config = {
+							"mon_max_pg_per_osd" = "%d"
+						}
+					}
+
+					resource "ceph_config" "osd" {
+						section = "osd"
+						config = {
+							"osd_recovery_sleep" = "%d.000000"
 						}
 					}
 
 					data "ceph_config_value" "mon_value" {
 						name    = "mon_max_pg_per_osd"
 						section = "global"
-						depends_on = [ceph_config.test]
+						depends_on = [ceph_config.global]
 					}
 
 					data "ceph_config_value" "osd_value" {
 						name    = "osd_recovery_sleep"
 						section = "osd"
-						depends_on = [ceph_config.test]
+						depends_on = [ceph_config.osd]
 					}
 				`, customValue1, customValue2),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
-						"ceph_config.test",
-						tfjsonpath.New("configs"),
+						"ceph_config.global",
+						tfjsonpath.New("config"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_config.osd",
+						tfjsonpath.New("config"),
 						knownvalue.NotNull(),
 					),
 					statecheck.ExpectKnownValue(
@@ -292,22 +313,21 @@ func TestAccCephConfigResource_removeConfig(t *testing.T) {
 			{
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
-					resource "ceph_config" "test" {
-						configs = {
-							"osd" = {
-								"osd_recovery_sleep" = "%d.000000"
-							}
+					resource "ceph_config" "osd" {
+						section = "osd"
+						config = {
+							"osd_recovery_sleep" = "%d.000000"
 						}
 					}
 
 					data "ceph_config_value" "osd_value" {
 						name    = "osd_recovery_sleep"
 						section = "osd"
-						depends_on = [ceph_config.test]
+						depends_on = [ceph_config.osd]
 					}
 
 					data "ceph_config" "all" {
-						depends_on = [ceph_config.test]
+						depends_on = [ceph_config.osd]
 					}
 				`, customValue2),
 				ConfigStateChecks: []statecheck.StateCheck{
@@ -318,7 +338,7 @@ func TestAccCephConfigResource_removeConfig(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("ceph_config.test", "configs.osd.osd_recovery_sleep", fmt.Sprintf("%d.000000", customValue2)),
+					resource.TestCheckResourceAttr("ceph_config.osd", "config.osd_recovery_sleep", fmt.Sprintf("%d.000000", customValue2)),
 				),
 			},
 		},
@@ -339,17 +359,16 @@ func TestAccCephConfigResource_import(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_config" "test" {
-						configs = {
-							"global" = {
-								%q = "%d"
-							}
+						section = "global"
+						config = {
+							%q = "%d"
 						}
 					}
 				`, configName, testValue),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"ceph_config.test",
-						tfjsonpath.New("configs"),
+						tfjsonpath.New("config"),
 						knownvalue.NotNull(),
 					),
 				},
@@ -358,16 +377,15 @@ func TestAccCephConfigResource_import(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_config" "test" {
-						configs = {
-							"global" = {
-								%q = "%d"
-							}
+						section = "global"
+						config = {
+							%q = "%d"
 						}
 					}
 				`, configName, testValue),
 				ResourceName:  "ceph_config.test",
 				ImportState:   true,
-				ImportStateId: fmt.Sprintf("global.%s", configName),
+				ImportStateId: "global",
 			},
 		},
 	})
@@ -378,7 +396,6 @@ func TestAccCephConfigResource_importMultiple(t *testing.T) {
 	defer detachLogs()
 
 	value1 := acctest.RandIntRange(100, 999)
-	value2 := acctest.RandIntRange(1000, 9999)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -386,21 +403,18 @@ func TestAccCephConfigResource_importMultiple(t *testing.T) {
 			{
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
-					resource "ceph_config" "test" {
-						configs = {
-							"global" = {
-								"mon_max_pg_per_osd" = "%d"
-							}
-							"osd" = {
-								"osd_recovery_sleep" = "%d.000000"
-							}
+					resource "ceph_config" "global" {
+						section = "global"
+						config = {
+							"mon_max_pg_per_osd" = "%d"
+							"osd_recovery_sleep" = "0.100000"
 						}
 					}
-				`, value1, value2),
+				`, value1),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
-						"ceph_config.test",
-						tfjsonpath.New("configs"),
+						"ceph_config.global",
+						tfjsonpath.New("config"),
 						knownvalue.NotNull(),
 					),
 				},
@@ -408,20 +422,17 @@ func TestAccCephConfigResource_importMultiple(t *testing.T) {
 			{
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
-					resource "ceph_config" "test" {
-						configs = {
-							"global" = {
-								"mon_max_pg_per_osd" = "%d"
-							}
-							"osd" = {
-								"osd_recovery_sleep" = "%d.000000"
-							}
+					resource "ceph_config" "global" {
+						section = "global"
+						config = {
+							"mon_max_pg_per_osd" = "%d"
+							"osd_recovery_sleep" = "0.100000"
 						}
 					}
-				`, value1, value2),
-				ResourceName:  "ceph_config.test",
+				`, value1),
+				ResourceName:  "ceph_config.global",
 				ImportState:   true,
-				ImportStateId: "global.mon_max_pg_per_osd,osd.osd_recovery_sleep",
+				ImportStateId: "global",
 			},
 		},
 	})
@@ -438,10 +449,9 @@ func TestAccCephConfigResource_MgrConfigRejection(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + `
 					resource "ceph_config" "test" {
-						configs = {
-							"mgr" = {
-								"mgr/dashboard/ssl" = "false"
-							}
+						section = "mgr"
+						config = {
+							"mgr/dashboard/ssl" = "false"
 						}
 					}
 				`,
@@ -451,7 +461,7 @@ func TestAccCephConfigResource_MgrConfigRejection(t *testing.T) {
 	})
 }
 
-func TestAccCephConfigResource_bulkImportEmpty(t *testing.T) {
+func TestAccCephConfigResource_bulkImport(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
@@ -464,21 +474,29 @@ func TestAccCephConfigResource_bulkImportEmpty(t *testing.T) {
 			{
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
-					resource "ceph_config" "test" {
-						configs = {
-							"global" = {
-								"mon_max_pg_per_osd" = "%d"
-							}
-							"osd" = {
-								"osd_recovery_sleep" = "%d.000000"
-							}
+					resource "ceph_config" "global" {
+						section = "global"
+						config = {
+							"mon_max_pg_per_osd" = "%d"
+						}
+					}
+
+					resource "ceph_config" "osd" {
+						section = "osd"
+						config = {
+							"osd_recovery_sleep" = "%d.000000"
 						}
 					}
 				`, value1, value2),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
-						"ceph_config.test",
-						tfjsonpath.New("configs"),
+						"ceph_config.global",
+						tfjsonpath.New("config"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_config.osd",
+						tfjsonpath.New("config"),
 						knownvalue.NotNull(),
 					),
 				},
@@ -486,31 +504,35 @@ func TestAccCephConfigResource_bulkImportEmpty(t *testing.T) {
 			{
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
-					resource "ceph_config" "test" {
-						configs = {
-							"global" = {
-								"mon_max_pg_per_osd" = "%d"
-							}
-							"osd" = {
-								"osd_recovery_sleep" = "%d.000000"
-							}
+					resource "ceph_config" "global" {
+						section = "global"
+						config = {
+							"mon_max_pg_per_osd" = "%d"
+						}
+					}
+
+					resource "ceph_config" "osd" {
+						section = "osd"
+						config = {
+							"osd_recovery_sleep" = "%d.000000"
 						}
 					}
 				`, value1, value2),
-				ResourceName:  "ceph_config.test",
+				ResourceName:  "ceph_config.global",
 				ImportState:   true,
-				ImportStateId: "",
+				ImportStateId: "global",
 			},
 		},
 	})
 }
 
-func TestAccCephConfigResource_bulkImportWildcard(t *testing.T) {
+func TestAccCephConfigResource_nativeIntValue(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
-	value1 := acctest.RandIntRange(100, 999)
-	value2 := acctest.RandIntRange(1000, 9999)
+	testValue1 := acctest.RandIntRange(100, 999)
+	testValue2 := acctest.RandIntRange(1000, 9999)
+	configName := "mon_max_pg_per_osd"
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -519,41 +541,142 @@ func TestAccCephConfigResource_bulkImportWildcard(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_config" "test" {
-						configs = {
-							"global" = {
-								"mon_max_pg_per_osd" = "%d"
-							}
-							"osd" = {
-								"osd_recovery_sleep" = "%d.000000"
-							}
+						section = "global"
+						config = {
+							%s = %d
 						}
 					}
-				`, value1, value2),
+
+					data "ceph_config_value" "test_value" {
+						name    = %q
+						section = "global"
+						depends_on = [ceph_config.test]
+					}
+				`, configName, testValue1, configName),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"ceph_config.test",
-						tfjsonpath.New("configs"),
+						tfjsonpath.New("config"),
 						knownvalue.NotNull(),
 					),
+					statecheck.ExpectKnownValue(
+						"data.ceph_config_value.test_value",
+						tfjsonpath.New("value"),
+						knownvalue.StringExact(fmt.Sprintf("%d", testValue1)),
+					),
 				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_config.test", "config.mon_max_pg_per_osd", fmt.Sprintf("%d", testValue1)),
+				),
 			},
 			{
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_config" "test" {
-						configs = {
-							"global" = {
-								"mon_max_pg_per_osd" = "%d"
-							}
-							"osd" = {
-								"osd_recovery_sleep" = "%d.000000"
-							}
+						section = "global"
+						config = {
+							%s = %d
 						}
 					}
-				`, value1, value2),
-				ResourceName:  "ceph_config.test",
-				ImportState:   true,
-				ImportStateId: "*",
+
+					data "ceph_config_value" "test_value" {
+						name    = %q
+						section = "global"
+						depends_on = [ceph_config.test]
+					}
+				`, configName, testValue2, configName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_config.test",
+						tfjsonpath.New("config"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.ceph_config_value.test_value",
+						tfjsonpath.New("value"),
+						knownvalue.StringExact(fmt.Sprintf("%d", testValue2)),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_config.test", "config.mon_max_pg_per_osd", fmt.Sprintf("%d", testValue2)),
+				),
+			},
+		},
+	})
+}
+
+func TestAccCephConfigResource_nativeBoolValue(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	configName := "mon_allow_pool_delete"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "test" {
+						section = "global"
+						config = {
+							%s = true
+						}
+					}
+
+					data "ceph_config_value" "test_value" {
+						name    = %q
+						section = "global"
+						depends_on = [ceph_config.test]
+					}
+				`, configName, configName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_config.test",
+						tfjsonpath.New("config"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.ceph_config_value.test_value",
+						tfjsonpath.New("value"),
+						knownvalue.StringExact("true"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_config.test", "config.mon_allow_pool_delete", "true"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "test" {
+						section = "global"
+						config = {
+							%s = false
+						}
+					}
+
+					data "ceph_config_value" "test_value" {
+						name    = %q
+						section = "global"
+						depends_on = [ceph_config.test]
+					}
+				`, configName, configName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_config.test",
+						tfjsonpath.New("config"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.ceph_config_value.test_value",
+						tfjsonpath.New("value"),
+						knownvalue.StringExact("false"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_config.test", "config.mon_allow_pool_delete", "false"),
+				),
 			},
 		},
 	})
