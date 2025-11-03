@@ -437,7 +437,7 @@ func TestAccCephConfigResource_importMultiple(t *testing.T) {
 						tfjsonpath.New("config"),
 						knownvalue.MapExact(map[string]knownvalue.Check{
 							"mon_max_pg_per_osd": knownvalue.StringExact(fmt.Sprintf("%d", value1)),
-							"osd_recovery_sleep":  knownvalue.StringExact("0.100000"),
+							"osd_recovery_sleep": knownvalue.StringExact("0.100000"),
 						}),
 					),
 				},
@@ -711,6 +711,181 @@ func TestAccCephConfigResource_nativeBoolValue(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("ceph_config.test", "config.mon_allow_pool_delete", "false"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccCephConfigResource_invalidSectionRejection(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_config" "test" {
+						section = "invalid_section"
+						config = {
+							"some_option" = "value"
+						}
+					}
+				`,
+				ExpectError: regexp.MustCompile("(?i)(invalid|unknown|not found|unrecognized).*section"),
+			},
+		},
+	})
+}
+
+func TestAccCephConfigResource_numericTypeBoundaries(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_config" "test" {
+						section = "global"
+						config = {
+							"mon_max_pg_per_osd" = "2147483647"
+						}
+					}
+				`,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_config.test",
+						tfjsonpath.New("config").AtMapKey("mon_max_pg_per_osd"),
+						knownvalue.StringExact("2147483647"),
+					),
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_config" "test" {
+						section = "global"
+						config = {
+							"mon_max_pg_per_osd" = "1"
+						}
+					}
+				`,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_config.test",
+						tfjsonpath.New("config").AtMapKey("mon_max_pg_per_osd"),
+						knownvalue.StringExact("1"),
+					),
+				},
+			},
+		},
+	})
+}
+
+func TestAccCephConfigResource_partialUpdate(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	value1 := acctest.RandIntRange(100, 999)
+	value2 := acctest.RandIntRange(1000, 9999)
+	value3 := acctest.RandIntRange(10000, 99999)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "test" {
+						section = "global"
+						config = {
+							"mon_max_pg_per_osd" = "%d"
+							"mon_osd_down_out_interval" = "%d"
+						}
+					}
+				`, value1, value2),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_config.test",
+						tfjsonpath.New("config").AtMapKey("mon_max_pg_per_osd"),
+						knownvalue.StringExact(fmt.Sprintf("%d", value1)),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_config.test",
+						tfjsonpath.New("config").AtMapKey("mon_osd_down_out_interval"),
+						knownvalue.StringExact(fmt.Sprintf("%d", value2)),
+					),
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "test" {
+						section = "global"
+						config = {
+							"mon_max_pg_per_osd" = "%d"
+							"mon_osd_down_out_interval" = "%d"
+							"mon_max_pool_pg_num" = "%d"
+						}
+					}
+				`, value3, value2, value1),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_config.test",
+						tfjsonpath.New("config").AtMapKey("mon_max_pg_per_osd"),
+						knownvalue.StringExact(fmt.Sprintf("%d", value3)),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_config.test",
+						tfjsonpath.New("config").AtMapKey("mon_osd_down_out_interval"),
+						knownvalue.StringExact(fmt.Sprintf("%d", value2)),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_config.test",
+						tfjsonpath.New("config").AtMapKey("mon_max_pool_pg_num"),
+						knownvalue.StringExact(fmt.Sprintf("%d", value1)),
+					),
+				},
+			},
+		},
+	})
+}
+
+func TestAccCephConfigResource_differentSections(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	globalValue := acctest.RandIntRange(100, 999)
+	monValue := acctest.RandIntRange(1000, 9999)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "global" {
+						section = "global"
+						config = {
+							"mon_osd_down_out_interval" = "%d"
+						}
+					}
+
+					resource "ceph_config" "mon" {
+						section = "mon"
+						config = {
+							"mon_max_pg_per_osd" = "%d"
+						}
+					}
+				`, globalValue, monValue),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_config.global", "config.mon_osd_down_out_interval", fmt.Sprintf("%d", globalValue)),
+					resource.TestCheckResourceAttr("ceph_config.mon", "config.mon_max_pg_per_osd", fmt.Sprintf("%d", monValue)),
 				),
 			},
 		},

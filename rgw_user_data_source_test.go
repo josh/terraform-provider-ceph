@@ -134,6 +134,51 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 	})
 }
 
+func TestAccCephRGWUserDataSource_deletedOutOfBand(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-deleted-oob")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			createTestRGWUser(t, testUID, "Test Deleted OOB User")
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					data "ceph_rgw_user" "test" {
+					  user_id = %q
+					}
+				`, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "user_id", testUID),
+					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "display_name", "Test Deleted OOB User"),
+				),
+			},
+			{
+				PreConfig: func() {
+					cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+testUID, "--purge-data")
+					output, err := cmd.CombinedOutput()
+					if err != nil {
+						t.Fatalf("Failed to delete user out of band: %v\nOutput: %s", err, string(output))
+					}
+					t.Logf("Deleted user %s out of band", testUID)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					data "ceph_rgw_user" "test" {
+					  user_id = %q
+					}
+				`, testUID),
+				ExpectError: regexp.MustCompile(`(?i)unable to get rgw user from ceph api`),
+			},
+		},
+	})
+}
+
 func createTestRGWUser(t *testing.T, uid, displayName string) {
 	t.Helper()
 

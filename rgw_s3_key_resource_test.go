@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -194,6 +195,30 @@ func createTestRGWUserWithoutKeys(t *testing.T, uid, displayName string) {
 		t.Fatalf("Failed to create test RGW user: %v\nOutput: %s", err, string(output))
 	}
 
+	cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "info", "--uid="+uid)
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to get user info: %v\nOutput: %s", err, string(output))
+	}
+
+	var userInfo RadosgwUserInfo
+	if err := json.Unmarshal(output, &userInfo); err != nil {
+		t.Fatalf("Failed to parse user info: %v\nOutput: %s", err, string(output))
+	}
+
+	for _, key := range userInfo.Keys {
+		cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "key", "rm",
+			"--uid="+uid,
+			"--key-type=s3",
+			"--access-key="+key.AccessKey,
+		)
+		output, err = cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("Failed to remove auto-generated key: %v\nOutput: %s", err, string(output))
+		}
+		t.Logf("Removed auto-generated key %s from user %s", key.AccessKey, uid)
+	}
+
 	t.Logf("Created test RGW user without keys: %s", uid)
 
 	t.Cleanup(func() {
@@ -240,4 +265,320 @@ func createTestRGWUserWithSubuserWithoutKeys(t *testing.T, uid, displayName, sub
 			t.Logf("Cleaned up test RGW user: %s", uid)
 		}
 	})
+}
+
+func TestAccCephRGWS3KeyResource_rotationWorkflow(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-key-rotation")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			createTestRGWUserWithoutKeys(t, testUID, "Key Rotation Test User")
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_s3_key" "key1" {
+					  user_id = %q
+					}
+				`, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key1", "user_id", testUID),
+					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.key1", "access_key"),
+					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.key1", "secret_key"),
+					checkCephRGWUserKeyCount(t, testUID, 1),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_s3_key" "key1" {
+					  user_id = %q
+					}
+
+					resource "ceph_rgw_s3_key" "key2" {
+					  user_id = %q
+					}
+				`, testUID, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key1", "user_id", testUID),
+					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.key1", "access_key"),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key2", "user_id", testUID),
+					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.key2", "access_key"),
+					checkCephRGWUserKeyCount(t, testUID, 2),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_s3_key" "key2" {
+					  user_id = %q
+					}
+				`, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key2", "user_id", testUID),
+					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.key2", "access_key"),
+					checkCephRGWUserKeyCount(t, testUID, 1),
+				),
+			},
+		},
+	})
+}
+
+func TestAccCephRGWS3KeyResource_customKeyValidation(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-custom-key-val")
+	customAccessKey1 := acctest.RandString(20)
+	customSecretKey1 := acctest.RandString(40)
+	customAccessKey2 := acctest.RandString(20)
+	customSecretKey2 := acctest.RandString(40)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			createTestRGWUserWithoutKeys(t, testUID, "Custom Key Validation User")
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_s3_key" "test" {
+					  user_id    = %q
+					  access_key = %q
+					  secret_key = %q
+					}
+				`, testUID, customAccessKey1, customSecretKey1),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "user_id", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "access_key", customAccessKey1),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "secret_key", customSecretKey1),
+					checkCephRGWUserKeyCount(t, testUID, 1),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_s3_key" "test" {
+					  user_id    = %q
+					  access_key = %q
+					  secret_key = %q
+					}
+				`, testUID, customAccessKey2, customSecretKey2),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "user_id", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "access_key", customAccessKey2),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "secret_key", customSecretKey2),
+					checkCephRGWUserKeyCount(t, testUID, 1),
+				),
+			},
+		},
+	})
+}
+
+func TestAccCephRGWS3KeyResource_importWithMultipleKeys(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-import-multi")
+	accessKey1 := acctest.RandString(20)
+	secretKey1 := acctest.RandString(40)
+	accessKey2 := acctest.RandString(20)
+	secretKey2 := acctest.RandString(40)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			createTestRGWUserWithoutKeys(t, testUID, "Import Multiple Keys Test User")
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_s3_key" "test" {
+					  user_id    = %q
+					  access_key = %q
+					  secret_key = %q
+					}
+				`, testUID, accessKey1, secretKey1),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "user_id", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "access_key", accessKey1),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "secret_key", secretKey1),
+					checkCephRGWUserKeyCount(t, testUID, 1),
+				),
+			},
+			{
+				PreConfig: func() {
+					createRGWS3Key(t, testUID, accessKey2, secretKey2)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_s3_key" "test" {
+					  user_id    = %q
+					  access_key = %q
+					  secret_key = %q
+					}
+				`, testUID, accessKey1, secretKey1),
+				ResourceName:                         "ceph_rgw_s3_key.test",
+				ImportState:                          true,
+				ImportStateId:                        fmt.Sprintf("%s:%s", testUID, accessKey1),
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "access_key",
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserKeyCount(t, testUID, 2),
+				),
+			},
+		},
+	})
+}
+
+func TestAccCephRGWS3KeyResource_deletionAndRecreation(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-del-recreate")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			createTestRGWUserWithoutKeys(t, testUID, "Deletion Recreate Test User")
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_s3_key" "test" {
+					  user_id = %q
+					}
+				`, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "user_id", testUID),
+					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.test", "access_key"),
+					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.test", "secret_key"),
+					checkCephRGWUserKeyCount(t, testUID, 1),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          testAccProviderConfigBlock,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserKeyCount(t, testUID, 0),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_s3_key" "test" {
+					  user_id = %q
+					}
+				`, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "user_id", testUID),
+					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.test", "access_key"),
+					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.test", "secret_key"),
+					checkCephRGWUserKeyCount(t, testUID, 1),
+				),
+			},
+		},
+	})
+}
+func TestAccCephRGWS3KeyResource_importMultipleKeysManagement(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-import-mgmt")
+	accessKey1 := acctest.RandString(20)
+	secretKey1 := acctest.RandString(40)
+	accessKey2 := acctest.RandString(20)
+	secretKey2 := acctest.RandString(40)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			createTestRGWUserWithoutKeys(t, testUID, "Import Multiple Keys Management User")
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_s3_key" "key1" {
+					  user_id    = %q
+					  access_key = %q
+					  secret_key = %q
+					}
+
+					resource "ceph_rgw_s3_key" "key2" {
+					  user_id    = %q
+					  access_key = %q
+					  secret_key = %q
+					}
+				`, testUID, accessKey1, secretKey1, testUID, accessKey2, secretKey2),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key1", "user_id", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key1", "access_key", accessKey1),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key2", "user_id", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key2", "access_key", accessKey2),
+					checkCephRGWUserKeyCount(t, testUID, 2),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_s3_key" "key1" {
+					  user_id    = %q
+					  access_key = %q
+					  secret_key = %q
+					}
+				`, testUID, accessKey1, secretKey1),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key1", "user_id", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key1", "access_key", accessKey1),
+					checkCephRGWUserKeyCount(t, testUID, 1),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_s3_key" "key1" {
+					  user_id    = %q
+					  access_key = %q
+					  secret_key = %q
+					}
+
+					resource "ceph_rgw_s3_key" "key3" {
+					  user_id = %q
+					}
+				`, testUID, accessKey1, secretKey1, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key1", "user_id", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key1", "access_key", accessKey1),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.key3", "user_id", testUID),
+					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.key3", "access_key"),
+					checkCephRGWUserKeyCount(t, testUID, 2),
+				),
+			},
+		},
+	})
+}
+
+func createRGWS3Key(t *testing.T, userID, accessKey, secretKey string) {
+	t.Helper()
+
+	cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "key", "create",
+		"--uid="+userID,
+		"--access-key="+accessKey,
+		"--secret-key="+secretKey,
+	)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to create RGW S3 key %s for user %s: %v\nOutput: %s", accessKey, userID, err, string(output))
+	}
+
+	t.Logf("Created RGW S3 key %s for user %s", accessKey, userID)
 }
