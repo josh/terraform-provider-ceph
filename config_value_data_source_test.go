@@ -190,3 +190,55 @@ func TestAccCephConfigValueDataSource_sectionNotFound(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephConfigValueDataSource_readMaskedConfig(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testValue := acctest.RandIntRange(100, 999)
+	configName := "osd_max_backfills"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "set", "osd/class:ssd", configName, fmt.Sprintf("%d", testValue))
+			if err := cmd.Run(); err != nil {
+				t.Fatalf("Failed to set masked config via CLI: %v", err)
+			}
+
+			t.Cleanup(func() {
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cleanupCancel()
+
+				cleanupCmd := exec.CommandContext(cleanupCtx, "ceph", "--conf", testConfPath, "config", "rm", "osd/class:ssd", configName)
+				_ = cleanupCmd.Run()
+			})
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					data "ceph_config_value" "masked" {
+					  name    = "%s"
+					  section = "osd"
+					}
+				`, configName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"data.ceph_config_value.masked",
+						tfjsonpath.New("section"),
+						knownvalue.StringExact("osd"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.ceph_config_value.masked",
+						tfjsonpath.New("value"),
+						knownvalue.StringExact(fmt.Sprintf("%d", testValue)),
+					),
+				},
+			},
+		},
+	})
+}
