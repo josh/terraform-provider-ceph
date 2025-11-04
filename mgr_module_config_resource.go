@@ -302,9 +302,28 @@ func (r *MgrModuleConfigResource) ImportState(ctx context.Context, req resource.
 		return
 	}
 
+	options, err := r.client.MgrGetModuleOptions(ctx, moduleName)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Import Error",
+			fmt.Sprintf("Unable to get module options for '%s': %s", moduleName, err),
+		)
+		return
+	}
+
 	stringConfigs := make(map[string]string)
 	for key, val := range readConfigs {
-		stringConfigs[key] = fmt.Sprintf("%v", val)
+		option, ok := options[key]
+		if !ok {
+			continue
+		}
+
+		valStr := fmt.Sprintf("%v", val)
+		defaultStr := fmt.Sprintf("%v", option.DefaultValue)
+
+		if valStr != defaultStr {
+			stringConfigs[key] = valStr
+		}
 	}
 
 	configsValue, diags := types.MapValueFrom(ctx, types.StringType, stringConfigs)
