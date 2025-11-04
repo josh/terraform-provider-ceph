@@ -6,6 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -121,4 +122,13 @@ func (d *AuthDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	data.Keyring = types.StringValue(keyringRaw)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+func cephCapsToMapValue(ctx context.Context, caps CephCaps, diags *diag.Diagnostics) types.Map {
+	value, err := types.MapValueFrom(ctx, types.StringType, caps.Map())
+	if err != nil {
+		diags.AddError("State Error", fmt.Sprintf("unable to encode caps: %s", err))
+		return types.MapNull(types.StringType)
+	}
+	return value
 }

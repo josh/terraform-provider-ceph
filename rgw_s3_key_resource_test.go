@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -180,55 +179,6 @@ func TestAccCephRGWS3KeyResource_nonExistentUser(t *testing.T) {
 				ExpectError: regexp.MustCompile(`(?i)unable to create rgw s3 key`),
 			},
 		},
-	})
-}
-
-func createTestRGWUserWithoutKeys(t *testing.T, uid, displayName string) {
-	t.Helper()
-
-	cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "create",
-		"--uid="+uid,
-		"--display-name="+displayName,
-	)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("Failed to create test RGW user: %v\nOutput: %s", err, string(output))
-	}
-
-	cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "info", "--uid="+uid)
-	output, err = cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("Failed to get user info: %v\nOutput: %s", err, string(output))
-	}
-
-	var userInfo RadosgwUserInfo
-	if err := json.Unmarshal(output, &userInfo); err != nil {
-		t.Fatalf("Failed to parse user info: %v\nOutput: %s", err, string(output))
-	}
-
-	for _, key := range userInfo.Keys {
-		cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "key", "rm",
-			"--uid="+uid,
-			"--key-type=s3",
-			"--access-key="+key.AccessKey,
-		)
-		output, err = cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("Failed to remove auto-generated key: %v\nOutput: %s", err, string(output))
-		}
-		t.Logf("Removed auto-generated key %s from user %s", key.AccessKey, uid)
-	}
-
-	t.Logf("Created test RGW user without keys: %s", uid)
-
-	t.Cleanup(func() {
-		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+uid, "--purge-data")
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Logf("Warning: Failed to cleanup test RGW user %s: %v\nOutput: %s", uid, err, string(output))
-		} else {
-			t.Logf("Cleaned up test RGW user: %s", uid)
-		}
 	})
 }
 

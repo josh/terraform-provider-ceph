@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -30,31 +29,6 @@ type MgrModuleConfigResourceModel struct {
 	ModuleName types.String `tfsdk:"module_name"`
 	Configs    types.Map    `tfsdk:"configs"`
 	ID         types.String `tfsdk:"id"`
-}
-
-func formatMgrModuleConfigValue(val interface{}) (string, error) {
-	switch v := val.(type) {
-	case float64:
-		if v == float64(int64(v)) {
-			return fmt.Sprintf("%d", int64(v)), nil
-		}
-		return strconv.FormatFloat(v, 'g', -1, 64), nil
-	case float32:
-		if v == float32(int32(v)) {
-			return fmt.Sprintf("%d", int32(v)), nil
-		}
-		return strconv.FormatFloat(float64(v), 'g', -1, 32), nil
-	case int, int8, int16, int32, int64:
-		return fmt.Sprintf("%d", v), nil
-	case uint, uint8, uint16, uint32, uint64:
-		return fmt.Sprintf("%d", v), nil
-	case bool:
-		return fmt.Sprintf("%t", v), nil
-	case string:
-		return v, nil
-	default:
-		return "", fmt.Errorf("unsupported config value type: %T", v)
-	}
 }
 
 func (r *MgrModuleConfigResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {

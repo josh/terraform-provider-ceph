@@ -277,12 +277,3 @@ func mapAttrToCephCaps(ctx context.Context, caps types.Map, diags *diag.Diagnost
 
 	return result, true
 }
-
-func cephCapsToMapValue(ctx context.Context, caps CephCaps, diags *diag.Diagnostics) types.Map {
-	value, err := types.MapValueFrom(ctx, types.StringType, caps.Map())
-	if err != nil {
-		diags.AddError("State Error", fmt.Sprintf("unable to encode caps: %s", err))
-		return types.MapNull(types.StringType)
-	}
-	return value
-}
