@@ -87,6 +87,13 @@ func (r *ConfigResource) Create(ctx context.Context, req resource.CreateRequest,
 
 	section := data.Section.ValueString()
 
+	if strings.Contains(section, "/") {
+		resp.Diagnostics.AddWarning(
+			"Config Mask Limitation",
+			fmt.Sprintf("Section '%s' uses mask syntax which may cause drift detection issues.", section),
+		)
+	}
+
 	var configs map[string]string
 	resp.Diagnostics.Append(data.Config.ElementsAs(ctx, &configs, false)...)
 	if resp.Diagnostics.HasError() {
