@@ -20,6 +20,36 @@ type CephAPIClient struct {
 	client   *http.Client
 }
 
+func logAPIRequest(ctx context.Context, req *http.Request) func(*http.Response, error) {
+	startTime := time.Now()
+	requestURL := req.URL.String()
+	host := req.URL.Host
+	path := req.URL.Path
+
+	return func(resp *http.Response, err error) {
+		duration := time.Since(startTime)
+		fields := map[string]interface{}{
+			"method":      req.Method,
+			"url":         requestURL,
+			"host":        host,
+			"path":        path,
+			"duration_ms": duration.Milliseconds(),
+		}
+
+		if resp != nil {
+			fields["status"] = resp.StatusCode
+		}
+
+		if err != nil {
+			fields["error"] = err.Error()
+			tflog.Error(ctx, "Ceph API request failed", fields)
+			return
+		}
+
+		tflog.Info(ctx, "Ceph API request completed", fields)
+	}
+}
+
 func (c *CephAPIClient) Configure(ctx context.Context, endpoints []*url.URL, username, password, token string) error {
 	endpoint, err := queryEndpoints(ctx, endpoints)
 	if err != nil {
@@ -71,7 +101,9 @@ func queryEndpoints(ctx context.Context, endpoints []*url.URL) (*url.URL, error)
 			continue
 		}
 
+		done := logAPIRequest(ctx, httpReq)
 		httpResp, err := client.Do(httpReq)
+		done(httpResp, err)
 		if err != nil {
 			continue
 		}
@@ -90,6 +122,7 @@ func queryEndpoints(ctx context.Context, endpoints []*url.URL) (*url.URL, error)
 
 func (c *CephAPIClient) AuthCheck(ctx context.Context) (bool, error) {
 	url := c.endpoint.JoinPath("/api/auth/check").String() + "?token=" + c.token
+	ctx = tflog.MaskLogStrings(ctx, c.token)
 	jsonPayload := []byte("{}")
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
@@ -99,7 +132,9 @@ func (c *CephAPIClient) AuthCheck(ctx context.Context) (bool, error) {
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
 
+	done := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	done(httpResp, err)
 	if err != nil {
 		return false, fmt.Errorf("unable to make check request: %w", err)
 	}
@@ -133,6 +168,8 @@ type CephAPIAuthResponse struct {
 }
 
 func (c *CephAPIClient) Auth(ctx context.Context, username string, password string) (string, error) {
+	ctx = tflog.MaskLogStrings(ctx, password)
+
 	requestBody := CephAPIAuthRequest{
 		Username: username,
 		Password: password,
@@ -152,7 +189,9 @@ func (c *CephAPIClient) Auth(ctx context.Context, username string, password stri
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
 
+	done := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	done(httpResp, err)
 	if err != nil {
 		return "", fmt.Errorf("unable to make authentication request: %w", err)
 	}
@@ -207,7 +246,9 @@ func (c *CephAPIClient) ClusterExportUser(ctx context.Context, entity string) (s
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return "", fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -250,7 +291,9 @@ func (c *CephAPIClient) ClusterListUsers(ctx context.Context) ([]CephAPIClusterU
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -332,7 +375,9 @@ func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, ca
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -366,7 +411,9 @@ func (c *CephAPIClient) ClusterImportUser(ctx context.Context, importData string
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -410,7 +457,9 @@ func (c *CephAPIClient) ClusterUpdateUser(ctx context.Context, entity string, ca
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -437,7 +486,9 @@ func (c *CephAPIClient) ClusterDeleteUser(ctx context.Context, userEntities stri
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -465,7 +516,9 @@ func (c *CephAPIClient) RGWListBucketNames(ctx context.Context) ([]string, error
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -514,7 +567,9 @@ func (c *CephAPIClient) RGWGetBucket(ctx context.Context, bucketName string) (Ce
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return CephAPIRGWBucket{}, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -552,7 +607,9 @@ func (c *CephAPIClient) RGWListUserNames(ctx context.Context) ([]string, error) 
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -658,7 +715,9 @@ func (c *CephAPIClient) RGWGetUser(ctx context.Context, uid string) (CephAPIRGWU
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return CephAPIRGWUser{}, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -710,7 +769,9 @@ func (c *CephAPIClient) RGWCreateUser(ctx context.Context, req CephAPIRGWUserCre
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return CephAPIRGWUser{}, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -761,7 +822,9 @@ func (c *CephAPIClient) RGWUpdateUser(ctx context.Context, uid string, req CephA
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return CephAPIRGWUser{}, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -799,7 +862,9 @@ func (c *CephAPIClient) RGWDeleteUser(ctx context.Context, uid string) error {
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -849,7 +914,9 @@ func (c *CephAPIClient) RGWCreateS3Key(ctx context.Context, uid string, subuser 
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -906,7 +973,9 @@ func (c *CephAPIClient) RGWCreateSwiftKey(ctx context.Context, uid string, subus
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -952,7 +1021,9 @@ func (c *CephAPIClient) RGWDeleteS3Key(ctx context.Context, uid string, accessKe
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -985,7 +1056,9 @@ func (c *CephAPIClient) RGWDeleteSwiftKey(ctx context.Context, uid string, secre
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -1038,7 +1111,9 @@ func (c *CephAPIClient) ClusterListConf(ctx context.Context) ([]CephAPIClusterCo
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -1077,7 +1152,9 @@ func (c *CephAPIClient) ClusterGetConf(ctx context.Context, name string) (CephAP
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return CephAPIClusterConf{}, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -1130,7 +1207,9 @@ func (c *CephAPIClient) ClusterUpdateConf(ctx context.Context, name string, sect
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -1161,7 +1240,9 @@ func (c *CephAPIClient) ClusterDeleteConf(ctx context.Context, name string, sect
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -1211,7 +1292,9 @@ func (c *CephAPIClient) MgrListModules(ctx context.Context) ([]CephAPIMgrModule,
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -1252,7 +1335,9 @@ func (c *CephAPIClient) MgrGetModuleConfig(ctx context.Context, moduleName strin
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -1303,7 +1388,9 @@ func (c *CephAPIClient) MgrSetModuleConfig(ctx context.Context, moduleName strin
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -1331,7 +1418,9 @@ func (c *CephAPIClient) MgrDisableModule(ctx context.Context, moduleName string)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -1359,7 +1448,9 @@ func (c *CephAPIClient) MgrEnableModule(ctx context.Context, moduleName string) 
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
@@ -1387,7 +1478,9 @@ func (c *CephAPIClient) MgrGetModuleOptions(ctx context.Context, moduleName stri
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+c.token)
 
+	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
 	if err != nil {
 		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
