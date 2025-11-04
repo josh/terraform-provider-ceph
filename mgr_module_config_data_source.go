@@ -92,7 +92,15 @@ func (d *MgrModuleConfigDataSource) Read(ctx context.Context, req datasource.Rea
 
 	configMap := make(map[string]string)
 	for key, value := range config {
-		configMap[key] = fmt.Sprintf("%v", value)
+		formattedVal, err := formatMgrModuleConfigValue(value)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Configuration Value Formatting Error",
+				fmt.Sprintf("Unable to format config value for key '%s': %s", key, err),
+			)
+			return
+		}
+		configMap[key] = formattedVal
 	}
 
 	configsValue, diags := types.MapValueFrom(ctx, types.StringType, configMap)

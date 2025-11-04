@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"os/exec"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
@@ -223,4 +226,388 @@ func TestAccCephMgrModuleConfigResource_importOnlyExplicitlySet(t *testing.T) {
 			},
 		},
 	})
+}
+
+func TestAccCephMgrModuleConfigResource_largeIntegerValues(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_mgr_module_config" "test" {
+						module_name = "dashboard"
+						configs = {
+							jwt_token_ttl = "31556952"
+						}
+					}
+				`,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs").AtMapKey("jwt_token_ttl"),
+						knownvalue.StringExact("31556952"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					func(s *terraform.State) error {
+						return assertCephMgrModuleConfigValue("dashboard", "jwt_token_ttl", "31556952")
+					},
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				ResourceName:    "ceph_mgr_module_config.test",
+				ImportState:     true,
+				ImportStateId:   "dashboard",
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if len(states) != 1 {
+						return fmt.Errorf("expected 1 state, got %d", len(states))
+					}
+					state := states[0]
+					ttl := state.Attributes["configs.jwt_token_ttl"]
+					if ttl != "31556952" {
+						return fmt.Errorf("expected jwt_token_ttl='31556952', got '%s'", ttl)
+					}
+					return nil
+				},
+			},
+		},
+	})
+}
+
+func TestAccCephMgrModuleConfigResource_mixedNumericTypes(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_mgr_module_config" "test" {
+						module_name = "dashboard"
+						configs = {
+							server_port                = 8080
+							standby_error_status_code  = "503"
+							jwt_token_ttl              = 31556952
+							ssl                        = false
+						}
+					}
+				`,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs").AtMapKey("server_port"),
+						knownvalue.StringExact("8080"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs").AtMapKey("standby_error_status_code"),
+						knownvalue.StringExact("503"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs").AtMapKey("jwt_token_ttl"),
+						knownvalue.StringExact("31556952"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs").AtMapKey("ssl"),
+						knownvalue.StringExact("false"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					func(s *terraform.State) error {
+						if err := assertCephMgrModuleConfigValue("dashboard", "server_port", "8080"); err != nil {
+							return err
+						}
+						if err := assertCephMgrModuleConfigValue("dashboard", "standby_error_status_code", "503"); err != nil {
+							return err
+						}
+						if err := assertCephMgrModuleConfigValue("dashboard", "jwt_token_ttl", "31556952"); err != nil {
+							return err
+						}
+						return assertCephMgrModuleConfigValue("dashboard", "ssl", "false")
+					},
+				),
+			},
+		},
+	})
+}
+
+func TestAccCephMgrModuleConfigResource_booleanValues(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_mgr_module_config" "test" {
+						module_name = "dashboard"
+						configs = {
+							ssl = false
+						}
+					}
+				`,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs").AtMapKey("ssl"),
+						knownvalue.StringExact("false"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					func(s *terraform.State) error {
+						return assertCephMgrModuleConfigValue("dashboard", "ssl", "false")
+					},
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_mgr_module_config" "test" {
+						module_name = "dashboard"
+						configs = {
+							ssl = "false"
+						}
+					}
+				`,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs").AtMapKey("ssl"),
+						knownvalue.StringExact("false"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					func(s *terraform.State) error {
+						return assertCephMgrModuleConfigValue("dashboard", "ssl", "false")
+					},
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_mgr_module_config" "test" {
+						module_name = "dashboard"
+						configs = {
+							ssl = true
+						}
+					}
+				`,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs").AtMapKey("ssl"),
+						knownvalue.StringExact("true"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					func(s *terraform.State) error {
+						return assertCephMgrModuleConfigValue("dashboard", "ssl", "true")
+					},
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_mgr_module_config" "test" {
+						module_name = "dashboard"
+						configs = {
+							ssl = "true"
+						}
+					}
+				`,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs").AtMapKey("ssl"),
+						knownvalue.StringExact("true"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					func(s *terraform.State) error {
+						return assertCephMgrModuleConfigValue("dashboard", "ssl", "true")
+					},
+				),
+			},
+		},
+	})
+}
+
+func TestAccCephMgrModuleConfigResource_stringValues(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_mgr_module_config" "test" {
+						module_name = "dashboard"
+						configs = {
+							url_prefix        = "/ceph-dashboard"
+							standby_behaviour = "redirect"
+						}
+					}
+				`,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs").AtMapKey("url_prefix"),
+						knownvalue.StringExact("/ceph-dashboard"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs").AtMapKey("standby_behaviour"),
+						knownvalue.StringExact("redirect"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					func(s *terraform.State) error {
+						if err := assertCephMgrModuleConfigValue("dashboard", "url_prefix", "/ceph-dashboard"); err != nil {
+							return err
+						}
+						return assertCephMgrModuleConfigValue("dashboard", "standby_behaviour", "redirect")
+					},
+				),
+			},
+		},
+	})
+}
+
+func TestAccCephMgrModuleConfigResource_importLargeInteger(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_mgr_module_config" "test" {
+						module_name = "dashboard"
+						configs = {
+							jwt_token_ttl = "31556952"
+						}
+					}
+				`,
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				ResourceName:    "ceph_mgr_module_config.test",
+				ImportState:     true,
+				ImportStateId:   "dashboard",
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if len(states) != 1 {
+						return fmt.Errorf("expected 1 state, got %d", len(states))
+					}
+					state := states[0]
+					ttl := state.Attributes["configs.jwt_token_ttl"]
+
+					if ttl == "" {
+						return fmt.Errorf("jwt_token_ttl not found in imported state")
+					}
+
+					if ttl != "31556952" {
+						return fmt.Errorf("expected jwt_token_ttl='31556952', got '%s'", ttl)
+					}
+
+					return nil
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_mgr_module_config" "test" {
+						module_name = "dashboard"
+						configs = {
+							jwt_token_ttl = "31556952"
+						}
+					}
+				`,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs").AtMapKey("jwt_token_ttl"),
+						knownvalue.StringExact("31556952"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					func(s *terraform.State) error {
+						return assertCephMgrModuleConfigValue("dashboard", "jwt_token_ttl", "31556952")
+					},
+				),
+			},
+		},
+	})
+}
+
+func getCephMgrModuleConfigValue(module, option string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	configKey := fmt.Sprintf("mgr/%s/%s", module, option)
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "get", "mgr", configKey)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to get config %s: %w (output: %s)", configKey, err, string(output))
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+func setCephMgrModuleConfigValue(module, option, value string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	configKey := fmt.Sprintf("mgr/%s/%s", module, option)
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "set", "mgr", configKey, value)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to set config %s: %w (output: %s)", configKey, err, string(output))
+	}
+
+	return nil
+}
+
+func removeCephMgrModuleConfigValue(module, option string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	configKey := fmt.Sprintf("mgr/%s/%s", module, option)
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "rm", "mgr", configKey)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to remove config %s: %w (output: %s)", configKey, err, string(output))
+	}
+
+	return nil
+}
+
+func assertCephMgrModuleConfigValue(module, option, expected string) error {
+	actual, err := getCephMgrModuleConfigValue(module, option)
+	if err != nil {
+		return err
+	}
+
+	if actual != expected {
+		return fmt.Errorf("config value mismatch for mgr/%s/%s: expected %q, got %q", module, option, expected, actual)
+	}
+
+	return nil
 }
