@@ -566,3 +566,459 @@ func createTestRGWUserDirectly(t *testing.T, uid, displayName string) {
 		}
 	})
 }
+
+func TestAccCephRGWUserResource_suspendUnsuspendCycle(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-suspend-cycle")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Suspend Cycle Test"
+					  email        = "suspend@example.com"
+					  suspended    = false
+					}
+				`, testUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("user_id"),
+						knownvalue.StringExact(testUID),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("suspended"),
+						knownvalue.Bool(false),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "user_id", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "suspended", "false"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Suspend Cycle Test"
+					  email        = "suspend@example.com"
+					  suspended    = true
+					}
+				`, testUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("suspended"),
+						knownvalue.Bool(true),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "suspended", "true"),
+					checkCephRGWUserSuspended(t, testUID, true),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Suspend Cycle Test"
+					  email        = "suspend@example.com"
+					  suspended    = false
+					}
+				`, testUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("suspended"),
+						knownvalue.Bool(false),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "suspended", "false"),
+					checkCephRGWUserSuspended(t, testUID, false),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Suspend Cycle Test"
+					  email        = "suspend@example.com"
+					  suspended    = true
+					}
+				`, testUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("suspended"),
+						knownvalue.Bool(true),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "suspended", "true"),
+					checkCephRGWUserSuspended(t, testUID, true),
+				),
+			},
+		},
+	})
+}
+
+func checkCephRGWUserSuspended(t *testing.T, userID string, expectedSuspended bool) resource.TestCheckFunc {
+	t.Helper()
+	return func(s *terraform.State) error {
+		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "info", "--uid="+userID)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("radosgw-admin failed to get user info: %w", err)
+		}
+
+		var userInfo struct {
+			Suspended int `json:"suspended"`
+		}
+		if err := json.Unmarshal(output, &userInfo); err != nil {
+			return fmt.Errorf("failed to parse radosgw-admin output: %w", err)
+		}
+
+		actualSuspended := userInfo.Suspended != 0
+		if actualSuspended != expectedSuspended {
+			return fmt.Errorf("expected user %s suspended=%v, but got suspended=%v", userID, expectedSuspended, actualSuspended)
+		}
+
+		t.Logf("Verified RGW user %s has suspended=%v as expected", userID, expectedSuspended)
+		return nil
+	}
+}
+
+func TestAccCephRGWUserResource_emailUpdate(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-email-update")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Email Update Test"
+					}
+				`, testUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("user_id"),
+						knownvalue.StringExact(testUID),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "user_id", testUID),
+					resource.TestCheckNoResourceAttr("ceph_rgw_user.test", "email"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Email Update Test"
+					  email        = "newemail@example.com"
+					}
+				`, testUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("email"),
+						knownvalue.StringExact("newemail@example.com"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "email", "newemail@example.com"),
+					checkCephRGWUserEmail(t, testUID, "newemail@example.com"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Email Update Test"
+					  email        = "updated@example.com"
+					}
+				`, testUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("email"),
+						knownvalue.StringExact("updated@example.com"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "email", "updated@example.com"),
+					checkCephRGWUserEmail(t, testUID, "updated@example.com"),
+				),
+			},
+		},
+	})
+}
+
+func checkCephRGWUserEmail(t *testing.T, userID string, expectedEmail string) resource.TestCheckFunc {
+	t.Helper()
+	return func(s *terraform.State) error {
+		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "info", "--uid="+userID)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("radosgw-admin failed to get user info: %w", err)
+		}
+
+		var userInfo struct {
+			Email string `json:"email"`
+		}
+		if err := json.Unmarshal(output, &userInfo); err != nil {
+			return fmt.Errorf("failed to parse radosgw-admin output: %w", err)
+		}
+
+		if userInfo.Email != expectedEmail {
+			return fmt.Errorf("expected user %s email=%q, but got email=%q", userID, expectedEmail, userInfo.Email)
+		}
+
+		t.Logf("Verified RGW user %s has email=%q as expected", userID, expectedEmail)
+		return nil
+	}
+}
+
+func TestAccCephRGWUserResource_maxBucketsValidation(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-max-buckets")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Max Buckets Test"
+					  max_buckets  = 0
+					}
+				`, testUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("max_buckets"),
+						knownvalue.Int64Exact(0),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "max_buckets", "0"),
+					checkCephRGWUserMaxBuckets(t, testUID, 0),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Max Buckets Test"
+					  max_buckets  = 100
+					}
+				`, testUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("max_buckets"),
+						knownvalue.Int64Exact(100),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "max_buckets", "100"),
+					checkCephRGWUserMaxBuckets(t, testUID, 100),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Max Buckets Test"
+					  max_buckets  = 100000
+					}
+				`, testUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("max_buckets"),
+						knownvalue.Int64Exact(100000),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "max_buckets", "100000"),
+					checkCephRGWUserMaxBuckets(t, testUID, 100000),
+				),
+			},
+		},
+	})
+}
+
+func checkCephRGWUserMaxBuckets(t *testing.T, userID string, expectedMaxBuckets int) resource.TestCheckFunc {
+	t.Helper()
+	return func(s *terraform.State) error {
+		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "info", "--uid="+userID)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("radosgw-admin failed to get user info: %w", err)
+		}
+
+		var userInfo struct {
+			MaxBuckets int `json:"max_buckets"`
+		}
+		if err := json.Unmarshal(output, &userInfo); err != nil {
+			return fmt.Errorf("failed to parse radosgw-admin output: %w", err)
+		}
+
+		if userInfo.MaxBuckets != expectedMaxBuckets {
+			return fmt.Errorf("expected user %s max_buckets=%d, but got max_buckets=%d", userID, expectedMaxBuckets, userInfo.MaxBuckets)
+		}
+
+		t.Logf("Verified RGW user %s has max_buckets=%d as expected", userID, expectedMaxBuckets)
+		return nil
+	}
+}
+
+func TestAccCephRGWUserResource_suspendOutOfBand(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-suspend-oob")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Out of Band Test"
+					  suspended    = false
+					}
+				`, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "suspended", "false"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				PreConfig: func() {
+					suspendUserViaCLI(t, testUID)
+				},
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Out of Band Test"
+					  suspended    = false
+					}
+				`, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "suspended", "false"),
+					checkCephRGWUserSuspended(t, testUID, false),
+				),
+			},
+		},
+	})
+}
+
+func suspendUserViaCLI(t *testing.T, userID string) {
+	t.Helper()
+	cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "suspend", "--uid="+userID)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Failed to suspend user via CLI: %v\nOutput: %s", err, string(output))
+	}
+	t.Logf("Suspended user %s via CLI", userID)
+}
+
+func TestAccCephRGWUserResource_driftDetection(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-drift")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Original Display Name"
+					  max_buckets  = 100
+					}
+				`, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "display_name", "Original Display Name"),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "max_buckets", "100"),
+				),
+			},
+			{
+				PreConfig: func() {
+					cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "modify",
+						"--uid="+testUID,
+						"--display-name=Modified Display Name",
+						"--max-buckets=200")
+					output, err := cmd.CombinedOutput()
+					if err != nil {
+						t.Fatalf("Failed to modify user out of band: %v\nOutput: %s", err, string(output))
+					}
+					t.Logf("Modified user %s out of band", testUID)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Original Display Name"
+					  max_buckets  = 100
+					}
+				`, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "display_name", "Original Display Name"),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "max_buckets", "100"),
+				),
+			},
+		},
+	})
+}

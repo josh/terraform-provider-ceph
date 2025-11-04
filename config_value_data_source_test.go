@@ -169,3 +169,24 @@ func TestAccCephConfigValueDataSource_MgrConfigRejection(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephConfigValueDataSource_sectionNotFound(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					data "ceph_config_value" "test" {
+					  name    = "some_option"
+					  section = "invalid_section"
+					}
+				`,
+				ExpectError: regexp.MustCompile("(?i)(not found|invalid|unknown|unrecognized)"),
+			},
+		},
+	})
+}

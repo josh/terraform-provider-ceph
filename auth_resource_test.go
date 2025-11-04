@@ -465,3 +465,69 @@ func TestAccCephAuthResource_staticKey(t *testing.T) {
 		},
 	})
 }
+func TestAccCephAuthResource_capsDriftDetection(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testEntity := acctest.RandomWithPrefix("client.test-caps-drift")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephAuthDestroy,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_auth" "test" {
+					  entity = %q
+					  caps = {
+					    mon = "allow r"
+					    osd = "allow rw pool=original"
+					  }
+					}
+				`, testEntity),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephAuthExists(t, testEntity),
+					checkCephAuthHasCaps(t, testEntity, map[string]string{
+						"mon": "allow r",
+						"osd": "allow rw pool=original",
+					}),
+				),
+			},
+			{
+				PreConfig: func() {
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+
+					cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "auth", "caps",
+						testEntity,
+						"mon", "allow rw",
+						"osd", "allow rw pool=modified",
+						"mgr", "allow r")
+					output, err := cmd.CombinedOutput()
+					if err != nil {
+						t.Fatalf("Failed to modify caps out of band: %v\nOutput: %s", err, string(output))
+					}
+					t.Logf("Modified caps for %s out of band", testEntity)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_auth" "test" {
+					  entity = %q
+					  caps = {
+					    mon = "allow r"
+					    osd = "allow rw pool=original"
+					  }
+					}
+				`, testEntity),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephAuthExists(t, testEntity),
+					checkCephAuthHasCaps(t, testEntity, map[string]string{
+						"mon": "allow r",
+						"osd": "allow rw pool=original",
+					}),
+				),
+			},
+		},
+	})
+}

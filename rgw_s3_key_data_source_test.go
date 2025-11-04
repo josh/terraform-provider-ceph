@@ -304,3 +304,67 @@ func createTestRGWUserWithMultipleS3Keys(t *testing.T, uid, displayName, accessK
 		}
 	})
 }
+
+func TestAccCephRGWS3KeyDataSource_ambiguousResults(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-ambiguous-s3key")
+	accessKey1 := acctest.RandString(20)
+	secretKey1 := acctest.RandString(40)
+	accessKey2 := acctest.RandString(20)
+	secretKey2 := acctest.RandString(40)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			createTestRGWUserWithoutKeys(t, testUID, "Test Ambiguous S3 Key User")
+
+			cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "key", "create",
+				"--uid="+testUID,
+				"--access-key="+accessKey1,
+				"--secret-key="+secretKey1,
+			)
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("Failed to create first key: %v\nOutput: %s", err, string(output))
+			}
+
+			cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "key", "create",
+				"--uid="+testUID,
+				"--access-key="+accessKey2,
+				"--secret-key="+secretKey2,
+			)
+			output, err = cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("Failed to create second key: %v\nOutput: %s", err, string(output))
+			}
+
+			t.Logf("Created user %s with two keys", testUID)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					data "ceph_rgw_s3_key" "test" {
+					  user_id = %q
+					}
+				`, testUID),
+				ExpectError: regexp.MustCompile("(?i)(multiple|ambiguous)"),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					data "ceph_rgw_s3_key" "test" {
+					  user_id    = %q
+					  access_key = %q
+					}
+				`, testUID, accessKey1),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.ceph_rgw_s3_key.test", "user_id", testUID),
+					resource.TestCheckResourceAttr("data.ceph_rgw_s3_key.test", "access_key", accessKey1),
+				),
+			},
+		},
+	})
+}
