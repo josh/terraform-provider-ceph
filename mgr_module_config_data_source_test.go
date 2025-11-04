@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"os/exec"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
@@ -115,4 +119,62 @@ func TestAccCephMgrModuleConfigDataSource_largeIntegerValues(t *testing.T) {
 			},
 		},
 	})
+}
+
+func getCephMgrModuleConfigValue(module, option string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	configKey := fmt.Sprintf("mgr/%s/%s", module, option)
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "get", "mgr", configKey)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("failed to get config %s: %w (output: %s)", configKey, err, string(output))
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
+func setCephMgrModuleConfigValue(module, option, value string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	configKey := fmt.Sprintf("mgr/%s/%s", module, option)
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "set", "mgr", configKey, value)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to set config %s: %w (output: %s)", configKey, err, string(output))
+	}
+
+	return nil
+}
+
+func removeCephMgrModuleConfigValue(module, option string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	configKey := fmt.Sprintf("mgr/%s/%s", module, option)
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "rm", "mgr", configKey)
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to remove config %s: %w (output: %s)", configKey, err, string(output))
+	}
+
+	return nil
+}
+
+func assertCephMgrModuleConfigValue(module, option, expected string) error {
+	actual, err := getCephMgrModuleConfigValue(module, option)
+	if err != nil {
+		return err
+	}
+
+	if actual != expected {
+		return fmt.Errorf("config value mismatch for mgr/%s/%s: expected %q, got %q", module, option, expected, actual)
+	}
+
+	return nil
 }

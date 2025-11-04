@@ -15,15 +15,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
-type RadosgwUserInfo struct {
-	DisplayName string         `json:"display_name"`
-	Keys        []RadosgwS3Key `json:"keys"`
-}
-
-type RadosgwS3Key struct {
-	AccessKey string `json:"access_key"`
-}
-
 func TestAccCephRGWUserResource(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
