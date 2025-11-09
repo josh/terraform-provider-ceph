@@ -22,6 +22,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/providerserver"
 	"github.com/hashicorp/terraform-plugin-go/tfprotov6"
 	"github.com/hashicorp/terraform-plugin-testing/config"
+	"github.com/hashicorp/terraform-plugin-testing/echoprovider"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
 
@@ -35,6 +36,11 @@ var (
 
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
 	"ceph": providerserver.NewProtocol6WithError(providerFunc()),
+}
+
+var testAccProtoV6ProviderFactoriesWithEcho = map[string]func() (tfprotov6.ProviderServer, error){
+	"ceph": providerserver.NewProtocol6WithError(providerFunc()),
+	"echo": echoprovider.NewProviderServer(),
 }
 
 func TestMain(m *testing.M) {

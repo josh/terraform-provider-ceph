@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
+	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
 	providerSchema "github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -19,7 +20,10 @@ func providerFunc() provider.Provider {
 	}
 }
 
-var _ provider.Provider = &CephProvider{}
+var (
+	_ provider.Provider                       = &CephProvider{}
+	_ provider.ProviderWithEphemeralResources = &CephProvider{}
+)
 
 type CephProvider struct {
 	version string
@@ -148,6 +152,13 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 
 	resp.DataSourceData = cephClient
 	resp.ResourceData = cephClient
+	resp.EphemeralResourceData = cephClient
+}
+
+func (p *CephProvider) EphemeralResources(ctx context.Context) []func() ephemeral.EphemeralResource {
+	return []func() ephemeral.EphemeralResource{
+		newAuthEphemeralResource,
+	}
 }
 
 func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource {
