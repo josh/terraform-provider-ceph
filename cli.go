@@ -741,6 +741,21 @@ func (c *CephCLI) PoolApplicationEnable(ctx context.Context, poolName, applicati
 	return fmt.Errorf("application %s not found in pool %s applications after enabling", application, poolName)
 }
 
+func (c *CephCLI) PoolExists(ctx context.Context, poolName string) (bool, error) {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "pool", "get", poolName, "size")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		if _, ok := err.(*exec.ExitError); ok {
+			stderr := strings.ToLower(string(output))
+			if strings.Contains(stderr, "error enoent") || strings.Contains(stderr, "pool does not exist") || strings.Contains(stderr, "unrecognized pool") {
+				return false, nil
+			}
+		}
+		return false, fmt.Errorf("failed to check pool existence: %w", err)
+	}
+	return true, nil
+}
+
 type RgwBucketInfo struct {
 	Owner string `json:"owner"`
 }
