@@ -1504,3 +1504,172 @@ func (c *CephAPIClient) MgrGetModuleOptions(ctx context.Context, moduleName stri
 
 	return options, nil
 }
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-erasure_code_profile>
+
+type CephAPIErasureCodeProfile struct {
+	Name               string `json:"name"`
+	K                  int    `json:"k"`
+	M                  int    `json:"m"`
+	Plugin             string `json:"plugin"`
+	CrushFailureDomain string `json:"crush-failure-domain"`
+	Technique          string `json:"technique,omitempty"`
+	CrushRoot          string `json:"crush-root,omitempty"`
+	CrushDeviceClass   string `json:"crush-device-class,omitempty"`
+	Directory          string `json:"directory,omitempty"`
+}
+
+func (c *CephAPIClient) ListErasureCodeProfiles(ctx context.Context) ([]CephAPIErasureCodeProfile, error) {
+	url := c.endpoint.JoinPath("/api/erasure_code_profile").String()
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	logRequest := logAPIRequest(ctx, httpReq)
+	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
+	if err != nil {
+		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(httpResp.Body)
+		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response body: %w", err)
+	}
+
+	var profiles []CephAPIErasureCodeProfile
+	err = json.Unmarshal(body, &profiles)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
+	}
+
+	return profiles, nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-erasure_code_profile>
+
+type CephAPIErasureCodeProfileCreateRequest struct {
+	Name               string `json:"name"`
+	K                  string `json:"k,omitempty"`
+	M                  string `json:"m,omitempty"`
+	Plugin             string `json:"plugin,omitempty"`
+	CrushFailureDomain string `json:"crush-failure-domain,omitempty"`
+	Technique          string `json:"technique,omitempty"`
+	CrushRoot          string `json:"crush-root,omitempty"`
+	CrushDeviceClass   string `json:"crush-device-class,omitempty"`
+	Directory          string `json:"directory,omitempty"`
+}
+
+func (c *CephAPIClient) CreateErasureCodeProfile(ctx context.Context, req CephAPIErasureCodeProfileCreateRequest) error {
+	jsonPayload, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("unable to encode request payload: %w", err)
+	}
+
+	url := c.endpoint.JoinPath("/api/erasure_code_profile").String()
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	logRequest := logAPIRequest(ctx, httpReq)
+	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
+	if err != nil {
+		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusCreated && httpResp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(httpResp.Body)
+		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-erasure_code_profile--name>
+
+func (c *CephAPIClient) DeleteErasureCodeProfile(ctx context.Context, name string) error {
+	url := c.endpoint.JoinPath("/api/erasure_code_profile", name).String()
+	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	logRequest := logAPIRequest(ctx, httpReq)
+	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
+	if err != nil {
+		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusAccepted && httpResp.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(httpResp.Body)
+		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-erasure_code_profile--name>
+
+func (c *CephAPIClient) GetErasureCodeProfile(ctx context.Context, name string) (*CephAPIErasureCodeProfile, error) {
+	url := c.endpoint.JoinPath("/api/erasure_code_profile", name).String()
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	logRequest := logAPIRequest(ctx, httpReq)
+	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
+	if err != nil {
+		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(httpResp.Body)
+		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response body: %w", err)
+	}
+
+	var profile CephAPIErasureCodeProfile
+	err = json.Unmarshal(body, &profile)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
+	}
+
+	return &profile, nil
+}
