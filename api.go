@@ -1469,6 +1469,7 @@ type CephAPIPoolUpdateRequest struct {
 	PgpNum                   *int     `json:"pgp_num,omitempty"`
 	CrushRule                *string  `json:"crush_rule,omitempty"`
 	Size                     *int     `json:"size,omitempty"`
+	MinSize                  *int     `json:"min_size,omitempty"`
 	PgAutoscaleMode          *string  `json:"pg_autoscale_mode,omitempty"`
 	CompressionMode          *string  `json:"compression_mode,omitempty"`
 	CompressionAlgorithm     *string  `json:"compression_algorithm,omitempty"`
