@@ -177,6 +177,7 @@ func (p *CephProvider) DataSources(ctx context.Context) []func() datasource.Data
 		newAuthDataSource,
 		newConfigDataSource,
 		newConfigValueDataSource,
+		newCrushRuleDataSource,
 		newErasureCodeProfileDataSource,
 		newMgrModuleConfigDataSource,
 		newRGWS3KeyDataSource,
