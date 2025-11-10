@@ -1350,6 +1350,7 @@ type CephAPIPoolCreateRequest struct {
 	CrushRule                *string  `json:"crush_rule,omitempty"`
 	ErasureCodeProfile       *string  `json:"erasure_code_profile,omitempty"`
 	ApplicationMetadata      []string `json:"application_metadata,omitempty"`
+	Flags                    []string `json:"flags,omitempty"`
 	MinSize                  *int     `json:"min_size,omitempty"`
 	Size                     *int     `json:"size,omitempty"`
 	PgAutoscaleMode          *string  `json:"pg_autoscale_mode,omitempty"`
@@ -1467,6 +1468,7 @@ func (c *CephAPIClient) GetPool(ctx context.Context, poolName string) (*CephAPIP
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#put--api-pool--pool_name>
 
 type CephAPIPoolUpdateRequest struct {
+	Pool                     *string  `json:"pool,omitempty"`
 	PgNum                    *int     `json:"pg_num,omitempty"`
 	PgpNum                   *int     `json:"pgp_num,omitempty"`
 	CrushRule                *string  `json:"crush_rule,omitempty"`
@@ -1480,6 +1482,8 @@ type CephAPIPoolUpdateRequest struct {
 	CompressionRequiredRatio *float64 `json:"compression_required_ratio,omitempty"`
 	CompressionMinBlobSize   *int     `json:"compression_min_blob_size,omitempty"`
 	CompressionMaxBlobSize   *int     `json:"compression_max_blob_size,omitempty"`
+	ApplicationMetadata      []string `json:"application_metadata,omitempty"`
+	Flags                    []string `json:"flags,omitempty"`
 }
 
 func (c *CephAPIClient) UpdatePool(ctx context.Context, poolName string, req CephAPIPoolUpdateRequest) error {
