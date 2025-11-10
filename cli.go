@@ -424,3 +424,61 @@ func (c *CephCLI) RgwKeyRemove(ctx context.Context, uid, accessKey string) error
 
 	return nil
 }
+
+func (c *CephCLI) PoolCreate(ctx context.Context, poolName string, pgNum int, poolType string) error {
+	args := []string{"--conf", c.confPath, "osd", "pool", "create", poolName, fmt.Sprintf("%d", pgNum)}
+	if poolType != "" {
+		args = append(args, poolType)
+	}
+
+	cmd := exec.CommandContext(ctx, "ceph", args...)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to create pool %s: %w", poolName, err)
+	}
+
+	return nil
+}
+
+func (c *CephCLI) PoolDelete(ctx context.Context, poolName string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "pool", "delete", poolName, poolName, "--yes-i-really-really-mean-it")
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to delete pool %s: %w", poolName, err)
+	}
+
+	return nil
+}
+
+func (c *CephCLI) PoolGet(ctx context.Context, poolName, key string) (string, error) {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "pool", "get", poolName, key)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get pool %s property %s: %w", poolName, key, err)
+	}
+
+	text := strings.TrimSpace(string(output))
+	prefix := key + ": "
+	if !strings.HasPrefix(text, prefix) {
+		return "", fmt.Errorf("unexpected output format: %s", text)
+	}
+
+	value := strings.TrimPrefix(text, prefix)
+	return strings.TrimSpace(value), nil
+}
+
+func (c *CephCLI) PoolSet(ctx context.Context, poolName, key, value string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "pool", "set", poolName, key, value)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to set pool %s property %s=%s: %w", poolName, key, value, err)
+	}
+
+	return nil
+}
+
+func (c *CephCLI) PoolApplicationEnable(ctx context.Context, poolName, application string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "pool", "application", "enable", poolName, application)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to enable application %s on pool %s: %w", application, poolName, err)
+	}
+
+	return nil
+}
