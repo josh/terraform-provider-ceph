@@ -482,3 +482,18 @@ func (c *CephCLI) PoolApplicationEnable(ctx context.Context, poolName, applicati
 
 	return nil
 }
+
+func (c *CephCLI) PoolList(ctx context.Context) ([]string, error) {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "pool", "ls", "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pools: %w", err)
+	}
+
+	var pools []string
+	if err := json.Unmarshal(output, &pools); err != nil {
+		return nil, fmt.Errorf("failed to parse pool list: %w", err)
+	}
+
+	return pools, nil
+}
