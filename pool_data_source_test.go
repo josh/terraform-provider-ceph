@@ -320,7 +320,7 @@ func TestAccCephPoolDataSource_configurationChanges(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+					ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 					defer cancel()
 
 					if err := cephTestClusterCLI.PoolSet(ctx, poolName, "pg_num", "16"); err != nil {
