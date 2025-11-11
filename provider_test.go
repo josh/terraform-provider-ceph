@@ -32,6 +32,7 @@ var (
 	testConfPath     string
 	testTimeout      = flag.Duration("timeout", 0, "test timeout")
 	cephDaemonLogs   *LogDemux
+	testNumOsds      = 5
 )
 
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
@@ -119,6 +120,14 @@ func startCephCluster(ctx context.Context, tmpDir string, out io.Writer) (string
 	}
 
 	if err := waitForCephOsd(startupCtx, confPath); err != nil {
+		return "", "", nil, err
+	}
+
+	if err := configureCrushRules(startupCtx, confPath, out); err != nil {
+		return "", "", nil, err
+	}
+
+	if err := configureDeviceClasses(startupCtx, confPath, out); err != nil {
 		return "", "", nil, err
 	}
 
@@ -212,18 +221,21 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 			"caps osd": "allow *",
 			"caps mds": "allow *",
 		},
-		"osd.0": {
-			"key":      "AQCzsPFolNPNNhAAkglWKcr2qZB4lCK/u9A1Zw==",
-			"caps mon": "allow profile osd",
-			"caps mgr": "allow profile osd",
-			"caps osd": "allow *",
-		},
 		"client.rgw.rgw1": {
 			"key":      "AQDRm89oNP7bAxAA6TgZ1toOkhDjUNEkRL18Gg==",
 			"caps mon": "allow rw",
 			"caps osd": "allow rwx",
 			"caps mgr": "allow rw",
 		},
+	}
+
+	for i := 0; i < testNumOsds; i++ {
+		keyringConfig[fmt.Sprintf("osd.%d", i)] = map[string]string{
+			"key":      "AQCzsPFolNPNNhAAkglWKcr2qZB4lCK/u9A1Zw==",
+			"caps mon": "allow profile osd",
+			"caps mgr": "allow profile osd",
+			"caps osd": "allow *",
+		}
 	}
 
 	err := os.MkdirAll(filepath.Join(tmpDir, "mon"), 0o755)
@@ -236,9 +248,11 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 		return confPath, err
 	}
 
-	err = os.MkdirAll(filepath.Join(tmpDir, "osd", "ceph-0"), 0o755)
-	if err != nil {
-		return confPath, err
+	for i := 0; i < testNumOsds; i++ {
+		err = os.MkdirAll(filepath.Join(tmpDir, "osd", fmt.Sprintf("ceph-%d", i)), 0o755)
+		if err != nil {
+			return confPath, err
+		}
 	}
 
 	err = os.MkdirAll(filepath.Join(tmpDir, "rgw", "ceph-rgw1"), 0o755)
@@ -353,28 +367,32 @@ func waitForCephMon(ctx context.Context, confPath string) error {
 }
 
 func startCephOsd(wg *sync.WaitGroup, ctx context.Context, confPath string, tmpDir string, out io.Writer) error {
-	cmd := exec.CommandContext(ctx, "ceph-osd", "--conf", confPath, "--id", "0", "--mkfs")
-	cmd.Stdout = out
-	cmd.Stderr = out
+	for i := 0; i < testNumOsds; i++ {
+		osdID := fmt.Sprintf("%d", i)
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to initialize OSD filesystem: %w", err)
+		cmd := exec.CommandContext(ctx, "ceph-osd", "--conf", confPath, "--id", osdID, "--mkfs")
+		cmd.Stdout = out
+		cmd.Stderr = out
+
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to initialize OSD %s filesystem: %w", osdID, err)
+		}
+
+		cmd = exec.CommandContext(ctx, "ceph-osd", "--conf", confPath, "--id", osdID, "--foreground")
+		cmd.Stdout = out
+		cmd.Stderr = out
+
+		err := cmd.Start()
+		if err != nil {
+			return fmt.Errorf("failed to start OSD %s: %w", osdID, err)
+		}
+
+		wg.Add(1)
+		go func(c *exec.Cmd) {
+			defer wg.Done()
+			_ = c.Wait()
+		}(cmd)
 	}
-
-	cmd = exec.CommandContext(ctx, "ceph-osd", "--conf", confPath, "--id", "0", "--foreground")
-	cmd.Stdout = out
-	cmd.Stderr = out
-
-	err := cmd.Start()
-	if err != nil {
-		return fmt.Errorf("failed to start OSD: %w", err)
-	}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		_ = cmd.Wait()
-	}()
 
 	return nil
 }
@@ -388,11 +406,43 @@ func waitForCephOsd(ctx context.Context, confPath string) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
-			if status, err := checkCephStatus(ctx, confPath); err == nil && status.Osdmap.NumUpOsds > 0 {
+			if status, err := checkCephStatus(ctx, confPath); err == nil && status.Osdmap.NumUpOsds >= testNumOsds {
 				return nil
 			}
 		}
 	}
+}
+
+func configureCrushRules(ctx context.Context, confPath string, out io.Writer) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", confPath, "osd", "erasure-code-profile", "set", "default", "k=2", "m=1", "crush-failure-domain=osd", "--force", "--yes-i-really-mean-it")
+	cmd.Stdout = out
+	cmd.Stderr = out
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to override default erasure code profile: %w", err)
+	}
+
+	return nil
+}
+
+func configureDeviceClasses(ctx context.Context, confPath string, out io.Writer) error {
+	lastOsdID := testNumOsds - 1
+	osdName := fmt.Sprintf("osd.%d", lastOsdID)
+
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", confPath, "osd", "crush", "rm-device-class", osdName)
+	cmd.Stdout = out
+	cmd.Stderr = out
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to remove device class from %s: %w", osdName, err)
+	}
+
+	cmd = exec.CommandContext(ctx, "ceph", "--conf", confPath, "osd", "crush", "set-device-class", "hdd", osdName)
+	cmd.Stdout = out
+	cmd.Stderr = out
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to set device class hdd on %s: %w", osdName, err)
+	}
+
+	return nil
 }
 
 func startCephMgr(wg *sync.WaitGroup, ctx context.Context, confPath string, out io.Writer) error {
