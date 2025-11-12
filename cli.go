@@ -233,12 +233,8 @@ type RgwUserInfo struct {
 }
 
 type RgwUserCreateOptions struct {
-	Email       string
-	MaxBuckets  *int
-	Suspended   bool
-	GenerateKey *bool
-	AccessKey   string
-	SecretKey   string
+	AccessKey string
+	SecretKey string
 }
 
 type RgwUserModifyOptions struct {
@@ -268,18 +264,6 @@ func (c *CephCLI) RgwUserCreate(ctx context.Context, uid, displayName string, op
 	args := []string{"--conf", c.confPath, "--format=json", "user", "create", "--uid=" + uid, "--display-name=" + displayName}
 
 	if opts != nil {
-		if opts.Email != "" {
-			args = append(args, "--email="+opts.Email)
-		}
-		if opts.MaxBuckets != nil {
-			args = append(args, fmt.Sprintf("--max-buckets=%d", *opts.MaxBuckets))
-		}
-		if opts.Suspended {
-			args = append(args, "--suspended")
-		}
-		if opts.GenerateKey != nil && *opts.GenerateKey {
-			args = append(args, "--gen-access-key", "--gen-secret")
-		}
 		if opts.AccessKey != "" {
 			args = append(args, "--access-key="+opts.AccessKey)
 		}
