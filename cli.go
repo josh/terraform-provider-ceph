@@ -18,9 +18,8 @@ func NewCephCLI(confPath string) *CephCLI {
 }
 
 type CephAuthInfo struct {
-	Entity string            `json:"entity"`
-	Key    string            `json:"key"`
-	Caps   map[string]string `json:"caps"`
+	Key  string            `json:"key"`
+	Caps map[string]string `json:"caps"`
 }
 
 func (c *CephCLI) AuthGet(ctx context.Context, entity string) (*CephAuthInfo, error) {
@@ -92,15 +91,7 @@ func (c *CephCLI) ConfigRemove(ctx context.Context, scope, key string) error {
 }
 
 type CephCrushRule struct {
-	RuleID   int    `json:"rule_id"`
 	RuleName string `json:"rule_name"`
-	Type     int    `json:"type"`
-	Steps    []struct {
-		Op   string `json:"op"`
-		Num  int    `json:"num,omitempty"`
-		Type string `json:"type,omitempty"`
-		Item int    `json:"item,omitempty"`
-	} `json:"steps"`
 }
 
 func (c *CephCLI) CrushRuleCreateReplicated(ctx context.Context, name, root, failureDomain string) error {
@@ -229,52 +220,16 @@ func (c *CephCLI) ErasureCodeProfileRemove(ctx context.Context, name string) err
 	return nil
 }
 
-func (c *CephCLI) CrushSetDeviceClass(ctx context.Context, class, osdName string) error {
-	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "crush", "set-device-class", class, osdName)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to set device class %s for %s: %w", class, osdName, err)
-	}
-
-	return nil
-}
-
-func (c *CephCLI) CrushRemoveDeviceClass(ctx context.Context, osdName string) error {
-	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "crush", "rm-device-class", osdName)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to remove device class for %s: %w", osdName, err)
-	}
-
-	return nil
-}
-
-func (c *CephCLI) MgrModuleEnable(ctx context.Context, module string) error {
-	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "mgr", "module", "enable", module)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to enable mgr module %s: %w", module, err)
-	}
-
-	return nil
-}
-
 type RgwS3Key struct {
-	User      string `json:"user"`
 	AccessKey string `json:"access_key"`
-	SecretKey string `json:"secret_key"`
-}
-
-type RgwSubuser struct {
-	ID          string `json:"id"`
-	Permissions string `json:"permissions"`
 }
 
 type RgwUserInfo struct {
-	UserID      string       `json:"user_id"`
-	DisplayName string       `json:"display_name"`
-	Email       string       `json:"email"`
-	Suspended   int          `json:"suspended"`
-	MaxBuckets  int          `json:"max_buckets"`
-	Keys        []RgwS3Key   `json:"keys"`
-	Subusers    []RgwSubuser `json:"subusers"`
+	DisplayName string     `json:"display_name"`
+	Email       string     `json:"email"`
+	Suspended   int        `json:"suspended"`
+	MaxBuckets  int        `json:"max_buckets"`
+	Keys        []RgwS3Key `json:"keys"`
 }
 
 type RgwUserCreateOptions struct {
@@ -509,50 +464,6 @@ func (c *CephCLI) RgwKeyRemove(ctx context.Context, uid, accessKey string) error
 	cmd := exec.CommandContext(ctx, "radosgw-admin", args...)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to remove rgw key %s for %s: %w", accessKey, uid, err)
-	}
-
-	return nil
-}
-
-type CephStatus struct {
-	Mgrmap CephStatusMgrmap `json:"mgrmap"`
-	Monmap CephStatusMonmap `json:"monmap"`
-	Osdmap CephStatusOsdmap `json:"osdmap"`
-}
-
-type CephStatusMgrmap struct {
-	Available bool              `json:"available"`
-	Services  map[string]string `json:"services"`
-}
-
-type CephStatusMonmap struct {
-	NumMons int `json:"num_mons"`
-}
-
-type CephStatusOsdmap struct {
-	NumUpOsds int `json:"num_up_osds"`
-}
-
-func (c *CephCLI) Status(ctx context.Context) (*CephStatus, error) {
-	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "status", "--format", "json")
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get ceph status: %w", err)
-	}
-
-	var status CephStatus
-	if err := json.Unmarshal(output, &status); err != nil {
-		return nil, fmt.Errorf("failed to parse ceph status output: %w", err)
-	}
-
-	return &status, nil
-}
-
-func (c *CephCLI) DashboardCreateUser(ctx context.Context, username, password, role string) error {
-	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "dashboard", "ac-user-create", username, "-i", "/dev/stdin", role)
-	cmd.Stdin = strings.NewReader(password)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create dashboard user %s: %w", username, err)
 	}
 
 	return nil
