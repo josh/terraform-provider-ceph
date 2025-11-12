@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -26,6 +27,7 @@ type CrushRuleDataSourceModel struct {
 	Type    types.Int64  `tfsdk:"type"`
 	MinSize types.Int64  `tfsdk:"min_size"`
 	MaxSize types.Int64  `tfsdk:"max_size"`
+	Steps   types.List   `tfsdk:"steps"`
 }
 
 func (d *CrushRuleDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -59,6 +61,30 @@ func (d *CrushRuleDataSource) Schema(ctx context.Context, req datasource.SchemaR
 			"max_size": dataSourceSchema.Int64Attribute{
 				MarkdownDescription: "Maximum number of replicas or chunks",
 				Computed:            true,
+			},
+			"steps": dataSourceSchema.ListNestedAttribute{
+				MarkdownDescription: "Detailed CRUSH rule steps in execution order.",
+				Computed:            true,
+				NestedObject: dataSourceSchema.NestedAttributeObject{
+					Attributes: map[string]dataSourceSchema.Attribute{
+						"op": dataSourceSchema.StringAttribute{
+							MarkdownDescription: "CRUSH step opcode (e.g., 'take', 'chooseleaf').",
+							Computed:            true,
+						},
+						"num": dataSourceSchema.Int64Attribute{
+							MarkdownDescription: "Optional numeric argument for the step.",
+							Computed:            true,
+						},
+						"type": dataSourceSchema.StringAttribute{
+							MarkdownDescription: "CRUSH bucket type referenced by the step.",
+							Computed:            true,
+						},
+						"item": dataSourceSchema.Int64Attribute{
+							MarkdownDescription: "CRUSH bucket or ID targeted by the step, when applicable.",
+							Computed:            true,
+						},
+					},
+				},
 			},
 		},
 	}
@@ -107,6 +133,59 @@ func (d *CrushRuleDataSource) Read(ctx context.Context, req datasource.ReadReque
 	data.Type = types.Int64Value(int64(rule.Type))
 	data.MinSize = types.Int64Value(int64(rule.MinSize))
 	data.MaxSize = types.Int64Value(int64(rule.MaxSize))
+
+	stepsObjects := make([]attr.Value, 0, len(rule.Steps))
+	for _, step := range rule.Steps {
+		stepAttrs := map[string]attr.Value{
+			"op":   types.StringValue(step.Op),
+			"type": types.StringValue(step.Type),
+		}
+
+		if step.Num != 0 {
+			stepAttrs["num"] = types.Int64Value(int64(step.Num))
+		} else {
+			stepAttrs["num"] = types.Int64Null()
+		}
+
+		if step.Item != 0 {
+			stepAttrs["item"] = types.Int64Value(int64(step.Item))
+		} else {
+			stepAttrs["item"] = types.Int64Null()
+		}
+
+		stepObj, stepDiags := types.ObjectValue(
+			map[string]attr.Type{
+				"op":   types.StringType,
+				"num":  types.Int64Type,
+				"type": types.StringType,
+				"item": types.Int64Type,
+			},
+			stepAttrs,
+		)
+		resp.Diagnostics.Append(stepDiags...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		stepsObjects = append(stepsObjects, stepObj)
+	}
+
+	stepsValue, stepDiags := types.ListValue(
+		types.ObjectType{
+			AttrTypes: map[string]attr.Type{
+				"op":   types.StringType,
+				"num":  types.Int64Type,
+				"type": types.StringType,
+				"item": types.Int64Type,
+			},
+		},
+		stepsObjects,
+	)
+	resp.Diagnostics.Append(stepDiags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	data.Steps = stepsValue
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

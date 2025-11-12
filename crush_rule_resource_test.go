@@ -60,6 +60,31 @@ func TestAccCephCrushRuleResource_replicated(t *testing.T) {
 						tfjsonpath.New("type"),
 						knownvalue.Int64Exact(1),
 					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(0).AtMapKey("op"),
+						knownvalue.StringExact("take"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(0).AtMapKey("item"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(1).AtMapKey("op"),
+						knownvalue.StringExact("chooseleaf_firstn"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(1).AtMapKey("type"),
+						knownvalue.StringExact("host"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(2).AtMapKey("op"),
+						knownvalue.StringExact("emit"),
+					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					checkCephCrushRuleExists(t, ruleName),
@@ -142,6 +167,51 @@ func TestAccCephCrushRuleResource_erasure(t *testing.T) {
 						tfjsonpath.New("type"),
 						knownvalue.Int64Exact(3),
 					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(0).AtMapKey("op"),
+						knownvalue.StringExact("set_chooseleaf_tries"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(0).AtMapKey("num"),
+						knownvalue.Int64Exact(5),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(1).AtMapKey("op"),
+						knownvalue.StringExact("set_choose_tries"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(1).AtMapKey("num"),
+						knownvalue.Int64Exact(100),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(2).AtMapKey("op"),
+						knownvalue.StringExact("take"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(2).AtMapKey("item"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(3).AtMapKey("op"),
+						knownvalue.StringExact("choose_indep"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(3).AtMapKey("type"),
+						knownvalue.StringExact("osd"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(4).AtMapKey("op"),
+						knownvalue.StringExact("emit"),
+					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					checkCephCrushRuleExists(t, ruleName),
@@ -193,6 +263,21 @@ func TestAccCephCrushRuleResource_withDeviceClass(t *testing.T) {
 						"ceph_crush_rule.test",
 						tfjsonpath.New("device_class"),
 						knownvalue.StringExact("hdd"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(0).AtMapKey("op"),
+						knownvalue.StringExact("take"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(0).AtMapKey("item"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(1).AtMapKey("op"),
+						knownvalue.StringExact("choose_firstn"),
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
