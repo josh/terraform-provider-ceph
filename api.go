@@ -159,12 +159,7 @@ type CephAPIAuthRequest struct {
 }
 
 type CephAPIAuthResponse struct {
-	Token             string              `json:"token"`
-	Username          string              `json:"username"`
-	Permissions       map[string][]string `json:"permissions,omitempty"`
-	PwdExpirationDate *string             `json:"pwdExpirationDate,omitempty"`
-	SSO               bool                `json:"sso"`
-	PwdUpdateRequired bool                `json:"pwdUpdateRequired"`
+	Token string `json:"token"`
 }
 
 func (c *CephAPIClient) Auth(ctx context.Context, username string, password string) (string, error) {
