@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -249,15 +247,9 @@ func checkCephErasureCodeProfileExists(t *testing.T, profileName string) resourc
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "osd", "erasure-code-profile", "get", profileName, "-f", "json")
-		output, err := cmd.Output()
+		profile, err := cephTestClusterCLI.ErasureCodeProfileGet(ctx, profileName)
 		if err != nil {
 			return fmt.Errorf("failed to get erasure code profile '%s': %w", profileName, err)
-		}
-
-		var profile map[string]interface{}
-		if err := json.Unmarshal(output, &profile); err != nil {
-			return fmt.Errorf("failed to parse erasure code profile output: %w", err)
 		}
 
 		if len(profile) == 0 {
@@ -279,15 +271,9 @@ func testAccCheckCephErasureCodeProfileDestroy(s *terraform.State) error {
 
 		profileName := rs.Primary.Attributes["name"]
 
-		cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "osd", "erasure-code-profile", "ls", "-f", "json")
-		output, err := cmd.Output()
+		profiles, err := cephTestClusterCLI.ErasureCodeProfileList(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to list erasure code profiles: %w", err)
-		}
-
-		var profiles []string
-		if err := json.Unmarshal(output, &profiles); err != nil {
-			return fmt.Errorf("failed to parse erasure code profile list: %w", err)
 		}
 
 		for _, profile := range profiles {

@@ -1,10 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -85,35 +86,31 @@ func TestAccCephRGWSubuserDataSource_invalidFormat(t *testing.T) {
 func createTestRGWUserWithSubuser(t *testing.T, uid, displayName, subuser, permissions string) {
 	t.Helper()
 
-	cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+uid, "--purge-data")
-	_ = cmd.Run()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "create",
-		"--uid="+uid,
-		"--display-name="+displayName,
-	)
-	output, err := cmd.CombinedOutput()
+	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
+
+	_, err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
 	if err != nil {
-		t.Fatalf("Failed to create test RGW user: %v\nOutput: %s", err, string(output))
+		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
 
-	cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "subuser", "create",
-		"--uid="+uid,
-		"--subuser="+uid+":"+subuser,
-		"--access="+permissions,
-	)
-	output, err = cmd.CombinedOutput()
+	_, err = cephTestClusterCLI.RgwSubuserCreate(ctx, uid, uid+":"+subuser, &RgwSubuserCreateOptions{
+		Access: permissions,
+	})
 	if err != nil {
-		t.Fatalf("Failed to create subuser: %v\nOutput: %s", err, string(output))
+		t.Fatalf("Failed to create subuser: %v", err)
 	}
 
 	t.Logf("Created test RGW user: %s with subuser: %s", uid, subuser)
 
 	t.Cleanup(func() {
-		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+uid, "--purge-data")
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Logf("Warning: Failed to cleanup test RGW user %s: %v\nOutput: %s", uid, err, string(output))
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+
+		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
+			t.Logf("Warning: Failed to cleanup test RGW user %s: %v", uid, err)
 		} else {
 			t.Logf("Cleaned up test RGW user: %s", uid)
 		}

@@ -1,10 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -90,10 +91,15 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "modify", "--uid="+testUID, "--admin")
-					output, err := cmd.CombinedOutput()
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+
+					admin := true
+					_, err := cephTestClusterCLI.RgwUserModify(ctx, testUID, &RgwUserModifyOptions{
+						Admin: &admin,
+					})
 					if err != nil {
-						t.Logf("radosgw-admin failed (expected in test environment): %v\nOutput: %s", err, string(output))
+						t.Logf("radosgw-admin failed (expected in test environment): %v", err)
 						return
 					}
 					t.Logf("Set admin flag to true for user: %s", testUID)
@@ -111,10 +117,15 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "modify", "--uid="+testUID, "--admin=0")
-					output, err := cmd.CombinedOutput()
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+
+					admin := false
+					_, err := cephTestClusterCLI.RgwUserModify(ctx, testUID, &RgwUserModifyOptions{
+						Admin: &admin,
+					})
 					if err != nil {
-						t.Logf("radosgw-admin failed (expected in test environment): %v\nOutput: %s", err, string(output))
+						t.Logf("radosgw-admin failed (expected in test environment): %v", err)
 						return
 					}
 					t.Logf("Set admin flag to false for user: %s", testUID)
@@ -160,10 +171,11 @@ func TestAccCephRGWUserDataSource_deletedOutOfBand(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+testUID, "--purge-data")
-					output, err := cmd.CombinedOutput()
-					if err != nil {
-						t.Fatalf("Failed to delete user out of band: %v\nOutput: %s", err, string(output))
+					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					defer cancel()
+
+					if err := cephTestClusterCLI.RgwUserRemove(ctx, testUID, true); err != nil {
+						t.Fatalf("Failed to delete user out of band: %v", err)
 					}
 					t.Logf("Deleted user %s out of band", testUID)
 				},
@@ -182,22 +194,22 @@ func TestAccCephRGWUserDataSource_deletedOutOfBand(t *testing.T) {
 func createTestRGWUser(t *testing.T, uid, displayName string) {
 	t.Helper()
 
-	cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "create",
-		"--uid="+uid,
-		"--display-name="+displayName,
-	)
-	output, err := cmd.CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
 	if err != nil {
-		t.Fatalf("Failed to create test RGW user: %v\nOutput: %s", err, string(output))
+		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
 
 	t.Logf("Created test RGW user: %s", uid)
 
 	t.Cleanup(func() {
-		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+uid, "--purge-data")
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Logf("Warning: Failed to cleanup test RGW user %s: %v\nOutput: %s", uid, err, string(output))
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+
+		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
+			t.Logf("Warning: Failed to cleanup test RGW user %s: %v", uid, err)
 		} else {
 			t.Logf("Cleaned up test RGW user: %s", uid)
 		}

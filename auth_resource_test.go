@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"testing"
 	"time"
@@ -306,10 +304,9 @@ func testAccCheckCephAuthDestroy(s *terraform.State) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "auth", "get", entity, "--format", "json")
-		output, err := cmd.Output()
+		_, err := cephTestClusterCLI.AuthGet(ctx, entity)
 		if err == nil {
-			return fmt.Errorf("ceph_auth resource %s still exists (output: %s)", entity, string(output))
+			return fmt.Errorf("ceph_auth resource %s still exists", entity)
 		}
 	}
 	return nil
@@ -321,26 +318,12 @@ func checkCephAuthExists(t *testing.T, entity string) resource.TestCheckFunc {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "auth", "get", entity, "--format", "json")
-		output, err := cmd.Output()
+		authInfo, err := cephTestClusterCLI.AuthGet(ctx, entity)
 		if err != nil {
 			return fmt.Errorf("auth entity %s does not exist: %w", entity, err)
 		}
 
-		var authData []struct {
-			Entity string            `json:"entity"`
-			Key    string            `json:"key"`
-			Caps   map[string]string `json:"caps"`
-		}
-		if err := json.Unmarshal(output, &authData); err != nil {
-			return fmt.Errorf("failed to parse auth output: %w", err)
-		}
-
-		if len(authData) == 0 {
-			return fmt.Errorf("auth entity %s not found in output", entity)
-		}
-
-		t.Logf("Verified auth entity %s exists with caps: %v", entity, authData[0].Caps)
+		t.Logf("Verified auth entity %s exists with caps: %v", entity, authInfo.Caps)
 		return nil
 	}
 }
@@ -351,26 +334,12 @@ func checkCephAuthHasCaps(t *testing.T, entity string, expectedCaps map[string]s
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "auth", "get", entity, "--format", "json")
-		output, err := cmd.Output()
+		authInfo, err := cephTestClusterCLI.AuthGet(ctx, entity)
 		if err != nil {
 			return fmt.Errorf("auth entity %s does not exist: %w", entity, err)
 		}
 
-		var authData []struct {
-			Entity string            `json:"entity"`
-			Key    string            `json:"key"`
-			Caps   map[string]string `json:"caps"`
-		}
-		if err := json.Unmarshal(output, &authData); err != nil {
-			return fmt.Errorf("failed to parse auth output: %w", err)
-		}
-
-		if len(authData) == 0 {
-			return fmt.Errorf("auth entity %s not found in output", entity)
-		}
-
-		actualCaps := authData[0].Caps
+		actualCaps := authInfo.Caps
 		for capType, expectedCap := range expectedCaps {
 			if actualCap, ok := actualCaps[capType]; !ok {
 				return fmt.Errorf("expected cap %s not found for entity %s", capType, entity)
@@ -390,26 +359,12 @@ func checkCephAuthHasKey(t *testing.T, entity string, expectedKey string) resour
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "auth", "get", entity, "--format", "json")
-		output, err := cmd.Output()
+		authInfo, err := cephTestClusterCLI.AuthGet(ctx, entity)
 		if err != nil {
 			return fmt.Errorf("auth entity %s does not exist: %w", entity, err)
 		}
 
-		var authData []struct {
-			Entity string            `json:"entity"`
-			Key    string            `json:"key"`
-			Caps   map[string]string `json:"caps"`
-		}
-		if err := json.Unmarshal(output, &authData); err != nil {
-			return fmt.Errorf("failed to parse auth output: %w", err)
-		}
-
-		if len(authData) == 0 {
-			return fmt.Errorf("auth entity %s not found in output", entity)
-		}
-
-		actualKey := authData[0].Key
+		actualKey := authInfo.Key
 		if actualKey != expectedKey {
 			return fmt.Errorf("key mismatch for entity %s: expected %q, got %q", entity, expectedKey, actualKey)
 		}
@@ -499,14 +454,13 @@ func TestAccCephAuthResource_capsDriftDetection(t *testing.T) {
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 					defer cancel()
 
-					cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "auth", "caps",
-						testEntity,
-						"mon", "allow rw",
-						"osd", "allow rw pool=modified",
-						"mgr", "allow r")
-					output, err := cmd.CombinedOutput()
+					err := cephTestClusterCLI.AuthSetCaps(ctx, testEntity, map[string]string{
+						"mon": "allow rw",
+						"osd": "allow rw pool=modified",
+						"mgr": "allow r",
+					})
 					if err != nil {
-						t.Fatalf("Failed to modify caps out of band: %v\nOutput: %s", err, string(output))
+						t.Fatalf("Failed to modify caps out of band: %v", err)
 					}
 					t.Logf("Modified caps for %s out of band", testEntity)
 				},

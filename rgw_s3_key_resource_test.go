@@ -1,10 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -185,32 +186,29 @@ func TestAccCephRGWS3KeyResource_nonExistentUser(t *testing.T) {
 func createTestRGWUserWithSubuserWithoutKeys(t *testing.T, uid, displayName, subuser string) {
 	t.Helper()
 
-	cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "create",
-		"--uid="+uid,
-		"--display-name="+displayName,
-	)
-	output, err := cmd.CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
 	if err != nil {
-		t.Fatalf("Failed to create test RGW user: %v\nOutput: %s", err, string(output))
+		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
 
-	cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "subuser", "create",
-		"--uid="+uid,
-		"--subuser="+uid+":"+subuser,
-		"--access=full",
-	)
-	output, err = cmd.CombinedOutput()
+	_, err = cephTestClusterCLI.RgwSubuserCreate(ctx, uid, uid+":"+subuser, &RgwSubuserCreateOptions{
+		Access: "full",
+	})
 	if err != nil {
-		t.Fatalf("Failed to create subuser: %v\nOutput: %s", err, string(output))
+		t.Fatalf("Failed to create subuser: %v", err)
 	}
 
 	t.Logf("Created test RGW user: %s with subuser: %s", uid, subuser)
 
 	t.Cleanup(func() {
-		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+uid, "--purge-data")
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Logf("Warning: Failed to cleanup test RGW user %s: %v\nOutput: %s", uid, err, string(output))
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+
+		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
+			t.Logf("Warning: Failed to cleanup test RGW user %s: %v", uid, err)
 		} else {
 			t.Logf("Cleaned up test RGW user: %s", uid)
 		}
@@ -520,14 +518,15 @@ func TestAccCephRGWS3KeyResource_importMultipleKeysManagement(t *testing.T) {
 func createRGWS3Key(t *testing.T, userID, accessKey, secretKey string) {
 	t.Helper()
 
-	cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "key", "create",
-		"--uid="+userID,
-		"--access-key="+accessKey,
-		"--secret-key="+secretKey,
-	)
-	output, err := cmd.CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := cephTestClusterCLI.RgwKeyCreate(ctx, userID, &RgwKeyCreateOptions{
+		AccessKey: accessKey,
+		SecretKey: secretKey,
+	})
 	if err != nil {
-		t.Fatalf("Failed to create RGW S3 key %s for user %s: %v\nOutput: %s", accessKey, userID, err, string(output))
+		t.Fatalf("Failed to create RGW S3 key %s for user %s: %v", accessKey, userID, err)
 	}
 
 	t.Logf("Created RGW S3 key %s for user %s", accessKey, userID)

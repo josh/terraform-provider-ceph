@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -78,18 +77,15 @@ func TestAccCephConfigDataSource_multiLevel(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			cmd1 := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "set", "global", configName, fmt.Sprintf("%d", globalValue))
-			if err := cmd1.Run(); err != nil {
+			if err := cephTestClusterCLI.ConfigSet(ctx, "global", configName, fmt.Sprintf("%d", globalValue)); err != nil {
 				t.Fatalf("Failed to set global config: %v", err)
 			}
 
-			cmd2 := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "set", "osd", configName, fmt.Sprintf("%d", osdValue))
-			if err := cmd2.Run(); err != nil {
+			if err := cephTestClusterCLI.ConfigSet(ctx, "osd", configName, fmt.Sprintf("%d", osdValue)); err != nil {
 				t.Fatalf("Failed to set osd config: %v", err)
 			}
 
-			cmd3 := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "set", "osd.0", configName, fmt.Sprintf("%d", osd1Value))
-			if err := cmd3.Run(); err != nil {
+			if err := cephTestClusterCLI.ConfigSet(ctx, "osd.0", configName, fmt.Sprintf("%d", osd1Value)); err != nil {
 				t.Fatalf("Failed to set osd.0 config: %v", err)
 			}
 
@@ -97,9 +93,9 @@ func TestAccCephConfigDataSource_multiLevel(t *testing.T) {
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cleanupCancel()
 
-				_ = exec.CommandContext(cleanupCtx, "ceph", "--conf", testConfPath, "config", "rm", "global", configName).Run()
-				_ = exec.CommandContext(cleanupCtx, "ceph", "--conf", testConfPath, "config", "rm", "osd", configName).Run()
-				_ = exec.CommandContext(cleanupCtx, "ceph", "--conf", testConfPath, "config", "rm", "osd.0", configName).Run()
+				_ = cephTestClusterCLI.ConfigRemove(cleanupCtx, "global", configName)
+				_ = cephTestClusterCLI.ConfigRemove(cleanupCtx, "osd", configName)
+				_ = cephTestClusterCLI.ConfigRemove(cleanupCtx, "osd.0", configName)
 			})
 		},
 		Steps: []resource.TestStep{

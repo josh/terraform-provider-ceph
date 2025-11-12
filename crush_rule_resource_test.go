@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"testing"
 	"time"
@@ -230,19 +228,13 @@ func checkCephCrushRuleExists(t *testing.T, ruleName string) resource.TestCheckF
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "osd", "crush", "rule", "dump", ruleName, "-f", "json")
-		output, err := cmd.Output()
+		rule, err := cephTestClusterCLI.CrushRuleDump(ctx, ruleName)
 		if err != nil {
 			return fmt.Errorf("failed to get CRUSH rule '%s': %w", ruleName, err)
 		}
 
-		var rule map[string]interface{}
-		if err := json.Unmarshal(output, &rule); err != nil {
-			return fmt.Errorf("failed to parse CRUSH rule output: %w", err)
-		}
-
-		if rule["rule_name"] != ruleName {
-			return fmt.Errorf("CRUSH rule name mismatch: expected %q, got %q", ruleName, rule["rule_name"])
+		if rule.RuleName != ruleName {
+			return fmt.Errorf("CRUSH rule name mismatch: expected %q, got %q", ruleName, rule.RuleName)
 		}
 
 		return nil
@@ -260,15 +252,9 @@ func testAccCheckCephCrushRuleDestroy(s *terraform.State) error {
 
 		ruleName := rs.Primary.Attributes["name"]
 
-		cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "osd", "crush", "rule", "ls", "-f", "json")
-		output, err := cmd.Output()
+		rules, err := cephTestClusterCLI.CrushRuleList(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to list CRUSH rules: %w", err)
-		}
-
-		var rules []string
-		if err := json.Unmarshal(output, &rules); err != nil {
-			return fmt.Errorf("failed to parse CRUSH rule list: %w", err)
 		}
 
 		for _, rule := range rules {

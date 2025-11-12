@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -26,8 +25,7 @@ func TestAccCephCrushRuleDataSource_replicated(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "osd", "crush", "rule", "create-replicated", ruleName, "default", "host")
-			if err := cmd.Run(); err != nil {
+			if err := cephTestClusterCLI.CrushRuleCreateReplicated(ctx, ruleName, "default", "host"); err != nil {
 				t.Fatalf("Failed to create replicated crush rule: %v", err)
 			}
 
@@ -35,7 +33,7 @@ func TestAccCephCrushRuleDataSource_replicated(t *testing.T) {
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = exec.CommandContext(cleanupCtx, "ceph", "--conf", testConfPath, "osd", "crush", "rule", "rm", ruleName).Run()
+				_ = cephTestClusterCLI.CrushRuleRemove(cleanupCtx, ruleName)
 			})
 		},
 		Steps: []resource.TestStep{
@@ -80,8 +78,7 @@ func TestAccCephCrushRuleDataSource_simple(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "osd", "crush", "rule", "create-simple", ruleName, "default", "host")
-			if err := cmd.Run(); err != nil {
+			if err := cephTestClusterCLI.CrushRuleCreateSimple(ctx, ruleName, "default", "host"); err != nil {
 				t.Fatalf("Failed to create simple crush rule: %v", err)
 			}
 
@@ -89,7 +86,7 @@ func TestAccCephCrushRuleDataSource_simple(t *testing.T) {
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = exec.CommandContext(cleanupCtx, "ceph", "--conf", testConfPath, "osd", "crush", "rule", "rm", ruleName).Run()
+				_ = cephTestClusterCLI.CrushRuleRemove(cleanupCtx, ruleName)
 			})
 		},
 		Steps: []resource.TestStep{
@@ -135,13 +132,15 @@ func TestAccCephCrushRuleDataSource_erasure(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 
-			cmdProfile := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "osd", "erasure-code-profile", "set", profileName, "k=2", "m=1", "crush-failure-domain=osd")
-			if err := cmdProfile.Run(); err != nil {
+			if err := cephTestClusterCLI.ErasureCodeProfileSet(ctx, profileName, map[string]string{
+				"k":                    "2",
+				"m":                    "1",
+				"crush-failure-domain": "osd",
+			}); err != nil {
 				t.Fatalf("Failed to create erasure code profile: %v", err)
 			}
 
-			cmdRule := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "osd", "crush", "rule", "create-erasure", ruleName, profileName)
-			if err := cmdRule.Run(); err != nil {
+			if err := cephTestClusterCLI.CrushRuleCreateErasure(ctx, ruleName, profileName); err != nil {
 				t.Fatalf("Failed to create erasure crush rule: %v", err)
 			}
 
@@ -149,8 +148,8 @@ func TestAccCephCrushRuleDataSource_erasure(t *testing.T) {
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = exec.CommandContext(cleanupCtx, "ceph", "--conf", testConfPath, "osd", "crush", "rule", "rm", ruleName).Run()
-				_ = exec.CommandContext(cleanupCtx, "ceph", "--conf", testConfPath, "osd", "erasure-code-profile", "rm", profileName).Run()
+				_ = cephTestClusterCLI.CrushRuleRemove(cleanupCtx, ruleName)
+				_ = cephTestClusterCLI.ErasureCodeProfileRemove(cleanupCtx, profileName)
 			})
 		},
 		Steps: []resource.TestStep{
