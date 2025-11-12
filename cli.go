@@ -257,11 +257,10 @@ type RgwSubuserCreateOptions struct {
 }
 
 type RgwKeyCreateOptions struct {
-	Subuser     string
-	KeyType     string
-	AccessKey   string
-	SecretKey   string
-	GenerateKey *bool
+	Subuser   string
+	KeyType   string
+	AccessKey string
+	SecretKey string
 }
 
 func (c *CephCLI) RgwUserCreate(ctx context.Context, uid, displayName string, opts *RgwUserCreateOptions) (*RgwUserInfo, error) {
@@ -438,9 +437,6 @@ func (c *CephCLI) RgwKeyCreate(ctx context.Context, uid string, opts *RgwKeyCrea
 		}
 		if opts.SecretKey != "" {
 			args = append(args, "--secret-key="+opts.SecretKey)
-		}
-		if opts.GenerateKey != nil && *opts.GenerateKey {
-			args = append(args, "--gen-access-key", "--gen-secret")
 		}
 	}
 
