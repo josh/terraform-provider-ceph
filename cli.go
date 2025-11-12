@@ -243,9 +243,7 @@ type RgwUserCreateOptions struct {
 
 type RgwUserModifyOptions struct {
 	DisplayName string
-	Email       string
 	MaxBuckets  *int
-	Suspended   *bool
 	Admin       *bool
 }
 
@@ -324,18 +322,8 @@ func (c *CephCLI) RgwUserModify(ctx context.Context, uid string, opts *RgwUserMo
 		if opts.DisplayName != "" {
 			args = append(args, "--display-name="+opts.DisplayName)
 		}
-		if opts.Email != "" {
-			args = append(args, "--email="+opts.Email)
-		}
 		if opts.MaxBuckets != nil {
 			args = append(args, fmt.Sprintf("--max-buckets=%d", *opts.MaxBuckets))
-		}
-		if opts.Suspended != nil {
-			if *opts.Suspended {
-				args = append(args, "--suspended")
-			} else {
-				args = append(args, "--suspended=0")
-			}
 		}
 		if opts.Admin != nil {
 			if *opts.Admin {
