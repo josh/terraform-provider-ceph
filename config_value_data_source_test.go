@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"testing"
 	"time"
@@ -28,8 +27,7 @@ func TestAccCephConfigValueDataSource(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "set", "global", configName, fmt.Sprintf("%d", testValue))
-			if err := cmd.Run(); err != nil {
+			if err := cephTestClusterCLI.ConfigSet(ctx, "global", configName, fmt.Sprintf("%d", testValue)); err != nil {
 				t.Fatalf("Failed to set test config: %v", err)
 			}
 
@@ -37,8 +35,7 @@ func TestAccCephConfigValueDataSource(t *testing.T) {
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cleanupCancel()
 
-				cleanupCmd := exec.CommandContext(cleanupCtx, "ceph", "--conf", testConfPath, "config", "rm", "global", configName)
-				_ = cleanupCmd.Run()
+				_ = cephTestClusterCLI.ConfigRemove(cleanupCtx, "global", configName)
 			})
 		},
 		Steps: []resource.TestStep{
@@ -97,13 +94,11 @@ func TestAccCephConfigValueDataSource_multipleSections(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			cmd1 := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "set", "global", configName, fmt.Sprintf("%d", testValue1))
-			if err := cmd1.Run(); err != nil {
+			if err := cephTestClusterCLI.ConfigSet(ctx, "global", configName, fmt.Sprintf("%d", testValue1)); err != nil {
 				t.Fatalf("Failed to set test config for global: %v", err)
 			}
 
-			cmd2 := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "set", "mon", configName, fmt.Sprintf("%d", testValue2))
-			if err := cmd2.Run(); err != nil {
+			if err := cephTestClusterCLI.ConfigSet(ctx, "mon", configName, fmt.Sprintf("%d", testValue2)); err != nil {
 				t.Fatalf("Failed to set test config for mon: %v", err)
 			}
 
@@ -111,11 +106,8 @@ func TestAccCephConfigValueDataSource_multipleSections(t *testing.T) {
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cleanupCancel()
 
-				cleanupCmd1 := exec.CommandContext(cleanupCtx, "ceph", "--conf", testConfPath, "config", "rm", "global", configName)
-				_ = cleanupCmd1.Run()
-
-				cleanupCmd2 := exec.CommandContext(cleanupCtx, "ceph", "--conf", testConfPath, "config", "rm", "mon", configName)
-				_ = cleanupCmd2.Run()
+				_ = cephTestClusterCLI.ConfigRemove(cleanupCtx, "global", configName)
+				_ = cephTestClusterCLI.ConfigRemove(cleanupCtx, "mon", configName)
 			})
 		},
 		Steps: []resource.TestStep{
@@ -204,8 +196,7 @@ func TestAccCephConfigValueDataSource_readMaskedConfig(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "set", "osd/class:ssd", configName, fmt.Sprintf("%d", testValue))
-			if err := cmd.Run(); err != nil {
+			if err := cephTestClusterCLI.ConfigSet(ctx, "osd/class:ssd", configName, fmt.Sprintf("%d", testValue)); err != nil {
 				t.Fatalf("Failed to set masked config via CLI: %v", err)
 			}
 
@@ -213,8 +204,7 @@ func TestAccCephConfigValueDataSource_readMaskedConfig(t *testing.T) {
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cleanupCancel()
 
-				cleanupCmd := exec.CommandContext(cleanupCtx, "ceph", "--conf", testConfPath, "config", "rm", "osd/class:ssd", configName)
-				_ = cleanupCmd.Run()
+				_ = cephTestClusterCLI.ConfigRemove(cleanupCtx, "osd/class:ssd", configName)
 			})
 		},
 		Steps: []resource.TestStep{

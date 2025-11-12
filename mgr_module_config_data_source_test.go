@@ -3,8 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"os/exec"
-	"strings"
 	"testing"
 	"time"
 
@@ -126,14 +124,7 @@ func getCephMgrModuleConfigValue(module, option string) (string, error) {
 	defer cancel()
 
 	configKey := fmt.Sprintf("mgr/%s/%s", module, option)
-	cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "get", "mgr", configKey)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("failed to get config %s: %w (output: %s)", configKey, err, string(output))
-	}
-
-	return strings.TrimSpace(string(output)), nil
+	return cephTestClusterCLI.ConfigGet(ctx, "mgr", configKey)
 }
 
 func setCephMgrModuleConfigValue(module, option, value string) error {
@@ -141,14 +132,7 @@ func setCephMgrModuleConfigValue(module, option, value string) error {
 	defer cancel()
 
 	configKey := fmt.Sprintf("mgr/%s/%s", module, option)
-	cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "set", "mgr", configKey, value)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to set config %s: %w (output: %s)", configKey, err, string(output))
-	}
-
-	return nil
+	return cephTestClusterCLI.ConfigSet(ctx, "mgr", configKey, value)
 }
 
 func removeCephMgrModuleConfigValue(module, option string) error {
@@ -156,14 +140,7 @@ func removeCephMgrModuleConfigValue(module, option string) error {
 	defer cancel()
 
 	configKey := fmt.Sprintf("mgr/%s/%s", module, option)
-	cmd := exec.CommandContext(ctx, "ceph", "--conf", testConfPath, "config", "rm", "mgr", configKey)
-
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("failed to remove config %s: %w (output: %s)", configKey, err, string(output))
-	}
-
-	return nil
+	return cephTestClusterCLI.ConfigRemove(ctx, "mgr", configKey)
 }
 
 func assertCephMgrModuleConfigValue(module, option, expected string) error {

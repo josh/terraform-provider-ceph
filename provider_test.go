@@ -27,12 +27,13 @@ import (
 )
 
 var (
-	testDashboardURL string
-	testClusterWG    *sync.WaitGroup
-	testConfPath     string
-	testTimeout      = flag.Duration("timeout", 0, "test timeout")
-	cephDaemonLogs   *LogDemux
-	testNumOsds      = 5
+	testDashboardURL   string
+	testClusterWG      *sync.WaitGroup
+	testConfPath       string
+	cephTestClusterCLI *CephCLI
+	testTimeout        = flag.Duration("timeout", 0, "test timeout")
+	cephDaemonLogs     *LogDemux
+	testNumOsds        = 5
 )
 
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
@@ -81,6 +82,7 @@ func TestMain(m *testing.M) {
 		}
 		detachLogs()
 		testConfPath = confPath
+		cephTestClusterCLI = NewCephCLI(confPath)
 
 		code = m.Run()
 

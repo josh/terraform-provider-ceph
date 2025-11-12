@@ -1,24 +1,15 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 )
-
-type RadosgwUserInfo struct {
-	DisplayName string         `json:"display_name"`
-	Keys        []RadosgwS3Key `json:"keys"`
-}
-
-type RadosgwS3Key struct {
-	AccessKey string `json:"access_key"`
-}
 
 func TestAccCephRGWS3KeyDataSource(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
@@ -195,27 +186,27 @@ func TestAccCephRGWS3KeyDataSource_multipleKeys(t *testing.T) {
 func createTestRGWUserWithCustomS3Key(t *testing.T, uid, displayName, accessKey, secretKey string) {
 	t.Helper()
 
-	cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+uid, "--purge-data")
-	_ = cmd.Run()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "create",
-		"--uid="+uid,
-		"--display-name="+displayName,
-		"--access-key="+accessKey,
-		"--secret-key="+secretKey,
-	)
-	output, err := cmd.CombinedOutput()
+	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
+
+	_, err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, &RgwUserCreateOptions{
+		AccessKey: accessKey,
+		SecretKey: secretKey,
+	})
 	if err != nil {
-		t.Fatalf("Failed to create test RGW user: %v\nOutput: %s", err, string(output))
+		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
 
 	t.Logf("Created test RGW user: %s with custom S3 key: %s", uid, accessKey)
 
 	t.Cleanup(func() {
-		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+uid, "--purge-data")
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Logf("Warning: Failed to cleanup test RGW user %s: %v\nOutput: %s", uid, err, string(output))
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+
+		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
+			t.Logf("Warning: Failed to cleanup test RGW user %s: %v", uid, err)
 		} else {
 			t.Logf("Cleaned up test RGW user: %s", uid)
 		}
@@ -225,49 +216,44 @@ func createTestRGWUserWithCustomS3Key(t *testing.T, uid, displayName, accessKey,
 func createTestRGWUserWithSubuserAndS3Keys(t *testing.T, uid, displayName, subuser, parentAccessKey, parentSecretKey, subuserAccessKey, subuserSecretKey string) {
 	t.Helper()
 
-	cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+uid, "--purge-data")
-	_ = cmd.Run()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "create",
-		"--uid="+uid,
-		"--display-name="+displayName,
-		"--access-key="+parentAccessKey,
-		"--secret-key="+parentSecretKey,
-	)
-	output, err := cmd.CombinedOutput()
+	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
+
+	_, err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, &RgwUserCreateOptions{
+		AccessKey: parentAccessKey,
+		SecretKey: parentSecretKey,
+	})
 	if err != nil {
-		t.Fatalf("Failed to create test RGW user: %v\nOutput: %s", err, string(output))
+		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
 
-	cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "subuser", "create",
-		"--uid="+uid,
-		"--subuser="+uid+":"+subuser,
-		"--access=full",
-	)
-	output, err = cmd.CombinedOutput()
+	_, err = cephTestClusterCLI.RgwSubuserCreate(ctx, uid, uid+":"+subuser, &RgwSubuserCreateOptions{
+		Access: "full",
+	})
 	if err != nil {
-		t.Fatalf("Failed to create subuser: %v\nOutput: %s", err, string(output))
+		t.Fatalf("Failed to create subuser: %v", err)
 	}
 
-	cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "key", "create",
-		"--uid="+uid,
-		"--subuser="+uid+":"+subuser,
-		"--key-type=s3",
-		"--access-key="+subuserAccessKey,
-		"--secret-key="+subuserSecretKey,
-	)
-	output, err = cmd.CombinedOutput()
+	_, err = cephTestClusterCLI.RgwKeyCreate(ctx, uid, &RgwKeyCreateOptions{
+		Subuser:   uid + ":" + subuser,
+		KeyType:   "s3",
+		AccessKey: subuserAccessKey,
+		SecretKey: subuserSecretKey,
+	})
 	if err != nil {
-		t.Fatalf("Failed to create subuser S3 key: %v\nOutput: %s", err, string(output))
+		t.Fatalf("Failed to create subuser S3 key: %v", err)
 	}
 
 	t.Logf("Created test RGW user: %s with subuser: %s and S3 keys", uid, subuser)
 
 	t.Cleanup(func() {
-		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+uid, "--purge-data")
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Logf("Warning: Failed to cleanup test RGW user %s: %v\nOutput: %s", uid, err, string(output))
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+
+		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
+			t.Logf("Warning: Failed to cleanup test RGW user %s: %v", uid, err)
 		} else {
 			t.Logf("Cleaned up test RGW user: %s", uid)
 		}
@@ -277,38 +263,36 @@ func createTestRGWUserWithSubuserAndS3Keys(t *testing.T, uid, displayName, subus
 func createTestRGWUserWithMultipleS3Keys(t *testing.T, uid, displayName, accessKey1, secretKey1, accessKey2, secretKey2 string) {
 	t.Helper()
 
-	cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+uid, "--purge-data")
-	_ = cmd.Run()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "create",
-		"--uid="+uid,
-		"--display-name="+displayName,
-		"--access-key="+accessKey1,
-		"--secret-key="+secretKey1,
-	)
-	output, err := cmd.CombinedOutput()
+	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
+
+	_, err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, &RgwUserCreateOptions{
+		AccessKey: accessKey1,
+		SecretKey: secretKey1,
+	})
 	if err != nil {
-		t.Fatalf("Failed to create test RGW user: %v\nOutput: %s", err, string(output))
+		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
 
-	cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "key", "create",
-		"--uid="+uid,
-		"--key-type=s3",
-		"--access-key="+accessKey2,
-		"--secret-key="+secretKey2,
-	)
-	output, err = cmd.CombinedOutput()
+	_, err = cephTestClusterCLI.RgwKeyCreate(ctx, uid, &RgwKeyCreateOptions{
+		KeyType:   "s3",
+		AccessKey: accessKey2,
+		SecretKey: secretKey2,
+	})
 	if err != nil {
-		t.Fatalf("Failed to create second S3 key: %v\nOutput: %s", err, string(output))
+		t.Fatalf("Failed to create second S3 key: %v", err)
 	}
 
 	t.Logf("Created test RGW user: %s with multiple S3 keys", uid)
 
 	t.Cleanup(func() {
-		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+uid, "--purge-data")
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Logf("Warning: Failed to cleanup test RGW user %s: %v\nOutput: %s", uid, err, string(output))
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+
+		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
+			t.Logf("Warning: Failed to cleanup test RGW user %s: %v", uid, err)
 		} else {
 			t.Logf("Cleaned up test RGW user: %s", uid)
 		}
@@ -318,35 +302,22 @@ func createTestRGWUserWithMultipleS3Keys(t *testing.T, uid, displayName, accessK
 func createTestRGWUserWithoutKeys(t *testing.T, uid, displayName string) {
 	t.Helper()
 
-	cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "create",
-		"--uid="+uid,
-		"--display-name="+displayName,
-	)
-	output, err := cmd.CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
 	if err != nil {
-		t.Fatalf("Failed to create test RGW user: %v\nOutput: %s", err, string(output))
+		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
 
-	cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "--format=json", "user", "info", "--uid="+uid)
-	output, err = cmd.CombinedOutput()
+	userInfo, err := cephTestClusterCLI.RgwUserInfo(ctx, uid)
 	if err != nil {
-		t.Fatalf("Failed to get user info: %v\nOutput: %s", err, string(output))
-	}
-
-	var userInfo RadosgwUserInfo
-	if err := json.Unmarshal(output, &userInfo); err != nil {
-		t.Fatalf("Failed to parse user info: %v\nOutput: %s", err, string(output))
+		t.Fatalf("Failed to get user info: %v", err)
 	}
 
 	for _, key := range userInfo.Keys {
-		cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "key", "rm",
-			"--uid="+uid,
-			"--key-type=s3",
-			"--access-key="+key.AccessKey,
-		)
-		output, err = cmd.CombinedOutput()
-		if err != nil {
-			t.Fatalf("Failed to remove auto-generated key: %v\nOutput: %s", err, string(output))
+		if err := cephTestClusterCLI.RgwKeyRemove(ctx, uid, key.AccessKey); err != nil {
+			t.Fatalf("Failed to remove auto-generated key: %v", err)
 		}
 		t.Logf("Removed auto-generated key %s from user %s", key.AccessKey, uid)
 	}
@@ -354,10 +325,11 @@ func createTestRGWUserWithoutKeys(t *testing.T, uid, displayName string) {
 	t.Logf("Created test RGW user without keys: %s", uid)
 
 	t.Cleanup(func() {
-		cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "user", "rm", "--uid="+uid, "--purge-data")
-		output, err := cmd.CombinedOutput()
-		if err != nil {
-			t.Logf("Warning: Failed to cleanup test RGW user %s: %v\nOutput: %s", uid, err, string(output))
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanupCancel()
+
+		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
+			t.Logf("Warning: Failed to cleanup test RGW user %s: %v", uid, err)
 		} else {
 			t.Logf("Cleaned up test RGW user: %s", uid)
 		}
@@ -379,24 +351,23 @@ func TestAccCephRGWS3KeyDataSource_ambiguousResults(t *testing.T) {
 		PreCheck: func() {
 			createTestRGWUserWithoutKeys(t, testUID, "Test Ambiguous S3 Key User")
 
-			cmd := exec.Command("radosgw-admin", "--conf", testConfPath, "key", "create",
-				"--uid="+testUID,
-				"--access-key="+accessKey1,
-				"--secret-key="+secretKey1,
-			)
-			output, err := cmd.CombinedOutput()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			_, err := cephTestClusterCLI.RgwKeyCreate(ctx, testUID, &RgwKeyCreateOptions{
+				AccessKey: accessKey1,
+				SecretKey: secretKey1,
+			})
 			if err != nil {
-				t.Fatalf("Failed to create first key: %v\nOutput: %s", err, string(output))
+				t.Fatalf("Failed to create first key: %v", err)
 			}
 
-			cmd = exec.Command("radosgw-admin", "--conf", testConfPath, "key", "create",
-				"--uid="+testUID,
-				"--access-key="+accessKey2,
-				"--secret-key="+secretKey2,
-			)
-			output, err = cmd.CombinedOutput()
+			_, err = cephTestClusterCLI.RgwKeyCreate(ctx, testUID, &RgwKeyCreateOptions{
+				AccessKey: accessKey2,
+				SecretKey: secretKey2,
+			})
 			if err != nil {
-				t.Fatalf("Failed to create second key: %v\nOutput: %s", err, string(output))
+				t.Fatalf("Failed to create second key: %v", err)
 			}
 
 			t.Logf("Created user %s with two keys", testUID)
