@@ -1266,18 +1266,7 @@ type CephAPIMgrModule struct {
 }
 
 type CephAPIMgrModuleOption struct {
-	Name         string      `json:"name"`
-	Type         string      `json:"type"`
-	Level        string      `json:"level"`
-	Flags        int         `json:"flags"`
 	DefaultValue interface{} `json:"default_value"`
-	Min          interface{} `json:"min"`
-	Max          interface{} `json:"max"`
-	EnumAllowed  []string    `json:"enum_allowed"`
-	Desc         string      `json:"desc"`
-	LongDesc     string      `json:"long_desc"`
-	Tags         []string    `json:"tags"`
-	SeeAlso      []string    `json:"see_also"`
 }
 
 func (c *CephAPIClient) MgrListModules(ctx context.Context) ([]CephAPIMgrModule, error) {
