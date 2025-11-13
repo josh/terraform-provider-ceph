@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -39,6 +41,7 @@ type CrushRuleResourceModel struct {
 	Type          types.Int64  `tfsdk:"type"`
 	MinSize       types.Int64  `tfsdk:"min_size"`
 	MaxSize       types.Int64  `tfsdk:"max_size"`
+	Steps         types.List   `tfsdk:"steps"`
 }
 
 func (r *CrushRuleResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -129,6 +132,30 @@ func (r *CrushRuleResource) Schema(ctx context.Context, req resource.SchemaReque
 					int64planmodifier.UseStateForUnknown(),
 				},
 			},
+			"steps": resourceSchema.ListNestedAttribute{
+				MarkdownDescription: "Detailed CRUSH rule steps in execution order.",
+				Computed:            true,
+				NestedObject: resourceSchema.NestedAttributeObject{
+					Attributes: map[string]resourceSchema.Attribute{
+						"op": resourceSchema.StringAttribute{
+							MarkdownDescription: "CRUSH step opcode (e.g., 'take', 'chooseleaf').",
+							Computed:            true,
+						},
+						"num": resourceSchema.Int64Attribute{
+							MarkdownDescription: "Optional numeric argument for the step.",
+							Computed:            true,
+						},
+						"type": resourceSchema.StringAttribute{
+							MarkdownDescription: "CRUSH bucket type referenced by the step.",
+							Computed:            true,
+						},
+						"item": resourceSchema.Int64Attribute{
+							MarkdownDescription: "CRUSH bucket or ID targeted by the step, when applicable.",
+							Computed:            true,
+						},
+					},
+				},
+			},
 		},
 	}
 }
@@ -197,7 +224,10 @@ func (r *CrushRuleResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	r.updateModelFromAPI(&data, rule)
+	if diags := r.updateModelFromAPI(&data, rule); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -220,7 +250,10 @@ func (r *CrushRuleResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	r.updateModelFromAPI(&data, rule)
+	if diags := r.updateModelFromAPI(&data, rule); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -266,15 +299,75 @@ func (r *CrushRuleResource) ImportState(ctx context.Context, req resource.Import
 	var data CrushRuleResourceModel
 	data.Name = types.StringValue(ruleName)
 
-	r.updateModelFromAPI(&data, rule)
+	if diags := r.updateModelFromAPI(&data, rule); diags.HasError() {
+		resp.Diagnostics.Append(diags...)
+		return
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *CrushRuleResource) updateModelFromAPI(data *CrushRuleResourceModel, rule *CephAPICrushRule) {
+func (r *CrushRuleResource) updateModelFromAPI(data *CrushRuleResourceModel, rule *CephAPICrushRule) diag.Diagnostics {
+	var diags diag.Diagnostics
+
 	data.RuleID = types.Int64Value(int64(rule.RuleID))
 	data.Ruleset = types.Int64Value(int64(rule.Ruleset))
 	data.Type = types.Int64Value(int64(rule.Type))
 	data.MinSize = types.Int64Value(int64(rule.MinSize))
 	data.MaxSize = types.Int64Value(int64(rule.MaxSize))
+
+	stepsObjects := make([]attr.Value, 0, len(rule.Steps))
+	for _, step := range rule.Steps {
+		stepAttrs := map[string]attr.Value{
+			"op":   types.StringValue(step.Op),
+			"type": types.StringValue(step.Type),
+		}
+
+		if step.Num != 0 {
+			stepAttrs["num"] = types.Int64Value(int64(step.Num))
+		} else {
+			stepAttrs["num"] = types.Int64Null()
+		}
+
+		if step.Item != 0 {
+			stepAttrs["item"] = types.Int64Value(int64(step.Item))
+		} else {
+			stepAttrs["item"] = types.Int64Null()
+		}
+
+		stepObj, stepDiags := types.ObjectValue(
+			map[string]attr.Type{
+				"op":   types.StringType,
+				"num":  types.Int64Type,
+				"type": types.StringType,
+				"item": types.Int64Type,
+			},
+			stepAttrs,
+		)
+		diags.Append(stepDiags...)
+		if diags.HasError() {
+			return diags
+		}
+
+		stepsObjects = append(stepsObjects, stepObj)
+	}
+
+	stepsValue, stepDiags := types.ListValue(
+		types.ObjectType{
+			AttrTypes: map[string]attr.Type{
+				"op":   types.StringType,
+				"num":  types.Int64Type,
+				"type": types.StringType,
+				"item": types.Int64Type,
+			},
+		},
+		stepsObjects,
+	)
+	diags.Append(stepDiags...)
+	if diags.HasError() {
+		return diags
+	}
+	data.Steps = stepsValue
+
+	return diags
 }
