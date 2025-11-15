@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	testDashboardURL   string
+	testDashboardURL   = "http://127.0.0.1:8080/"
 	testClusterWG      *sync.WaitGroup
 	testConfPath       string
 	cephTestClusterCLI *CephCLI
