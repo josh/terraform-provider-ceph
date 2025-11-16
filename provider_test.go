@@ -48,6 +48,8 @@ var testAccProtoV6ProviderFactoriesWithEcho = map[string]func() (tfprotov6.Provi
 func TestMain(m *testing.M) {
 	flag.Parse()
 
+	cephDaemonLogs = &LogDemux{}
+
 	var code int
 
 	if os.Getenv("TF_ACC") != "" {
@@ -63,8 +65,6 @@ func TestMain(m *testing.M) {
 			fmt.Fprintf(os.Stderr, "failed to create temp dir: %v\n", err)
 			os.Exit(1)
 		}
-
-		cephDaemonLogs = &LogDemux{}
 		var confPath string
 		var setupBuffer bytes.Buffer
 		detachLogs := cephDaemonLogs.Attach(&setupBuffer)
