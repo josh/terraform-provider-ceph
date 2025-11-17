@@ -40,7 +40,7 @@ jobs:
       - name: Tests
         timeout-minutes: 26
         run: |
-          go test -v -timeout 25m
+          go test -timeout 25m
         env:
           TF_ACC: "1"
           TF_LOG_PROVIDER_CEPH: "trace"
