@@ -320,9 +320,9 @@ type CephAPIClusterUserCapability struct {
 }
 
 type CephAPIClusterUserCreateRequest struct {
-	UserEntity   string                         `json:"user_entity,omitempty"`
+	UserEntity   *string                        `json:"user_entity,omitempty"`
 	Capabilities []CephAPIClusterUserCapability `json:"capabilities,omitempty"`
-	ImportData   string                         `json:"import_data,omitempty"`
+	ImportData   *string                        `json:"import_data,omitempty"`
 }
 
 func (c CephCaps) asClusterCapabilities() []CephAPIClusterUserCapability {
@@ -350,9 +350,14 @@ func (c CephCaps) asClusterCapabilities() []CephAPIClusterUserCapability {
 func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, capabilities CephCaps) error {
 	capabilitySlice := capabilities.asClusterCapabilities()
 
-	requestBody := CephAPIClusterUserCreateRequest{
-		UserEntity:   entity,
-		Capabilities: capabilitySlice,
+	requestBody := CephAPIClusterUserCreateRequest{}
+
+	if entity != "" {
+		requestBody.UserEntity = &entity
+	}
+
+	if len(capabilitySlice) > 0 {
+		requestBody.Capabilities = capabilitySlice
 	}
 
 	jsonPayload, err := json.Marshal(requestBody)
@@ -387,8 +392,10 @@ func (c *CephAPIClient) ClusterCreateUser(ctx context.Context, entity string, ca
 }
 
 func (c *CephAPIClient) ClusterImportUser(ctx context.Context, importData string) error {
-	requestBody := CephAPIClusterUserCreateRequest{
-		ImportData: importData,
+	requestBody := CephAPIClusterUserCreateRequest{}
+
+	if importData != "" {
+		requestBody.ImportData = &importData
 	}
 
 	jsonPayload, err := json.Marshal(requestBody)
