@@ -172,7 +172,11 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 			"auth_allow_insecure_global_id_reclaim": "true",
 			"pid_file":                              filepath.Join(tmpDir, "$type.$id.pid"),
 			"admin_socket":                          filepath.Join(tmpDir, "$name.$pid.asok"),
+			"crash_dir":                             filepath.Join(tmpDir, "crash"),
+			"exporter_sock_dir":                     filepath.Join(tmpDir, "run"),
+			"immutable_object_cache_sock":           filepath.Join(tmpDir, "run", "immutable_object_cache.sock"),
 			"keyring":                               filepath.Join(tmpDir, "keyring"),
+			"run_dir":                               filepath.Join(tmpDir, "run"),
 			"log_to_file":                           "false",
 			"log_to_stderr":                         "true",
 			"debug_ms":                              "0",
@@ -258,6 +262,16 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 	}
 
 	err = os.MkdirAll(filepath.Join(tmpDir, "rgw", "ceph-rgw1"), 0o755)
+	if err != nil {
+		return confPath, err
+	}
+
+	err = os.MkdirAll(filepath.Join(tmpDir, "run"), 0o755)
+	if err != nil {
+		return confPath, err
+	}
+
+	err = os.MkdirAll(filepath.Join(tmpDir, "crash"), 0o755)
 	if err != nil {
 		return confPath, err
 	}
