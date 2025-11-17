@@ -588,6 +588,85 @@ func (c *CephAPIClient) RGWGetBucket(ctx context.Context, bucketName string) (Ce
 	return bucket, nil
 }
 
+type CephAPIRGWBucketCreateRequest struct {
+	Bucket     string  `json:"bucket"`
+	UID        string  `json:"uid"`
+	Zonegroup  *string `json:"zonegroup,omitempty"`
+	DaemonName *string `json:"daemon_name,omitempty"`
+}
+
+func (c *CephAPIClient) RGWCreateBucket(ctx context.Context, req CephAPIRGWBucketCreateRequest) (CephAPIRGWBucket, error) {
+	url := c.endpoint.JoinPath("/api/rgw/bucket").String()
+
+	reqBody, err := json.Marshal(req)
+	if err != nil {
+		return CephAPIRGWBucket{}, fmt.Errorf("unable to marshal request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
+	if err != nil {
+		return CephAPIRGWBucket{}, fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	logRequest := logAPIRequest(ctx, httpReq)
+	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
+	if err != nil {
+		return CephAPIRGWBucket{}, fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusCreated && httpResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(httpResp.Body)
+		return CephAPIRGWBucket{}, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return CephAPIRGWBucket{}, fmt.Errorf("unable to read response body: %w", err)
+	}
+
+	var bucket CephAPIRGWBucket
+	err = json.Unmarshal(body, &bucket)
+	if err != nil {
+		return CephAPIRGWBucket{}, fmt.Errorf("unable to decode JSON response: %w", err)
+	}
+
+	return bucket, nil
+}
+
+func (c *CephAPIClient) RGWDeleteBucket(ctx context.Context, bucketName string) error {
+	url := c.endpoint.JoinPath("/api/rgw/bucket", bucketName).String()
+
+	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
+	if err != nil {
+		return fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	logRequest := logAPIRequest(ctx, httpReq)
+	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
+	if err != nil {
+		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusNoContent && httpResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(httpResp.Body)
+		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-rgw-user>
 
 func (c *CephAPIClient) RGWListUserNames(ctx context.Context) ([]string, error) {

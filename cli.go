@@ -482,3 +482,35 @@ func (c *CephCLI) PoolApplicationEnable(ctx context.Context, poolName, applicati
 
 	return nil
 }
+
+type RgwBucketInfo struct {
+	Bucket string `json:"bucket"`
+	Owner  string `json:"owner"`
+	ID     string `json:"id"`
+}
+
+func (c *CephCLI) RgwBucketInfo(ctx context.Context, bucket string) (*RgwBucketInfo, error) {
+	cmd := exec.CommandContext(ctx, "radosgw-admin", "--conf", c.confPath, "--format=json", "bucket", "stats", "--bucket="+bucket)
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get rgw bucket info for %s: %w", bucket, err)
+	}
+
+	var bucketInfo RgwBucketInfo
+	if err := json.Unmarshal(output, &bucketInfo); err != nil {
+		return nil, fmt.Errorf("failed to parse rgw bucket info output: %w", err)
+	}
+
+	return &bucketInfo, nil
+}
+
+func (c *CephCLI) RgwBucketRemove(ctx context.Context, bucket string) error {
+	args := []string{"--conf", c.confPath, "bucket", "rm", "--bucket=" + bucket, "--purge-objects"}
+
+	cmd := exec.CommandContext(ctx, "radosgw-admin", args...)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to remove rgw bucket %s: %w", bucket, err)
+	}
+
+	return nil
+}
