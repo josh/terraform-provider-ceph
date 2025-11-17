@@ -503,14 +503,3 @@ func (c *CephCLI) RgwBucketInfo(ctx context.Context, bucket string) (*RgwBucketI
 
 	return &bucketInfo, nil
 }
-
-func (c *CephCLI) RgwBucketRemove(ctx context.Context, bucket string) error {
-	args := []string{"--conf", c.confPath, "bucket", "rm", "--bucket=" + bucket, "--purge-objects"}
-
-	cmd := exec.CommandContext(ctx, "radosgw-admin", args...)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to remove rgw bucket %s: %w", bucket, err)
-	}
-
-	return nil
-}
