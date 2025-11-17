@@ -20,15 +20,18 @@ type ErasureCodeProfileDataSource struct {
 }
 
 type ErasureCodeProfileDataSourceModel struct {
-	Name               types.String `tfsdk:"name"`
-	K                  types.Int64  `tfsdk:"k"`
-	M                  types.Int64  `tfsdk:"m"`
-	Plugin             types.String `tfsdk:"plugin"`
-	CrushFailureDomain types.String `tfsdk:"crush_failure_domain"`
-	Technique          types.String `tfsdk:"technique"`
-	CrushRoot          types.String `tfsdk:"crush_root"`
-	CrushDeviceClass   types.String `tfsdk:"crush_device_class"`
-	Directory          types.String `tfsdk:"directory"`
+	Name                      types.String `tfsdk:"name"`
+	K                         types.Int64  `tfsdk:"k"`
+	M                         types.Int64  `tfsdk:"m"`
+	Plugin                    types.String `tfsdk:"plugin"`
+	CrushFailureDomain        types.String `tfsdk:"crush_failure_domain"`
+	CrushMinFailureDomain     types.Int64  `tfsdk:"crush_min_failure_domain"`
+	CrushOsdsPerFailureDomain types.Int64  `tfsdk:"crush_osds_per_failure_domain"`
+	PacketSize                types.Int64  `tfsdk:"packet_size"`
+	Technique                 types.String `tfsdk:"technique"`
+	CrushRoot                 types.String `tfsdk:"crush_root"`
+	CrushDeviceClass          types.String `tfsdk:"crush_device_class"`
+	Directory                 types.String `tfsdk:"directory"`
 }
 
 func (d *ErasureCodeProfileDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -57,6 +60,18 @@ func (d *ErasureCodeProfileDataSource) Schema(ctx context.Context, req datasourc
 			},
 			"crush_failure_domain": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The CRUSH failure domain for placement",
+				Computed:            true,
+			},
+			"crush_min_failure_domain": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "Minimum number of CRUSH failure domains required (Ceph 'crush-min-size').",
+				Computed:            true,
+			},
+			"crush_osds_per_failure_domain": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "Number of OSDs placed per CRUSH failure domain (Ceph 'crush-osds-per-failure-domain').",
+				Computed:            true,
+			},
+			"packet_size": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "Packet size used by the erasure coding plugin.",
 				Computed:            true,
 			},
 			"technique": dataSourceSchema.StringAttribute{
@@ -121,6 +136,21 @@ func (d *ErasureCodeProfileDataSource) Read(ctx context.Context, req datasource.
 	data.M = types.Int64Value(int64(profile.M))
 	data.Plugin = types.StringValue(profile.Plugin)
 	data.CrushFailureDomain = types.StringValue(profile.CrushFailureDomain)
+	if profile.CrushMinFailureDomain != nil {
+		data.CrushMinFailureDomain = types.Int64Value(int64(*profile.CrushMinFailureDomain))
+	} else {
+		data.CrushMinFailureDomain = types.Int64Null()
+	}
+	if profile.CrushOsdsPerFailureDomain != nil {
+		data.CrushOsdsPerFailureDomain = types.Int64Value(int64(*profile.CrushOsdsPerFailureDomain))
+	} else {
+		data.CrushOsdsPerFailureDomain = types.Int64Null()
+	}
+	if profile.PacketSize != nil {
+		data.PacketSize = types.Int64Value(int64(*profile.PacketSize))
+	} else {
+		data.PacketSize = types.Int64Null()
+	}
 	if profile.Technique != "" {
 		data.Technique = types.StringValue(profile.Technique)
 	} else {

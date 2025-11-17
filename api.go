@@ -1989,15 +1989,18 @@ func (c *CephAPIClient) GetCrushRule(ctx context.Context, name string) (*CephAPI
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-erasure_code_profile>
 
 type CephAPIErasureCodeProfile struct {
-	Name               string `json:"name"`
-	K                  int    `json:"k"`
-	M                  int    `json:"m"`
-	Plugin             string `json:"plugin"`
-	CrushFailureDomain string `json:"crush-failure-domain"`
-	Technique          string `json:"technique,omitempty"`
-	CrushRoot          string `json:"crush-root,omitempty"`
-	CrushDeviceClass   string `json:"crush-device-class,omitempty"`
-	Directory          string `json:"directory,omitempty"`
+	Name                      string `json:"name"`
+	K                         int    `json:"k"`
+	M                         int    `json:"m"`
+	Plugin                    string `json:"plugin"`
+	CrushFailureDomain        string `json:"crush-failure-domain"`
+	CrushMinFailureDomain     *int   `json:"crush-min-size,omitempty"`
+	CrushOsdsPerFailureDomain *int   `json:"crush-osds-per-failure-domain,omitempty"`
+	PacketSize                *int   `json:"packet-size,omitempty"`
+	Technique                 string `json:"technique,omitempty"`
+	CrushRoot                 string `json:"crush-root,omitempty"`
+	CrushDeviceClass          string `json:"crush-device-class,omitempty"`
+	Directory                 string `json:"directory,omitempty"`
 }
 
 func (c *CephAPIClient) ListErasureCodeProfiles(ctx context.Context) ([]CephAPIErasureCodeProfile, error) {
@@ -2042,15 +2045,18 @@ func (c *CephAPIClient) ListErasureCodeProfiles(ctx context.Context) ([]CephAPIE
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-erasure_code_profile>
 
 type CephAPIErasureCodeProfileCreateRequest struct {
-	Name               string  `json:"name"`
-	K                  *string `json:"k,omitempty"`
-	M                  *string `json:"m,omitempty"`
-	Plugin             *string `json:"plugin,omitempty"`
-	CrushFailureDomain *string `json:"crush-failure-domain,omitempty"`
-	Technique          *string `json:"technique,omitempty"`
-	CrushRoot          *string `json:"crush-root,omitempty"`
-	CrushDeviceClass   *string `json:"crush-device-class,omitempty"`
-	Directory          *string `json:"directory,omitempty"`
+	Name                      string  `json:"name"`
+	K                         *string `json:"k,omitempty"`
+	M                         *string `json:"m,omitempty"`
+	Plugin                    *string `json:"plugin,omitempty"`
+	CrushFailureDomain        *string `json:"crush-failure-domain,omitempty"`
+	CrushMinFailureDomain     *string `json:"crush-min-size,omitempty"`
+	CrushOsdsPerFailureDomain *string `json:"crush-osds-per-failure-domain,omitempty"`
+	PacketSize                *string `json:"packet-size,omitempty"`
+	Technique                 *string `json:"technique,omitempty"`
+	CrushRoot                 *string `json:"crush-root,omitempty"`
+	CrushDeviceClass          *string `json:"crush-device-class,omitempty"`
+	Directory                 *string `json:"directory,omitempty"`
 }
 
 func (c *CephAPIClient) CreateErasureCodeProfile(ctx context.Context, req CephAPIErasureCodeProfileCreateRequest) error {

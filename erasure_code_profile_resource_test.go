@@ -154,6 +154,9 @@ func TestAccCephErasureCodeProfileResource_withOptionalParams(t *testing.T) {
 					  m                    = 1
 					  plugin               = "jerasure"
 					  crush_failure_domain = "osd"
+					  crush_min_failure_domain      = 2
+					  crush_osds_per_failure_domain = 1
+					  packet_size          = 4096
 					  technique            = "reed_sol_van"
 					  crush_device_class   = "hdd"
 					}
@@ -171,6 +174,21 @@ func TestAccCephErasureCodeProfileResource_withOptionalParams(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"ceph_erasure_code_profile.test",
+						tfjsonpath.New("crush_min_failure_domain"),
+						knownvalue.Int64Exact(2),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_erasure_code_profile.test",
+						tfjsonpath.New("crush_osds_per_failure_domain"),
+						knownvalue.Int64Exact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_erasure_code_profile.test",
+						tfjsonpath.New("packet_size"),
+						knownvalue.Int64Exact(4096),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_erasure_code_profile.test",
 						tfjsonpath.New("technique"),
 						knownvalue.StringExact("reed_sol_van"),
 					),
@@ -184,6 +202,9 @@ func TestAccCephErasureCodeProfileResource_withOptionalParams(t *testing.T) {
 					checkCephErasureCodeProfileExists(t, profileName),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "plugin", "jerasure"),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "technique", "reed_sol_van"),
+					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "crush_min_failure_domain", "2"),
+					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "crush_osds_per_failure_domain", "1"),
+					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "packet_size", "4096"),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "crush_device_class", "hdd"),
 				),
 			},

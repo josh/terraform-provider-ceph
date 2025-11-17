@@ -26,15 +26,18 @@ type ErasureCodeProfileResource struct {
 }
 
 type ErasureCodeProfileResourceModel struct {
-	Name               types.String `tfsdk:"name"`
-	K                  types.Int64  `tfsdk:"k"`
-	M                  types.Int64  `tfsdk:"m"`
-	Plugin             types.String `tfsdk:"plugin"`
-	CrushFailureDomain types.String `tfsdk:"crush_failure_domain"`
-	Technique          types.String `tfsdk:"technique"`
-	CrushRoot          types.String `tfsdk:"crush_root"`
-	CrushDeviceClass   types.String `tfsdk:"crush_device_class"`
-	Directory          types.String `tfsdk:"directory"`
+	Name                      types.String `tfsdk:"name"`
+	K                         types.Int64  `tfsdk:"k"`
+	M                         types.Int64  `tfsdk:"m"`
+	Plugin                    types.String `tfsdk:"plugin"`
+	CrushFailureDomain        types.String `tfsdk:"crush_failure_domain"`
+	CrushMinFailureDomain     types.Int64  `tfsdk:"crush_min_failure_domain"`
+	CrushOsdsPerFailureDomain types.Int64  `tfsdk:"crush_osds_per_failure_domain"`
+	PacketSize                types.Int64  `tfsdk:"packet_size"`
+	Technique                 types.String `tfsdk:"technique"`
+	CrushRoot                 types.String `tfsdk:"crush_root"`
+	CrushDeviceClass          types.String `tfsdk:"crush_device_class"`
+	Directory                 types.String `tfsdk:"directory"`
 }
 
 func (r *ErasureCodeProfileResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -86,6 +89,33 @@ func (r *ErasureCodeProfileResource) Schema(ctx context.Context, req resource.Sc
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"crush_min_failure_domain": resourceSchema.Int64Attribute{
+				MarkdownDescription: "Minimum number of CRUSH failure domains required to satisfy placement (maps to Ceph's 'crush-min-size').",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"crush_osds_per_failure_domain": resourceSchema.Int64Attribute{
+				MarkdownDescription: "Number of OSDs to place in each CRUSH failure domain (maps to Ceph's 'crush-osds-per-failure-domain').",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"packet_size": resourceSchema.Int64Attribute{
+				MarkdownDescription: "Packet size used by the erasure coding plugin (maps to Ceph's 'packet-size').",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
+					int64planmodifier.UseStateForUnknown(),
 				},
 			},
 			"technique": resourceSchema.StringAttribute{
@@ -175,6 +205,21 @@ func (r *ErasureCodeProfileResource) Create(ctx context.Context, req resource.Cr
 	if !data.CrushFailureDomain.IsNull() && !data.CrushFailureDomain.IsUnknown() {
 		val := data.CrushFailureDomain.ValueString()
 		createReq.CrushFailureDomain = &val
+	}
+
+	if !data.CrushMinFailureDomain.IsNull() && !data.CrushMinFailureDomain.IsUnknown() {
+		val := fmt.Sprintf("%d", data.CrushMinFailureDomain.ValueInt64())
+		createReq.CrushMinFailureDomain = &val
+	}
+
+	if !data.CrushOsdsPerFailureDomain.IsNull() && !data.CrushOsdsPerFailureDomain.IsUnknown() {
+		val := fmt.Sprintf("%d", data.CrushOsdsPerFailureDomain.ValueInt64())
+		createReq.CrushOsdsPerFailureDomain = &val
+	}
+
+	if !data.PacketSize.IsNull() && !data.PacketSize.IsUnknown() {
+		val := fmt.Sprintf("%d", data.PacketSize.ValueInt64())
+		createReq.PacketSize = &val
 	}
 
 	if !data.Technique.IsNull() && !data.Technique.IsUnknown() {
@@ -289,6 +334,21 @@ func (r *ErasureCodeProfileResource) updateModelFromAPI(data *ErasureCodeProfile
 	data.M = types.Int64Value(int64(profile.M))
 	data.Plugin = types.StringValue(profile.Plugin)
 	data.CrushFailureDomain = types.StringValue(profile.CrushFailureDomain)
+	if profile.CrushMinFailureDomain != nil {
+		data.CrushMinFailureDomain = types.Int64Value(int64(*profile.CrushMinFailureDomain))
+	} else {
+		data.CrushMinFailureDomain = types.Int64Null()
+	}
+	if profile.CrushOsdsPerFailureDomain != nil {
+		data.CrushOsdsPerFailureDomain = types.Int64Value(int64(*profile.CrushOsdsPerFailureDomain))
+	} else {
+		data.CrushOsdsPerFailureDomain = types.Int64Null()
+	}
+	if profile.PacketSize != nil {
+		data.PacketSize = types.Int64Value(int64(*profile.PacketSize))
+	} else {
+		data.PacketSize = types.Int64Null()
+	}
 	if profile.Technique != "" {
 		data.Technique = types.StringValue(profile.Technique)
 	} else {
