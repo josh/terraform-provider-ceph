@@ -729,52 +729,18 @@ type CephAPIRGWSubuser struct {
 	Permissions string `json:"permissions"`
 }
 
-type CephAPIRGWCaps struct {
-	Type string `json:"type"`
-	Perm string `json:"perm"`
-}
-
-type CephAPIRGWQuota struct {
-	Enabled    bool  `json:"enabled"`
-	CheckOnRaw bool  `json:"check_on_raw"`
-	MaxSize    int64 `json:"max_size"`
-	MaxSizeKB  int64 `json:"max_size_kb"`
-	MaxObjects int64 `json:"max_objects"`
-}
-
-type CephAPIRGWUserStats struct {
-	Size           int64 `json:"size"`
-	SizeActual     int64 `json:"size_actual"`
-	SizeUtilized   int64 `json:"size_utilized"`
-	SizeKB         int64 `json:"size_kb"`
-	SizeKBActual   int64 `json:"size_kb_actual"`
-	SizeKBUtilized int64 `json:"size_kb_utilized"`
-	NumObjects     int64 `json:"num_objects"`
-}
-
 type CephAPIRGWUser struct {
-	Tenant              string               `json:"tenant"`
-	UserID              string               `json:"user_id"`
-	DisplayName         string               `json:"display_name"`
-	Email               string               `json:"email"`
-	Suspended           int                  `json:"suspended"`
-	MaxBuckets          int                  `json:"max_buckets"`
-	Subusers            []CephAPIRGWSubuser  `json:"subusers"`
-	Keys                []CephAPIRGWS3Key    `json:"keys"`
-	SwiftKeys           []CephAPIRGWSwiftKey `json:"swift_keys"`
-	Caps                []CephAPIRGWCaps     `json:"caps"`
-	OpMask              string               `json:"op_mask"`
-	System              bool                 `json:"system"`
-	Admin               bool                 `json:"admin"`
-	DefaultPlacement    string               `json:"default_placement"`
-	DefaultStorageClass string               `json:"default_storage_class"`
-	PlacementTags       []string             `json:"placement_tags"`
-	BucketQuota         CephAPIRGWQuota      `json:"bucket_quota"`
-	UserQuota           CephAPIRGWQuota      `json:"user_quota"`
-	TempURLKeys         []json.RawMessage    `json:"temp_url_keys"`
-	Type                string               `json:"type"`
-	MFAIDs              []string             `json:"mfa_ids"`
-	Stats               *CephAPIRGWUserStats `json:"stats,omitempty"`
+	Tenant      string               `json:"tenant"`
+	UserID      string               `json:"user_id"`
+	DisplayName string               `json:"display_name"`
+	Email       string               `json:"email"`
+	Suspended   int                  `json:"suspended"`
+	MaxBuckets  int                  `json:"max_buckets"`
+	Subusers    []CephAPIRGWSubuser  `json:"subusers"`
+	Keys        []CephAPIRGWS3Key    `json:"keys"`
+	SwiftKeys   []CephAPIRGWSwiftKey `json:"swift_keys"`
+	System      bool                 `json:"system"`
+	Admin       bool                 `json:"admin"`
 }
 
 func (c *CephAPIClient) RGWGetUser(ctx context.Context, uid string) (CephAPIRGWUser, error) {
