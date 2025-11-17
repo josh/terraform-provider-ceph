@@ -784,13 +784,13 @@ func (c *CephAPIClient) RGWGetUser(ctx context.Context, uid string) (CephAPIRGWU
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-rgw-user>
 
 type CephAPIRGWUserCreateRequest struct {
-	UID         string `json:"uid"`
-	DisplayName string `json:"display_name"`
-	Email       string `json:"email,omitempty"`
-	MaxBuckets  *int   `json:"max_buckets,omitempty"`
-	Suspended   *int   `json:"suspended,omitempty"`
-	System      *bool  `json:"system,omitempty"`
-	GenerateKey bool   `json:"generate_key"`
+	UID         string  `json:"uid"`
+	DisplayName string  `json:"display_name"`
+	Email       *string `json:"email,omitempty"`
+	MaxBuckets  *int    `json:"max_buckets,omitempty"`
+	Suspended   *int    `json:"suspended,omitempty"`
+	System      *bool   `json:"system,omitempty"`
+	GenerateKey bool    `json:"generate_key"`
 }
 
 func (c *CephAPIClient) RGWCreateUser(ctx context.Context, req CephAPIRGWUserCreateRequest) (CephAPIRGWUser, error) {

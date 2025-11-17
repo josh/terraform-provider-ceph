@@ -715,6 +715,7 @@ func TestAccCephRGWUserResource_emailUpdate(t *testing.T) {
 					checkCephRGWUserExists(t, testUID),
 					resource.TestCheckResourceAttr("ceph_rgw_user.test", "user_id", testUID),
 					resource.TestCheckNoResourceAttr("ceph_rgw_user.test", "email"),
+					checkCephRGWUserEmail(t, testUID, ""),
 				),
 			},
 			{
@@ -737,6 +738,28 @@ func TestAccCephRGWUserResource_emailUpdate(t *testing.T) {
 					checkCephRGWUserExists(t, testUID),
 					resource.TestCheckResourceAttr("ceph_rgw_user.test", "email", "newemail@example.com"),
 					checkCephRGWUserEmail(t, testUID, "newemail@example.com"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Email Update Test"
+					  email        = ""
+					}
+				`, testUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("email"),
+						knownvalue.StringExact(""),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "email", ""),
+					checkCephRGWUserEmail(t, testUID, ""),
 				),
 			},
 			{

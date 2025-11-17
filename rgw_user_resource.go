@@ -118,7 +118,8 @@ func (r *RGWUserResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	if !data.Email.IsNull() && !data.Email.IsUnknown() {
-		createReq.Email = data.Email.ValueString()
+		email := data.Email.ValueString()
+		createReq.Email = &email
 	}
 
 	if !data.MaxBuckets.IsNull() && !data.MaxBuckets.IsUnknown() {
@@ -284,9 +285,12 @@ func (r *RGWUserResource) ImportState(ctx context.Context, req resource.ImportSt
 func updateModelFromAPIUser(ctx context.Context, data *RGWUserResourceModel, user CephAPIRGWUser) {
 	data.UserID = types.StringValue(user.UserID)
 	data.DisplayName = types.StringValue(user.DisplayName)
-	if user.Email != "" {
+	switch {
+	case user.Email != "":
 		data.Email = types.StringValue(user.Email)
-	} else {
+	case !data.Email.IsNull() && !data.Email.IsUnknown():
+		data.Email = types.StringValue("")
+	default:
 		data.Email = types.StringNull()
 	}
 	data.MaxBuckets = types.Int64Value(int64(user.MaxBuckets))
