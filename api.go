@@ -1121,21 +1121,8 @@ type CephAPIClusterConfValue struct {
 
 type CephAPIClusterConf struct {
 	Name               string                    `json:"name"`
-	Type               string                    `json:"type"`
 	Level              string                    `json:"level"`
-	Desc               string                    `json:"desc"`
-	LongDesc           string                    `json:"long_desc"`
-	Default            interface{}               `json:"default"`
-	DaemonDefault      interface{}               `json:"daemon_default"`
-	Min                interface{}               `json:"min"`
-	Max                interface{}               `json:"max"`
 	CanUpdateAtRuntime bool                      `json:"can_update_at_runtime"`
-	SeeAlso            []string                  `json:"see_also"`
-	EnumValues         []string                  `json:"enum_values"`
-	Tags               []string                  `json:"tags"`
-	Services           []string                  `json:"services"`
-	Flags              []string                  `json:"flags"`
-	Source             string                    `json:"source,omitempty"`
 	Value              []CephAPIClusterConfValue `json:"value,omitempty"`
 }
 
