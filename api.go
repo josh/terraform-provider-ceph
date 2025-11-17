@@ -1647,29 +1647,25 @@ func (c *CephAPIClient) ListPools(ctx context.Context) ([]CephAPIPool, error) {
 
 type CephAPIPoolCreateRequest struct {
 	Pool                     string   `json:"pool"`
-	PoolType                 string   `json:"pool_type,omitempty"`
+	PoolType                 *string  `json:"pool_type,omitempty"`
 	PgNum                    *int     `json:"pg_num,omitempty"`
 	PgpNum                   *int     `json:"pgp_num,omitempty"`
-	CrushRule                string   `json:"crush_rule,omitempty"`
-	ErasureCodeProfile       string   `json:"erasure_code_profile,omitempty"`
+	CrushRule                *string  `json:"crush_rule,omitempty"`
+	ErasureCodeProfile       *string  `json:"erasure_code_profile,omitempty"`
 	ApplicationMetadata      []string `json:"application_metadata,omitempty"`
 	MinSize                  *int     `json:"min_size,omitempty"`
 	Size                     *int     `json:"size,omitempty"`
-	PgAutoscaleMode          string   `json:"pg_autoscale_mode,omitempty"`
+	PgAutoscaleMode          *string  `json:"pg_autoscale_mode,omitempty"`
 	TargetSizeRatio          *float64 `json:"target_size_ratio,omitempty"`
 	TargetSizeBytes          *int     `json:"target_size_bytes,omitempty"`
-	CompressionMode          string   `json:"compression_mode,omitempty"`
-	CompressionAlgorithm     string   `json:"compression_algorithm,omitempty"`
+	CompressionMode          *string  `json:"compression_mode,omitempty"`
+	CompressionAlgorithm     *string  `json:"compression_algorithm,omitempty"`
 	CompressionRequiredRatio *float64 `json:"compression_required_ratio,omitempty"`
 	CompressionMinBlobSize   *int     `json:"compression_min_blob_size,omitempty"`
 	CompressionMaxBlobSize   *int     `json:"compression_max_blob_size,omitempty"`
 }
 
 func (c *CephAPIClient) CreatePool(ctx context.Context, req CephAPIPoolCreateRequest) error {
-	if req.PoolType == "" {
-		return fmt.Errorf("pool_type is required")
-	}
-
 	jsonPayload, err := json.Marshal(req)
 	if err != nil {
 		return fmt.Errorf("unable to encode request payload: %w", err)
@@ -1776,11 +1772,11 @@ func (c *CephAPIClient) GetPool(ctx context.Context, poolName string) (*CephAPIP
 type CephAPIPoolUpdateRequest struct {
 	PgNum                    *int     `json:"pg_num,omitempty"`
 	PgpNum                   *int     `json:"pgp_num,omitempty"`
-	CrushRule                string   `json:"crush_rule,omitempty"`
+	CrushRule                *string  `json:"crush_rule,omitempty"`
 	Size                     *int     `json:"size,omitempty"`
-	PgAutoscaleMode          string   `json:"pg_autoscale_mode,omitempty"`
-	CompressionMode          string   `json:"compression_mode,omitempty"`
-	CompressionAlgorithm     string   `json:"compression_algorithm,omitempty"`
+	PgAutoscaleMode          *string  `json:"pg_autoscale_mode,omitempty"`
+	CompressionMode          *string  `json:"compression_mode,omitempty"`
+	CompressionAlgorithm     *string  `json:"compression_algorithm,omitempty"`
 	CompressionRequiredRatio *float64 `json:"compression_required_ratio,omitempty"`
 	CompressionMinBlobSize   *int     `json:"compression_min_blob_size,omitempty"`
 	CompressionMaxBlobSize   *int     `json:"compression_max_blob_size,omitempty"`
