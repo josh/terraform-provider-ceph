@@ -158,31 +158,38 @@ func (r *ErasureCodeProfileResource) Create(ctx context.Context, req resource.Cr
 	}
 
 	if !data.K.IsNull() && !data.K.IsUnknown() {
-		createReq.K = fmt.Sprintf("%d", data.K.ValueInt64())
+		val := fmt.Sprintf("%d", data.K.ValueInt64())
+		createReq.K = &val
 	}
 
 	if !data.M.IsNull() && !data.M.IsUnknown() {
-		createReq.M = fmt.Sprintf("%d", data.M.ValueInt64())
+		val := fmt.Sprintf("%d", data.M.ValueInt64())
+		createReq.M = &val
 	}
 
 	if !data.Plugin.IsNull() && !data.Plugin.IsUnknown() {
-		createReq.Plugin = data.Plugin.ValueString()
+		val := data.Plugin.ValueString()
+		createReq.Plugin = &val
 	}
 
 	if !data.CrushFailureDomain.IsNull() && !data.CrushFailureDomain.IsUnknown() {
-		createReq.CrushFailureDomain = data.CrushFailureDomain.ValueString()
+		val := data.CrushFailureDomain.ValueString()
+		createReq.CrushFailureDomain = &val
 	}
 
 	if !data.Technique.IsNull() && !data.Technique.IsUnknown() {
-		createReq.Technique = data.Technique.ValueString()
+		val := data.Technique.ValueString()
+		createReq.Technique = &val
 	}
 
 	if !data.CrushRoot.IsNull() && !data.CrushRoot.IsUnknown() {
-		createReq.CrushRoot = data.CrushRoot.ValueString()
+		val := data.CrushRoot.ValueString()
+		createReq.CrushRoot = &val
 	}
 
 	if !data.CrushDeviceClass.IsNull() && !data.CrushDeviceClass.IsUnknown() {
-		createReq.CrushDeviceClass = data.CrushDeviceClass.ValueString()
+		val := data.CrushDeviceClass.ValueString()
+		createReq.CrushDeviceClass = &val
 	}
 
 	err := r.client.CreateErasureCodeProfile(ctx, createReq)

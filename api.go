@@ -2014,15 +2014,15 @@ func (c *CephAPIClient) ListErasureCodeProfiles(ctx context.Context) ([]CephAPIE
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-erasure_code_profile>
 
 type CephAPIErasureCodeProfileCreateRequest struct {
-	Name               string `json:"name"`
-	K                  string `json:"k,omitempty"`
-	M                  string `json:"m,omitempty"`
-	Plugin             string `json:"plugin,omitempty"`
-	CrushFailureDomain string `json:"crush-failure-domain,omitempty"`
-	Technique          string `json:"technique,omitempty"`
-	CrushRoot          string `json:"crush-root,omitempty"`
-	CrushDeviceClass   string `json:"crush-device-class,omitempty"`
-	Directory          string `json:"directory,omitempty"`
+	Name               string  `json:"name"`
+	K                  *string `json:"k,omitempty"`
+	M                  *string `json:"m,omitempty"`
+	Plugin             *string `json:"plugin,omitempty"`
+	CrushFailureDomain *string `json:"crush-failure-domain,omitempty"`
+	Technique          *string `json:"technique,omitempty"`
+	CrushRoot          *string `json:"crush-root,omitempty"`
+	CrushDeviceClass   *string `json:"crush-device-class,omitempty"`
+	Directory          *string `json:"directory,omitempty"`
 }
 
 func (c *CephAPIClient) CreateErasureCodeProfile(ctx context.Context, req CephAPIErasureCodeProfileCreateRequest) error {
