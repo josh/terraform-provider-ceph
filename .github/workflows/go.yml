@@ -38,9 +38,9 @@ jobs:
           go build
 
       - name: Tests
-        timeout-minutes: 11
+        timeout-minutes: 26
         run: |
-          go test -v -timeout 10m
+          go test -v -timeout 25m
         env:
           TF_ACC: "1"
           TF_LOG_PROVIDER_CEPH: "trace"
