@@ -11,6 +11,7 @@ import (
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -60,8 +61,10 @@ func (r *CrushRuleResource) Schema(ctx context.Context, req resource.SchemaReque
 				},
 			},
 			"pool_type": resourceSchema.StringAttribute{
-				MarkdownDescription: "The type of pool this rule is for. Must be either 'replicated' or 'erasure'.",
-				Required:            true,
+				MarkdownDescription: "The type of pool this rule is for. Must be either 'replicated' or 'erasure'. Defaults to 'replicated'.",
+				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString("replicated"),
 				Validators: []validator.String{
 					stringvalidator.OneOf("replicated", "erasure"),
 				},
@@ -93,6 +96,8 @@ func (r *CrushRuleResource) Schema(ctx context.Context, req resource.SchemaReque
 			"root": resourceSchema.StringAttribute{
 				MarkdownDescription: "The CRUSH root for placement. Defaults to 'default' if not specified.",
 				Optional:            true,
+				Computed:            true,
+				Default:             stringdefault.StaticString("default"),
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},
@@ -191,19 +196,21 @@ func (r *CrushRuleResource) Create(ctx context.Context, req resource.CreateReque
 		Name:          data.Name.ValueString(),
 		PoolType:      data.PoolType.ValueString(),
 		FailureDomain: data.FailureDomain.ValueString(),
-		Root:          "default",
 	}
 
 	if !data.DeviceClass.IsNull() && !data.DeviceClass.IsUnknown() {
-		createReq.DeviceClass = data.DeviceClass.ValueString()
+		val := data.DeviceClass.ValueString()
+		createReq.DeviceClass = &val
 	}
 
 	if !data.Profile.IsNull() && !data.Profile.IsUnknown() {
-		createReq.Profile = data.Profile.ValueString()
+		val := data.Profile.ValueString()
+		createReq.Profile = &val
 	}
 
 	if !data.Root.IsNull() && !data.Root.IsUnknown() {
-		createReq.Root = data.Root.ValueString()
+		val := data.Root.ValueString()
+		createReq.Root = &val
 	}
 
 	err := r.client.CreateCrushRule(ctx, createReq)

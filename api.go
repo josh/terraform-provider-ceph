@@ -1848,12 +1848,12 @@ func (c *CephAPIClient) ListCrushRules(ctx context.Context) ([]CephAPICrushRule,
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-crush_rule>
 
 type CephAPICrushRuleCreateRequest struct {
-	Name          string `json:"name"`
-	PoolType      string `json:"pool_type"`
-	FailureDomain string `json:"failure_domain"`
-	DeviceClass   string `json:"device_class,omitempty"`
-	Profile       string `json:"profile,omitempty"`
-	Root          string `json:"root,omitempty"`
+	Name          string  `json:"name"`
+	PoolType      string  `json:"pool_type"`
+	FailureDomain string  `json:"failure_domain"`
+	DeviceClass   *string `json:"device_class,omitempty"`
+	Profile       *string `json:"profile,omitempty"`
+	Root          *string `json:"root,omitempty"`
 }
 
 func (c *CephAPIClient) CreateCrushRule(ctx context.Context, req CephAPICrushRuleCreateRequest) error {
