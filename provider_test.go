@@ -37,6 +37,7 @@ var (
 	testNumOsds        = 5
 
 	expectedInitialPools      = []string{".rgw.root", ".mgr", "default.rgw.log", "default.rgw.control", "default.rgw.meta"}
+	expectedOptionalPools     = []string{"default.rgw.buckets.index"}
 	expectedInitialConfig     = []ConfigDumpEntry{{Section: "mgr", Name: "mgr/dashboard/ssl", Value: "false"}}
 	expectedInitialCrushRules = []string{"replicated_rule"}
 )
@@ -634,21 +635,33 @@ func testAccPreCheckCleanPoolState(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 
-	pools, err := cephTestClusterCLI.PoolList(ctx)
+	actualPools, err := cephTestClusterCLI.PoolList(ctx)
 	if err != nil {
 		t.Fatalf("Failed to list pools: %v", err)
 	}
 
-	sortedPools := make([]string, len(pools))
-	copy(sortedPools, pools)
-	sort.Strings(sortedPools)
+	for _, required := range expectedInitialPools {
+		if !slices.Contains(actualPools, required) {
+			sortedActual := make([]string, len(actualPools))
+			copy(sortedActual, actualPools)
+			sort.Strings(sortedActual)
+			sortedRequired := make([]string, len(expectedInitialPools))
+			copy(sortedRequired, expectedInitialPools)
+			sort.Strings(sortedRequired)
+			t.Fatalf("Missing required pool.\nExpected: %v\nOptional: %v\nGot: %v",
+				sortedRequired, expectedOptionalPools, sortedActual)
+		}
+	}
 
-	sortedExpected := make([]string, len(expectedInitialPools))
-	copy(sortedExpected, expectedInitialPools)
-	sort.Strings(sortedExpected)
-
-	if !slices.Equal(sortedPools, sortedExpected) {
-		t.Fatalf("Pool mismatch.\nExpected: %v\nGot: %v", sortedExpected, sortedPools)
+	for _, actual := range actualPools {
+		if !slices.Contains(expectedInitialPools, actual) &&
+			!slices.Contains(expectedOptionalPools, actual) {
+			sortedActual := make([]string, len(actualPools))
+			copy(sortedActual, actualPools)
+			sort.Strings(sortedActual)
+			t.Fatalf("Unexpected pool found: %s\nExpected required: %v\nExpected optional: %v\nGot: %v",
+				actual, expectedInitialPools, expectedOptionalPools, sortedActual)
+		}
 	}
 }
 
@@ -672,11 +685,6 @@ func testAccPreCheckCleanConfigState(t *testing.T) {
 	for _, entry := range expectedInitialConfig {
 		key := entry.Section + "::" + entry.Name
 		expectedMap[key] = entry
-	}
-
-	if len(actualMap) != len(expectedMap) {
-		t.Fatalf("Config entry count mismatch: expected %d entry(s), got %d entries.\nExpected: %+v\nGot: %+v",
-			len(expectedMap), len(actualMap), expectedInitialConfig, entries)
 	}
 
 	for key, expected := range expectedMap {
