@@ -33,12 +33,13 @@ func TestAccCephErasureCodeProfileDataSource_k2m1(t *testing.T) {
 				t.Fatalf("Failed to create erasure code profile: %v", err)
 			}
 
-			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 30*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = cephTestClusterCLI.ErasureCodeProfileRemove(cleanupCtx, profileName)
+				if err := cephTestClusterCLI.ErasureCodeProfileRemove(cleanupCtx, profileName); err != nil {
+					t.Errorf("Failed to cleanup erasure code profile %s: %v", profileName, err)
+				}
 			})
 		},
 		Steps: []resource.TestStep{
@@ -101,12 +102,13 @@ func TestAccCephErasureCodeProfileDataSource_k3m2(t *testing.T) {
 				t.Fatalf("Failed to create erasure code profile: %v", err)
 			}
 
-			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 30*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = cephTestClusterCLI.ErasureCodeProfileRemove(cleanupCtx, profileName)
+				if err := cephTestClusterCLI.ErasureCodeProfileRemove(cleanupCtx, profileName); err != nil {
+					t.Errorf("Failed to cleanup erasure code profile %s: %v", profileName, err)
+				}
 			})
 		},
 		Steps: []resource.TestStep{

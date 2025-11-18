@@ -29,12 +29,13 @@ func TestAccCephPoolDataSource(t *testing.T) {
 				t.Fatalf("Failed to create pool: %v", err)
 			}
 
-			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
+				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
+				}
 			})
 		},
 		Steps: []resource.TestStep{
@@ -99,12 +100,13 @@ func TestAccCephPoolDataSource_erasureCoded(t *testing.T) {
 				t.Fatalf("Failed to create erasure coded pool: %v", err)
 			}
 
-			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
+				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
+				}
 			})
 		},
 		Steps: []resource.TestStep{
@@ -162,12 +164,13 @@ func TestAccCephPoolDataSource_withApplication(t *testing.T) {
 				t.Fatalf("Failed to enable application: %v", err)
 			}
 
-			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
+				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
+				}
 			})
 		},
 		Steps: []resource.TestStep{
@@ -234,12 +237,13 @@ func TestAccCephPoolDataSource_compression(t *testing.T) {
 				t.Fatalf("Failed to set compression required ratio: %v", err)
 			}
 
-			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
+				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
+				}
 			})
 		},
 		Steps: []resource.TestStep{
@@ -299,12 +303,13 @@ func TestAccCephPoolDataSource_configurationChanges(t *testing.T) {
 				t.Fatalf("Failed to create pool: %v", err)
 			}
 
-			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
+				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
+				}
 			})
 		},
 		Steps: []resource.TestStep{
@@ -406,12 +411,13 @@ func TestAccCephPoolDataSource_customPGCount(t *testing.T) {
 				t.Fatalf("Failed to create pool: %v", err)
 			}
 
-			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
+				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
+				}
 			})
 		},
 		Steps: []resource.TestStep{
@@ -470,12 +476,13 @@ func TestAccCephPoolDataSource_targetSize(t *testing.T) {
 				t.Fatalf("Failed to set target size bytes: %v", err)
 			}
 
-			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
+				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
+				}
 			})
 		},
 		Steps: []resource.TestStep{
@@ -534,12 +541,13 @@ func TestAccCephPoolDataSource_autoscaler(t *testing.T) {
 				t.Fatalf("Failed to set autoscale mode: %v", err)
 			}
 
-			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
+				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
+				}
 			})
 		},
 		Steps: []resource.TestStep{
@@ -593,12 +601,13 @@ func TestAccCephPoolDataSource_configuration(t *testing.T) {
 				t.Fatalf("Failed to set noscrub flag: %v", err)
 			}
 
-			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
+				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
+				}
 			})
 		},
 		Steps: []resource.TestStep{

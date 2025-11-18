@@ -33,12 +33,13 @@ func TestAccCephConfigValueDataSource(t *testing.T) {
 				t.Fatalf("Failed to set test config: %v", err)
 			}
 
-			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = cephTestClusterCLI.ConfigRemove(cleanupCtx, "global", configName)
+				if err := cephTestClusterCLI.ConfigRemove(cleanupCtx, "global", configName); err != nil {
+					t.Errorf("Failed to cleanup config global/%s: %v", configName, err)
+				}
 			})
 		},
 		Steps: []resource.TestStep{
@@ -107,13 +108,16 @@ func TestAccCephConfigValueDataSource_multipleSections(t *testing.T) {
 				t.Fatalf("Failed to set test config for mon: %v", err)
 			}
 
-			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = cephTestClusterCLI.ConfigRemove(cleanupCtx, "global", configName)
-				_ = cephTestClusterCLI.ConfigRemove(cleanupCtx, "mon", configName)
+				if err := cephTestClusterCLI.ConfigRemove(cleanupCtx, "global", configName); err != nil {
+					t.Errorf("Failed to cleanup config global/%s: %v", configName, err)
+				}
+				if err := cephTestClusterCLI.ConfigRemove(cleanupCtx, "mon", configName); err != nil {
+					t.Errorf("Failed to cleanup config mon/%s: %v", configName, err)
+				}
 			})
 		},
 		Steps: []resource.TestStep{
@@ -208,12 +212,13 @@ func TestAccCephConfigValueDataSource_readMaskedConfig(t *testing.T) {
 				t.Fatalf("Failed to set masked config via CLI: %v", err)
 			}
 
-			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
 
-				_ = cephTestClusterCLI.ConfigRemove(cleanupCtx, "osd/class:ssd", configName)
+				if err := cephTestClusterCLI.ConfigRemove(cleanupCtx, "osd/class:ssd", configName); err != nil {
+					t.Errorf("Failed to cleanup config osd/class:ssd/%s: %v", configName, err)
+				}
 			})
 		},
 		Steps: []resource.TestStep{

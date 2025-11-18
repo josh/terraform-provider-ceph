@@ -203,15 +203,12 @@ func createTestRGWUserWithSubuserWithoutKeys(t *testing.T, uid, displayName, sub
 
 	t.Logf("Created test RGW user: %s with subuser: %s", uid, subuser)
 
-	cleanupCtxParent := t.Context()
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cleanupCancel()
 
 		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
-			t.Logf("Warning: Failed to cleanup test RGW user %s: %v", uid, err)
-		} else {
-			t.Logf("Cleaned up test RGW user: %s", uid)
+			t.Logf("Note: cleanup of RGW user %s reported an error (may already be deleted): %v", uid, err)
 		}
 	})
 }
