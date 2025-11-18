@@ -25,6 +25,10 @@ func TestAccCephCrushRuleResource_replicated(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCephCrushRuleDestroy,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanCrushRuleState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -119,6 +123,10 @@ func TestAccCephCrushRuleResource_erasure(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCephCrushRuleDestroy,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanCrushRuleState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -243,6 +251,10 @@ func TestAccCephCrushRuleResource_withDeviceClass(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCephCrushRuleDestroy,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanCrushRuleState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),

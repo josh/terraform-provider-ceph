@@ -796,3 +796,33 @@ func (c *CephCLI) CheckHealth(ctx context.Context) error {
 
 	return nil
 }
+
+func (c *CephCLI) PoolList(ctx context.Context) ([]string, error) {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "pool", "ls", "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pools: %w", err)
+	}
+
+	var pools []string
+	if err := json.Unmarshal(output, &pools); err != nil {
+		return nil, fmt.Errorf("failed to parse pool list: %w", err)
+	}
+
+	return pools, nil
+}
+
+func (c *CephCLI) ConfigDump(ctx context.Context) ([]ConfigDumpEntry, error) {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "config", "dump", "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to dump config: %w", err)
+	}
+
+	var entries []ConfigDumpEntry
+	if err := json.Unmarshal(output, &entries); err != nil {
+		return nil, fmt.Errorf("failed to parse config dump: %w", err)
+	}
+
+	return entries, nil
+}

@@ -23,6 +23,10 @@ func TestAccCephConfigResource(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanConfigState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -94,6 +98,10 @@ func TestAccCephConfigResource_update(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanConfigState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -201,6 +209,10 @@ func TestAccCephConfigResource_multipleConfigs(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanConfigState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -271,6 +283,10 @@ func TestAccCephConfigResource_removeConfig(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanConfigState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -372,6 +388,10 @@ func TestAccCephConfigResource_import(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanConfigState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -419,6 +439,10 @@ func TestAccCephConfigResource_importMultiple(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanConfigState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -467,6 +491,10 @@ func TestAccCephConfigResource_MgrConfigRejection(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanConfigState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -493,6 +521,10 @@ func TestAccCephConfigResource_bulkImport(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanConfigState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -563,6 +595,10 @@ func TestAccCephConfigResource_nativeIntValue(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanConfigState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -644,6 +680,10 @@ func TestAccCephConfigResource_nativeBoolValue(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanConfigState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -723,6 +763,10 @@ func TestAccCephConfigResource_invalidSectionRejection(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanConfigState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -746,6 +790,10 @@ func TestAccCephConfigResource_numericTypeBoundaries(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanConfigState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -797,6 +845,10 @@ func TestAccCephConfigResource_partialUpdate(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanConfigState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -865,6 +917,10 @@ func TestAccCephConfigResource_differentSections(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanConfigState(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),

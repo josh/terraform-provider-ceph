@@ -21,6 +21,7 @@ func TestAccCephPoolDataSource(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanPoolState(t)
 
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
@@ -92,6 +93,7 @@ func TestAccCephPoolDataSource_erasureCoded(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanPoolState(t)
 
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
@@ -152,6 +154,7 @@ func TestAccCephPoolDataSource_withApplication(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanPoolState(t)
 
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
@@ -217,6 +220,7 @@ func TestAccCephPoolDataSource_compression(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanPoolState(t)
 
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
@@ -295,6 +299,7 @@ func TestAccCephPoolDataSource_configurationChanges(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanPoolState(t)
 
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
@@ -403,6 +408,7 @@ func TestAccCephPoolDataSource_customPGCount(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanPoolState(t)
 
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
@@ -460,6 +466,7 @@ func TestAccCephPoolDataSource_targetSize(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanPoolState(t)
 
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
@@ -529,6 +536,7 @@ func TestAccCephPoolDataSource_autoscaler(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanPoolState(t)
 
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
@@ -589,6 +597,7 @@ func TestAccCephPoolDataSource_configuration(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
+			testAccPreCheckCleanPoolState(t)
 
 			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
