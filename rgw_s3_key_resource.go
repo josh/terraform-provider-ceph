@@ -210,7 +210,7 @@ func (r *RGWS3KeyResource) Create(ctx context.Context, req resource.CreateReques
 		}
 	}
 
-	updateModelFromAPIKey(ctx, &data, createdKey)
+	updateModelFromAPIKey(&data, createdKey)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -256,7 +256,7 @@ func (r *RGWS3KeyResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	updateModelFromAPIKey(ctx, &data, foundKey)
+	updateModelFromAPIKey(&data, foundKey)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -348,7 +348,7 @@ func (r *RGWS3KeyResource) ImportState(ctx context.Context, req resource.ImportS
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("access_key"), accessKey)...)
 }
 
-func updateModelFromAPIKey(ctx context.Context, data *RGWS3KeyResourceModel, key *CephAPIRGWS3Key) {
+func updateModelFromAPIKey(data *RGWS3KeyResourceModel, key *CephAPIRGWS3Key) {
 	data.AccessKey = types.StringValue(key.AccessKey)
 	data.SecretKey = types.StringValue(key.SecretKey)
 	data.User = types.StringValue(key.User)

@@ -191,7 +191,7 @@ func createTestRGWUserWithCustomS3Key(t *testing.T, uid, displayName, accessKey,
 
 	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
 
-	_, err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, &RgwUserCreateOptions{
+	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, &RgwUserCreateOptions{
 		AccessKey: accessKey,
 		SecretKey: secretKey,
 	})
@@ -221,7 +221,7 @@ func createTestRGWUserWithSubuserAndS3Keys(t *testing.T, uid, displayName, subus
 
 	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
 
-	_, err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, &RgwUserCreateOptions{
+	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, &RgwUserCreateOptions{
 		AccessKey: parentAccessKey,
 		SecretKey: parentSecretKey,
 	})
@@ -229,14 +229,14 @@ func createTestRGWUserWithSubuserAndS3Keys(t *testing.T, uid, displayName, subus
 		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
 
-	_, err = cephTestClusterCLI.RgwSubuserCreate(ctx, uid, uid+":"+subuser, &RgwSubuserCreateOptions{
+	err = cephTestClusterCLI.RgwSubuserCreate(ctx, uid, uid+":"+subuser, &RgwSubuserCreateOptions{
 		Access: "full",
 	})
 	if err != nil {
 		t.Fatalf("Failed to create subuser: %v", err)
 	}
 
-	_, err = cephTestClusterCLI.RgwKeyCreate(ctx, uid, &RgwKeyCreateOptions{
+	err = cephTestClusterCLI.RgwKeyCreate(ctx, uid, &RgwKeyCreateOptions{
 		Subuser:   uid + ":" + subuser,
 		KeyType:   "s3",
 		AccessKey: subuserAccessKey,
@@ -268,7 +268,7 @@ func createTestRGWUserWithMultipleS3Keys(t *testing.T, uid, displayName, accessK
 
 	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
 
-	_, err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, &RgwUserCreateOptions{
+	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, &RgwUserCreateOptions{
 		AccessKey: accessKey1,
 		SecretKey: secretKey1,
 	})
@@ -276,7 +276,7 @@ func createTestRGWUserWithMultipleS3Keys(t *testing.T, uid, displayName, accessK
 		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
 
-	_, err = cephTestClusterCLI.RgwKeyCreate(ctx, uid, &RgwKeyCreateOptions{
+	err = cephTestClusterCLI.RgwKeyCreate(ctx, uid, &RgwKeyCreateOptions{
 		KeyType:   "s3",
 		AccessKey: accessKey2,
 		SecretKey: secretKey2,
@@ -305,7 +305,7 @@ func createTestRGWUserWithoutKeys(t *testing.T, uid, displayName string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
+	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
 	if err != nil {
 		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestAccCephRGWS3KeyDataSource_ambiguousResults(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
-			_, err := cephTestClusterCLI.RgwKeyCreate(ctx, testUID, &RgwKeyCreateOptions{
+			err := cephTestClusterCLI.RgwKeyCreate(ctx, testUID, &RgwKeyCreateOptions{
 				AccessKey: accessKey1,
 				SecretKey: secretKey1,
 			})
@@ -362,7 +362,7 @@ func TestAccCephRGWS3KeyDataSource_ambiguousResults(t *testing.T) {
 				t.Fatalf("Failed to create first key: %v", err)
 			}
 
-			_, err = cephTestClusterCLI.RgwKeyCreate(ctx, testUID, &RgwKeyCreateOptions{
+			err = cephTestClusterCLI.RgwKeyCreate(ctx, testUID, &RgwKeyCreateOptions{
 				AccessKey: accessKey2,
 				SecretKey: secretKey2,
 			})

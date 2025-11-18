@@ -88,7 +88,7 @@ func TestAccCephCrushRuleResource_replicated(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephCrushRuleExists(t, ruleName),
+					checkCephCrushRuleExists(ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "name", ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "pool_type", "replicated"),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "failure_domain", "host"),
@@ -215,7 +215,7 @@ func TestAccCephCrushRuleResource_erasure(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephCrushRuleExists(t, ruleName),
+					checkCephCrushRuleExists(ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "name", ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "pool_type", "erasure"),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "type", "3"),
@@ -282,7 +282,7 @@ func TestAccCephCrushRuleResource_withDeviceClass(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephCrushRuleExists(t, ruleName),
+					checkCephCrushRuleExists(ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "device_class", "hdd"),
 				),
 			},
@@ -309,7 +309,7 @@ func TestAccCephCrushRuleResource_InvalidPoolType(t *testing.T) {
 	})
 }
 
-func checkCephCrushRuleExists(t *testing.T, ruleName string) resource.TestCheckFunc {
+func checkCephCrushRuleExists(ruleName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

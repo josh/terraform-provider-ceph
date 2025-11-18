@@ -535,7 +535,7 @@ func createTestRGWUserDirectly(t *testing.T, uid, displayName string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
+	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
 	if err != nil {
 		t.Fatalf("Failed to pre-create test RGW user: %v", err)
 	}
@@ -996,7 +996,7 @@ func TestAccCephRGWUserResource_driftDetection(t *testing.T) {
 					defer cancel()
 
 					maxBuckets := 200
-					_, err := cephTestClusterCLI.RgwUserModify(ctx, testUID, &RgwUserModifyOptions{
+					err := cephTestClusterCLI.RgwUserModify(ctx, testUID, &RgwUserModifyOptions{
 						DisplayName: "Modified Display Name",
 						MaxBuckets:  &maxBuckets,
 					})

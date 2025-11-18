@@ -151,7 +151,7 @@ func (r *RGWUserResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	updateModelFromAPIUser(ctx, &data, user)
+	updateModelFromAPIUser(&data, user)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -175,7 +175,7 @@ func (r *RGWUserResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	updateModelFromAPIUser(ctx, &data, user)
+	updateModelFromAPIUser(&data, user)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -237,7 +237,7 @@ func (r *RGWUserResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	updateModelFromAPIUser(ctx, &data, user)
+	updateModelFromAPIUser(&data, user)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -277,12 +277,12 @@ func (r *RGWUserResource) ImportState(ctx context.Context, req resource.ImportSt
 	data := RGWUserResourceModel{
 		UserID: types.StringValue(userID),
 	}
-	updateModelFromAPIUser(ctx, &data, user)
+	updateModelFromAPIUser(&data, user)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func updateModelFromAPIUser(ctx context.Context, data *RGWUserResourceModel, user CephAPIRGWUser) {
+func updateModelFromAPIUser(data *RGWUserResourceModel, user CephAPIRGWUser) {
 	data.UserID = types.StringValue(user.UserID)
 	data.DisplayName = types.StringValue(user.DisplayName)
 	switch {

@@ -117,7 +117,7 @@ func startCephCluster(ctx context.Context, tmpDir string, out io.Writer) (string
 		return "", "", nil, err
 	}
 
-	if err := startCephOsd(&wg, ctx, confPath, tmpDir, out); err != nil {
+	if err := startCephOsd(&wg, ctx, confPath, out); err != nil {
 		return "", "", nil, err
 	}
 
@@ -145,7 +145,7 @@ func startCephCluster(ctx context.Context, tmpDir string, out io.Writer) (string
 		return "", "", nil, err
 	}
 
-	if err := waitForCephRgw(startupCtx, confPath); err != nil {
+	if err := waitForCephRgw(startupCtx); err != nil {
 		return "", "", nil, err
 	}
 
@@ -382,7 +382,7 @@ func waitForCephMon(ctx context.Context, confPath string) error {
 	}
 }
 
-func startCephOsd(wg *sync.WaitGroup, ctx context.Context, confPath string, tmpDir string, out io.Writer) error {
+func startCephOsd(wg *sync.WaitGroup, ctx context.Context, confPath string, out io.Writer) error {
 	for i := range testNumOsds {
 		osdID := fmt.Sprintf("%d", i)
 
@@ -515,7 +515,7 @@ func startCephRgw(wg *sync.WaitGroup, ctx context.Context, confPath string, out 
 	return nil
 }
 
-func waitForCephRgw(ctx context.Context, confPath string) error {
+func waitForCephRgw(ctx context.Context) error {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
