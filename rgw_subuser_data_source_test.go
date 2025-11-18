@@ -91,12 +91,12 @@ func createTestRGWUserWithSubuser(t *testing.T, uid, displayName, subuser, permi
 
 	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
 
-	_, err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
+	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
 	if err != nil {
 		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
 
-	_, err = cephTestClusterCLI.RgwSubuserCreate(ctx, uid, uid+":"+subuser, &RgwSubuserCreateOptions{
+	err = cephTestClusterCLI.RgwSubuserCreate(ctx, uid, uid+":"+subuser, &RgwSubuserCreateOptions{
 		Access: permissions,
 	})
 	if err != nil {

@@ -63,7 +63,7 @@ func TestAccCephErasureCodeProfileResource_k2m1(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephErasureCodeProfileExists(t, profileName),
+					checkCephErasureCodeProfileExists(profileName),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "name", profileName),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "k", "2"),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "m", "1"),
@@ -126,7 +126,7 @@ func TestAccCephErasureCodeProfileResource_k3m2(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephErasureCodeProfileExists(t, profileName),
+					checkCephErasureCodeProfileExists(profileName),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "k", "3"),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "m", "2"),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "crush_failure_domain", "host"),
@@ -182,7 +182,7 @@ func TestAccCephErasureCodeProfileResource_withOptionalParams(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephErasureCodeProfileExists(t, profileName),
+					checkCephErasureCodeProfileExists(profileName),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "plugin", "jerasure"),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "technique", "reed_sol_van"),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "crush_device_class", "hdd"),
@@ -232,7 +232,7 @@ func TestAccCephErasureCodeProfileResource_defaults(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephErasureCodeProfileExists(t, profileName),
+					checkCephErasureCodeProfileExists(profileName),
 					resource.TestCheckResourceAttrSet("ceph_erasure_code_profile.test", "k"),
 					resource.TestCheckResourceAttrSet("ceph_erasure_code_profile.test", "m"),
 					resource.TestCheckResourceAttrSet("ceph_erasure_code_profile.test", "plugin"),
@@ -243,7 +243,7 @@ func TestAccCephErasureCodeProfileResource_defaults(t *testing.T) {
 	})
 }
 
-func checkCephErasureCodeProfileExists(t *testing.T, profileName string) resource.TestCheckFunc {
+func checkCephErasureCodeProfileExists(profileName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()

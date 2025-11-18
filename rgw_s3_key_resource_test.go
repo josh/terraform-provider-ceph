@@ -189,12 +189,12 @@ func createTestRGWUserWithSubuserWithoutKeys(t *testing.T, uid, displayName, sub
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
+	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
 	if err != nil {
 		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
 
-	_, err = cephTestClusterCLI.RgwSubuserCreate(ctx, uid, uid+":"+subuser, &RgwSubuserCreateOptions{
+	err = cephTestClusterCLI.RgwSubuserCreate(ctx, uid, uid+":"+subuser, &RgwSubuserCreateOptions{
 		Access: "full",
 	})
 	if err != nil {
@@ -521,7 +521,7 @@ func createRGWS3Key(t *testing.T, userID, accessKey, secretKey string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := cephTestClusterCLI.RgwKeyCreate(ctx, userID, &RgwKeyCreateOptions{
+	err := cephTestClusterCLI.RgwKeyCreate(ctx, userID, &RgwKeyCreateOptions{
 		AccessKey: accessKey,
 		SecretKey: secretKey,
 	})

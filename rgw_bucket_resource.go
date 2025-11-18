@@ -146,7 +146,7 @@ func (r *RGWBucketResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	updateModelFromAPIBucket(ctx, &data, bucket)
+	updateModelFromAPIBucket(&data, bucket)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -170,7 +170,7 @@ func (r *RGWBucketResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	updateModelFromAPIBucket(ctx, &data, bucket)
+	updateModelFromAPIBucket(&data, bucket)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -217,12 +217,12 @@ func (r *RGWBucketResource) ImportState(ctx context.Context, req resource.Import
 	data := RGWBucketResourceModel{
 		Bucket: types.StringValue(bucketName),
 	}
-	updateModelFromAPIBucket(ctx, &data, bucket)
+	updateModelFromAPIBucket(&data, bucket)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func updateModelFromAPIBucket(ctx context.Context, data *RGWBucketResourceModel, bucket CephAPIRGWBucket) {
+func updateModelFromAPIBucket(data *RGWBucketResourceModel, bucket CephAPIRGWBucket) {
 	data.Bucket = types.StringValue(bucket.Bucket)
 	data.Owner = types.StringValue(bucket.Owner)
 	data.Zonegroup = types.StringValue(bucket.Zonegroup)

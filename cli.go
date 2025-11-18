@@ -370,7 +370,7 @@ type RgwKeyCreateOptions struct {
 	SecretKey string
 }
 
-func (c *CephCLI) RgwUserCreate(ctx context.Context, uid, displayName string, opts *RgwUserCreateOptions) (*RgwUserInfo, error) {
+func (c *CephCLI) RgwUserCreate(ctx context.Context, uid, displayName string, opts *RgwUserCreateOptions) error {
 	args := []string{"--conf", c.confPath, "--format=json", "user", "create", "--uid=" + uid, "--display-name=" + displayName}
 
 	if opts != nil {
@@ -385,20 +385,20 @@ func (c *CephCLI) RgwUserCreate(ctx context.Context, uid, displayName string, op
 	cmd := exec.CommandContext(ctx, "radosgw-admin", args...)
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create rgw user %s: %w", uid, err)
+		return fmt.Errorf("failed to create rgw user %s: %w", uid, err)
 	}
 
 	var userInfo RgwUserInfo
 	if err := json.Unmarshal(output, &userInfo); err != nil {
-		return nil, fmt.Errorf("failed to parse rgw user create output: %w", err)
+		return fmt.Errorf("failed to parse rgw user create output: %w", err)
 	}
 
 	_, err = c.RgwUserInfo(ctx, uid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify user creation: %w", err)
+		return fmt.Errorf("failed to verify user creation: %w", err)
 	}
 
-	return &userInfo, nil
+	return nil
 }
 
 func (c *CephCLI) RgwUserInfo(ctx context.Context, uid string) (*RgwUserInfo, error) {
@@ -416,7 +416,7 @@ func (c *CephCLI) RgwUserInfo(ctx context.Context, uid string) (*RgwUserInfo, er
 	return &userInfo, nil
 }
 
-func (c *CephCLI) RgwUserModify(ctx context.Context, uid string, opts *RgwUserModifyOptions) (*RgwUserInfo, error) {
+func (c *CephCLI) RgwUserModify(ctx context.Context, uid string, opts *RgwUserModifyOptions) error {
 	args := []string{"--conf", c.confPath, "--format=json", "user", "modify", "--uid=" + uid}
 
 	if opts != nil {
@@ -438,31 +438,31 @@ func (c *CephCLI) RgwUserModify(ctx context.Context, uid string, opts *RgwUserMo
 	cmd := exec.CommandContext(ctx, "radosgw-admin", args...)
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to modify rgw user %s: %w", uid, err)
+		return fmt.Errorf("failed to modify rgw user %s: %w", uid, err)
 	}
 
 	var userInfo RgwUserInfo
 	if err := json.Unmarshal(output, &userInfo); err != nil {
-		return nil, fmt.Errorf("failed to parse rgw user modify output: %w", err)
+		return fmt.Errorf("failed to parse rgw user modify output: %w", err)
 	}
 
 	verifiedInfo, err := c.RgwUserInfo(ctx, uid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify user modification: %w", err)
+		return fmt.Errorf("failed to verify user modification: %w", err)
 	}
 	if opts != nil {
 		if opts.DisplayName != "" && verifiedInfo.DisplayName != opts.DisplayName {
-			return nil, fmt.Errorf("display name not updated: expected %q, got %q", opts.DisplayName, verifiedInfo.DisplayName)
+			return fmt.Errorf("display name not updated: expected %q, got %q", opts.DisplayName, verifiedInfo.DisplayName)
 		}
 		if opts.MaxBuckets != nil && verifiedInfo.MaxBuckets != *opts.MaxBuckets {
-			return nil, fmt.Errorf("max buckets not updated: expected %d, got %d", *opts.MaxBuckets, verifiedInfo.MaxBuckets)
+			return fmt.Errorf("max buckets not updated: expected %d, got %d", *opts.MaxBuckets, verifiedInfo.MaxBuckets)
 		}
 		if opts.Admin != nil && verifiedInfo.Admin != *opts.Admin {
-			return nil, fmt.Errorf("admin flag not updated: expected %v, got %v", *opts.Admin, verifiedInfo.Admin)
+			return fmt.Errorf("admin flag not updated: expected %v, got %v", *opts.Admin, verifiedInfo.Admin)
 		}
 	}
 
-	return &userInfo, nil
+	return nil
 }
 
 func (c *CephCLI) RgwUserRemove(ctx context.Context, uid string, purgeData bool) error {
@@ -511,7 +511,7 @@ func (c *CephCLI) RgwUserSuspend(ctx context.Context, uid string, suspend bool) 
 	return nil
 }
 
-func (c *CephCLI) RgwSubuserCreate(ctx context.Context, uid, subuser string, opts *RgwSubuserCreateOptions) (*RgwUserInfo, error) {
+func (c *CephCLI) RgwSubuserCreate(ctx context.Context, uid, subuser string, opts *RgwSubuserCreateOptions) error {
 	args := []string{"--conf", c.confPath, "--format=json", "subuser", "create", "--uid=" + uid, "--subuser=" + subuser}
 
 	if opts != nil {
@@ -523,23 +523,23 @@ func (c *CephCLI) RgwSubuserCreate(ctx context.Context, uid, subuser string, opt
 	cmd := exec.CommandContext(ctx, "radosgw-admin", args...)
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create rgw subuser %s for %s: %w", subuser, uid, err)
+		return fmt.Errorf("failed to create rgw subuser %s for %s: %w", subuser, uid, err)
 	}
 
 	var userInfo RgwUserInfo
 	if err := json.Unmarshal(output, &userInfo); err != nil {
-		return nil, fmt.Errorf("failed to parse rgw subuser create output: %w", err)
+		return fmt.Errorf("failed to parse rgw subuser create output: %w", err)
 	}
 
 	_, err = c.RgwUserInfo(ctx, uid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify subuser creation: %w", err)
+		return fmt.Errorf("failed to verify subuser creation: %w", err)
 	}
 
-	return &userInfo, nil
+	return nil
 }
 
-func (c *CephCLI) RgwKeyCreate(ctx context.Context, uid string, opts *RgwKeyCreateOptions) ([]RgwS3Key, error) {
+func (c *CephCLI) RgwKeyCreate(ctx context.Context, uid string, opts *RgwKeyCreateOptions) error {
 	args := []string{"--conf", c.confPath, "--format=json", "key", "create", "--uid=" + uid}
 
 	var expectedAccessKey string
@@ -562,17 +562,17 @@ func (c *CephCLI) RgwKeyCreate(ctx context.Context, uid string, opts *RgwKeyCrea
 	cmd := exec.CommandContext(ctx, "radosgw-admin", args...)
 	output, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create rgw key for %s: %w", uid, err)
+		return fmt.Errorf("failed to create rgw key for %s: %w", uid, err)
 	}
 
 	var userInfo RgwUserInfo
 	if err := json.Unmarshal(output, &userInfo); err != nil {
-		return nil, fmt.Errorf("failed to parse rgw key create output: %w", err)
+		return fmt.Errorf("failed to parse rgw key create output: %w", err)
 	}
 
 	verifiedInfo, err := c.RgwUserInfo(ctx, uid)
 	if err != nil {
-		return nil, fmt.Errorf("failed to verify key creation: %w", err)
+		return fmt.Errorf("failed to verify key creation: %w", err)
 	}
 
 	if expectedAccessKey != "" {
@@ -589,13 +589,13 @@ func (c *CephCLI) RgwKeyCreate(ctx context.Context, uid string, opts *RgwKeyCrea
 			}
 		}
 		if !found {
-			return nil, fmt.Errorf("key with access key %s not found for user %s", expectedAccessKey, expectedUser)
+			return fmt.Errorf("key with access key %s not found for user %s", expectedAccessKey, expectedUser)
 		}
 	} else if len(verifiedInfo.Keys) == 0 {
-		return nil, fmt.Errorf("no keys found for user")
+		return fmt.Errorf("no keys found for user")
 	}
 
-	return userInfo.Keys, nil
+	return nil
 }
 
 func (c *CephCLI) RgwKeyRemove(ctx context.Context, uid, accessKey string) error {

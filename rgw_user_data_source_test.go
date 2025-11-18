@@ -95,7 +95,7 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 					defer cancel()
 
 					admin := true
-					_, err := cephTestClusterCLI.RgwUserModify(ctx, testUID, &RgwUserModifyOptions{
+					err := cephTestClusterCLI.RgwUserModify(ctx, testUID, &RgwUserModifyOptions{
 						Admin: &admin,
 					})
 					if err != nil {
@@ -121,7 +121,7 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 					defer cancel()
 
 					admin := false
-					_, err := cephTestClusterCLI.RgwUserModify(ctx, testUID, &RgwUserModifyOptions{
+					err := cephTestClusterCLI.RgwUserModify(ctx, testUID, &RgwUserModifyOptions{
 						Admin: &admin,
 					})
 					if err != nil {
@@ -197,7 +197,7 @@ func createTestRGWUser(t *testing.T, uid, displayName string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	_, err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
+	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
 	if err != nil {
 		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
