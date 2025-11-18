@@ -696,6 +696,14 @@ func (c *CephCLI) PoolSet(ctx context.Context, poolName, key, value string) erro
 	}
 }
 
+func (c *CephCLI) PoolSetUnchecked(ctx context.Context, poolName, key, value string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "pool", "set", poolName, key, value)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to set pool %s property %s=%s: %w", poolName, key, value, err)
+	}
+	return nil
+}
+
 func (c *CephCLI) PoolApplicationGet(ctx context.Context, poolName string) ([]string, error) {
 	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "pool", "application", "get", poolName, "--format", "json")
 	output, err := cmd.Output()
