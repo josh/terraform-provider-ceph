@@ -511,10 +511,9 @@ func (c *CephAPIClient) RGWGetBucket(ctx context.Context, bucketName string) (Ce
 }
 
 type CephAPIRGWBucketCreateRequest struct {
-	Bucket     string  `json:"bucket"`
-	UID        string  `json:"uid"`
-	Zonegroup  *string `json:"zonegroup,omitempty"`
-	DaemonName *string `json:"daemon_name,omitempty"`
+	Bucket    string  `json:"bucket"`
+	UID       string  `json:"uid"`
+	Zonegroup *string `json:"zonegroup,omitempty"`
 }
 
 func (c *CephAPIClient) RGWCreateBucket(ctx context.Context, req CephAPIRGWBucketCreateRequest) (CephAPIRGWBucket, error) {
