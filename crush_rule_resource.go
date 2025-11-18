@@ -192,10 +192,21 @@ func (r *CrushRuleResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
+	var config CrushRuleResourceModel
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	createReq := CephAPICrushRuleCreateRequest{
 		Name:          data.Name.ValueString(),
-		PoolType:      data.PoolType.ValueString(),
 		FailureDomain: data.FailureDomain.ValueString(),
+	}
+
+	if !config.PoolType.IsNull() && !config.PoolType.IsUnknown() {
+		val := data.PoolType.ValueString()
+		createReq.PoolType = &val
 	}
 
 	if !data.DeviceClass.IsNull() && !data.DeviceClass.IsUnknown() {

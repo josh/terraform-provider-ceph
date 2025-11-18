@@ -1616,7 +1616,7 @@ func (c *CephAPIClient) ListCrushRules(ctx context.Context) ([]CephAPICrushRule,
 
 type CephAPICrushRuleCreateRequest struct {
 	Name          string  `json:"name"`
-	PoolType      string  `json:"pool_type"`
+	PoolType      *string `json:"pool_type,omitempty"`
 	FailureDomain string  `json:"failure_domain"`
 	DeviceClass   *string `json:"device_class,omitempty"`
 	Profile       *string `json:"profile,omitempty"`
