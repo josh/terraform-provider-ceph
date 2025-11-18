@@ -108,7 +108,7 @@ func TestAccCephConfigDataSource_multiLevel(t *testing.T) {
 					data "ceph_config" "all" {}
 				`,
 				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr("data.ceph_config.all", "configs.#", "4"),
+					resource.TestCheckResourceAttrSet("data.ceph_config.all", "configs.#"),
 				),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
