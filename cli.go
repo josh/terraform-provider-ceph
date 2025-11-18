@@ -11,7 +11,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type CephCLI struct {
@@ -668,32 +667,14 @@ func (c *CephCLI) PoolSet(ctx context.Context, poolName, key, value string) erro
 		return fmt.Errorf("failed to set pool %s property %s=%s: %w", poolName, key, value, err)
 	}
 
-	ticker := time.NewTicker(100 * time.Millisecond)
-	defer ticker.Stop()
-
-	var lastValue string
-	for {
-		select {
-		case <-ticker.C:
-			actualValue, err := c.PoolGet(ctx, poolName, key)
-			if err != nil {
-				continue
-			}
-			lastValue = actualValue
-			if actualValue == value {
-				return nil
-			}
-		case <-ctx.Done():
-			return fmt.Errorf("pool property %s not updated: expected %q, got %q: %w", key, value, lastValue, ctx.Err())
-		}
+	actualValue, err := c.PoolGet(ctx, poolName, key)
+	if err != nil {
+		return fmt.Errorf("failed to verify pool property %s: %w", key, err)
 	}
-}
-
-func (c *CephCLI) PoolSetUnchecked(ctx context.Context, poolName, key, value string) error {
-	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "pool", "set", poolName, key, value)
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to set pool %s property %s=%s: %w", poolName, key, value, err)
+	if actualValue != value {
+		return fmt.Errorf("pool property %s not updated: expected %q, got %q", key, value, actualValue)
 	}
+
 	return nil
 }
 
