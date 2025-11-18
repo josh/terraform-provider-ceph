@@ -26,15 +26,16 @@ func TestAccCephConfigValueDataSource(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.ConfigSet(ctx, "global", configName, fmt.Sprintf("%d", testValue)); err != nil {
 				t.Fatalf("Failed to set test config: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.ConfigRemove(cleanupCtx, "global", configName)
@@ -95,7 +96,7 @@ func TestAccCephConfigValueDataSource_multipleSections(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.ConfigSet(ctx, "global", configName, fmt.Sprintf("%d", testValue1)); err != nil {
@@ -106,8 +107,9 @@ func TestAccCephConfigValueDataSource_multipleSections(t *testing.T) {
 				t.Fatalf("Failed to set test config for mon: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.ConfigRemove(cleanupCtx, "global", configName)
@@ -199,15 +201,16 @@ func TestAccCephConfigValueDataSource_readMaskedConfig(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.ConfigSet(ctx, "osd/class:ssd", configName, fmt.Sprintf("%d", testValue)); err != nil {
 				t.Fatalf("Failed to set masked config via CLI: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.ConfigRemove(cleanupCtx, "osd/class:ssd", configName)

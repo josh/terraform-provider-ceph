@@ -76,7 +76,7 @@ func TestAccCephConfigDataSource_multiLevel(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.ConfigSet(ctx, "global", configName, fmt.Sprintf("%d", globalValue)); err != nil {
@@ -91,8 +91,9 @@ func TestAccCephConfigDataSource_multiLevel(t *testing.T) {
 				t.Fatalf("Failed to set osd.0 config: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.ConfigRemove(cleanupCtx, "global", configName)

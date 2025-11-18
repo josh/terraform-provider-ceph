@@ -315,7 +315,7 @@ func testAccCheckCephAuthDestroy(s *terraform.State) error {
 func checkCephAuthExists(t *testing.T, entity string) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
 
 		authInfo, err := cephTestClusterCLI.AuthGet(ctx, entity)
@@ -331,7 +331,7 @@ func checkCephAuthExists(t *testing.T, entity string) resource.TestCheckFunc {
 func checkCephAuthHasCaps(t *testing.T, entity string, expectedCaps map[string]string) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
 
 		authInfo, err := cephTestClusterCLI.AuthGet(ctx, entity)
@@ -356,7 +356,7 @@ func checkCephAuthHasCaps(t *testing.T, entity string, expectedCaps map[string]s
 func checkCephAuthHasKey(t *testing.T, entity string, expectedKey string) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 		defer cancel()
 
 		authInfo, err := cephTestClusterCLI.AuthGet(ctx, entity)
@@ -451,7 +451,7 @@ func TestAccCephAuthResource_capsDriftDetection(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 					defer cancel()
 
 					err := cephTestClusterCLI.AuthSetCaps(ctx, testEntity, map[string]string{

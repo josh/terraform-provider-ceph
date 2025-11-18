@@ -159,7 +159,7 @@ func testAccCheckCephRGWBucketDestroy(s *terraform.State) error {
 func checkCephRGWBucketExists(t *testing.T, bucketName string) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 
 		bucket, err := cephTestClusterCLI.RgwBucketInfo(ctx, bucketName)

@@ -186,7 +186,7 @@ func TestAccCephRGWS3KeyDataSource_multipleKeys(t *testing.T) {
 func createTestRGWUserWithCustomS3Key(t *testing.T, uid, displayName, accessKey, secretKey string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
@@ -201,8 +201,9 @@ func createTestRGWUserWithCustomS3Key(t *testing.T, uid, displayName, accessKey,
 
 	t.Logf("Created test RGW user: %s with custom S3 key: %s", uid, accessKey)
 
+	cleanupCtxParent := t.Context()
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 		defer cleanupCancel()
 
 		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
@@ -216,7 +217,7 @@ func createTestRGWUserWithCustomS3Key(t *testing.T, uid, displayName, accessKey,
 func createTestRGWUserWithSubuserAndS3Keys(t *testing.T, uid, displayName, subuser, parentAccessKey, parentSecretKey, subuserAccessKey, subuserSecretKey string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
@@ -248,8 +249,9 @@ func createTestRGWUserWithSubuserAndS3Keys(t *testing.T, uid, displayName, subus
 
 	t.Logf("Created test RGW user: %s with subuser: %s and S3 keys", uid, subuser)
 
+	cleanupCtxParent := t.Context()
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 		defer cleanupCancel()
 
 		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
@@ -263,7 +265,7 @@ func createTestRGWUserWithSubuserAndS3Keys(t *testing.T, uid, displayName, subus
 func createTestRGWUserWithMultipleS3Keys(t *testing.T, uid, displayName, accessKey1, secretKey1, accessKey2, secretKey2 string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
@@ -287,8 +289,9 @@ func createTestRGWUserWithMultipleS3Keys(t *testing.T, uid, displayName, accessK
 
 	t.Logf("Created test RGW user: %s with multiple S3 keys", uid)
 
+	cleanupCtxParent := t.Context()
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 		defer cleanupCancel()
 
 		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
@@ -302,7 +305,7 @@ func createTestRGWUserWithMultipleS3Keys(t *testing.T, uid, displayName, accessK
 func createTestRGWUserWithoutKeys(t *testing.T, uid, displayName string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
@@ -324,8 +327,9 @@ func createTestRGWUserWithoutKeys(t *testing.T, uid, displayName string) {
 
 	t.Logf("Created test RGW user without keys: %s", uid)
 
+	cleanupCtxParent := t.Context()
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 		defer cleanupCancel()
 
 		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
@@ -351,7 +355,7 @@ func TestAccCephRGWS3KeyDataSource_ambiguousResults(t *testing.T) {
 		PreCheck: func() {
 			createTestRGWUserWithoutKeys(t, testUID, "Test Ambiguous S3 Key User")
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			err := cephTestClusterCLI.RgwKeyCreate(ctx, testUID, &RgwKeyCreateOptions{
