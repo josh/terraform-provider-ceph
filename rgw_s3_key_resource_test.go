@@ -186,7 +186,7 @@ func TestAccCephRGWS3KeyResource_nonExistentUser(t *testing.T) {
 func createTestRGWUserWithSubuserWithoutKeys(t *testing.T, uid, displayName, subuser string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
@@ -203,8 +203,9 @@ func createTestRGWUserWithSubuserWithoutKeys(t *testing.T, uid, displayName, sub
 
 	t.Logf("Created test RGW user: %s with subuser: %s", uid, subuser)
 
+	cleanupCtxParent := t.Context()
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 		defer cleanupCancel()
 
 		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
@@ -518,7 +519,7 @@ func TestAccCephRGWS3KeyResource_importMultipleKeysManagement(t *testing.T) {
 func createRGWS3Key(t *testing.T, userID, accessKey, secretKey string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	err := cephTestClusterCLI.RgwKeyCreate(ctx, userID, &RgwKeyCreateOptions{

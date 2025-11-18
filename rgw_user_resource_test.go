@@ -408,7 +408,7 @@ func testAccCheckCephRGWUserDestroy(s *terraform.State) error {
 func checkCephRGWUserExists(t *testing.T, userID string) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 
 		user, err := cephTestClusterCLI.RgwUserInfo(ctx, userID)
@@ -485,7 +485,7 @@ func TestAccCephRGWUserResource_managedS3Keys(t *testing.T) {
 func checkCephRGWUserKeyCount(t *testing.T, userID string, expectedCount int) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 
 		userInfo, err := cephTestClusterCLI.RgwUserInfo(ctx, userID)
@@ -533,7 +533,7 @@ func TestAccCephRGWUserResource_alreadyExists(t *testing.T) {
 func createTestRGWUserDirectly(t *testing.T, uid, displayName string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
@@ -543,8 +543,9 @@ func createTestRGWUserDirectly(t *testing.T, uid, displayName string) {
 
 	t.Logf("Pre-created test RGW user: %s", uid)
 
+	cleanupCtxParent := t.Context()
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 		defer cleanupCancel()
 
 		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
@@ -669,7 +670,7 @@ func TestAccCephRGWUserResource_suspendUnsuspendCycle(t *testing.T) {
 func checkCephRGWUserSuspended(t *testing.T, userID string, expectedSuspended bool) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 
 		userInfo, err := cephTestClusterCLI.RgwUserInfo(ctx, userID)
@@ -792,7 +793,7 @@ func TestAccCephRGWUserResource_emailUpdate(t *testing.T) {
 func checkCephRGWUserEmail(t *testing.T, userID string, expectedEmail string) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 
 		userInfo, err := cephTestClusterCLI.RgwUserInfo(ctx, userID)
@@ -892,7 +893,7 @@ func TestAccCephRGWUserResource_maxBucketsValidation(t *testing.T) {
 func checkCephRGWUserMaxBuckets(t *testing.T, userID string, expectedMaxBuckets int) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 
 		userInfo, err := cephTestClusterCLI.RgwUserInfo(ctx, userID)
@@ -958,7 +959,7 @@ func TestAccCephRGWUserResource_suspendOutOfBand(t *testing.T) {
 func suspendUserViaCLI(t *testing.T, userID string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	if err := cephTestClusterCLI.RgwUserSuspend(ctx, userID, true); err != nil {
@@ -993,7 +994,7 @@ func TestAccCephRGWUserResource_driftDetection(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 					defer cancel()
 
 					maxBuckets := 200

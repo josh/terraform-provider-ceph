@@ -22,15 +22,16 @@ func TestAccCephCrushRuleDataSource_replicated(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.CrushRuleCreateReplicated(ctx, ruleName, "default", "host"); err != nil {
 				t.Fatalf("Failed to create replicated crush rule: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 30*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.CrushRuleRemove(cleanupCtx, ruleName)
@@ -100,15 +101,16 @@ func TestAccCephCrushRuleDataSource_simple(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.CrushRuleCreateSimple(ctx, ruleName, "default", "host"); err != nil {
 				t.Fatalf("Failed to create simple crush rule: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 30*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.CrushRuleRemove(cleanupCtx, ruleName)
@@ -179,7 +181,7 @@ func TestAccCephCrushRuleDataSource_erasure(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.ErasureCodeProfileSet(ctx, profileName, map[string]string{
@@ -194,8 +196,9 @@ func TestAccCephCrushRuleDataSource_erasure(t *testing.T) {
 				t.Fatalf("Failed to create erasure crush rule: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 30*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.CrushRuleRemove(cleanupCtx, ruleName)

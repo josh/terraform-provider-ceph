@@ -86,7 +86,7 @@ func TestAccCephRGWSubuserDataSource_invalidFormat(t *testing.T) {
 func createTestRGWUserWithSubuser(t *testing.T, uid, displayName, subuser, permissions string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
@@ -105,8 +105,9 @@ func createTestRGWUserWithSubuser(t *testing.T, uid, displayName, subuser, permi
 
 	t.Logf("Created test RGW user: %s with subuser: %s", uid, subuser)
 
+	cleanupCtxParent := t.Context()
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 		defer cleanupCancel()
 
 		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {

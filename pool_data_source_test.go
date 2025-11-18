@@ -22,15 +22,16 @@ func TestAccCephPoolDataSource(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.PoolCreate(ctx, poolName, 8, ""); err != nil {
 				t.Fatalf("Failed to create pool: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
@@ -91,15 +92,16 @@ func TestAccCephPoolDataSource_erasureCoded(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.PoolCreate(ctx, poolName, 8, "erasure"); err != nil {
 				t.Fatalf("Failed to create erasure coded pool: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
@@ -149,7 +151,7 @@ func TestAccCephPoolDataSource_withApplication(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.PoolCreate(ctx, poolName, 8, ""); err != nil {
@@ -160,8 +162,9 @@ func TestAccCephPoolDataSource_withApplication(t *testing.T) {
 				t.Fatalf("Failed to enable application: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
@@ -212,7 +215,7 @@ func TestAccCephPoolDataSource_compression(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.PoolCreate(ctx, poolName, 8, ""); err != nil {
@@ -231,8 +234,9 @@ func TestAccCephPoolDataSource_compression(t *testing.T) {
 				t.Fatalf("Failed to set compression required ratio: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
@@ -288,15 +292,16 @@ func TestAccCephPoolDataSource_configurationChanges(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.PoolCreate(ctx, poolName, 8, ""); err != nil {
 				t.Fatalf("Failed to create pool: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
@@ -330,7 +335,7 @@ func TestAccCephPoolDataSource_configurationChanges(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+					ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 					defer cancel()
 
 					if err := cephTestClusterCLI.PoolSet(ctx, poolName, "pg_num", "16"); err != nil {
@@ -380,15 +385,16 @@ func TestAccCephPoolDataSource_customPGCount(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.PoolCreate(ctx, poolName, 32, ""); err != nil {
 				t.Fatalf("Failed to create pool: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
@@ -435,7 +441,7 @@ func TestAccCephPoolDataSource_targetSize(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.PoolCreate(ctx, poolName, 8, ""); err != nil {
@@ -450,8 +456,9 @@ func TestAccCephPoolDataSource_targetSize(t *testing.T) {
 				t.Fatalf("Failed to set target size bytes: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
@@ -502,7 +509,7 @@ func TestAccCephPoolDataSource_autoscaler(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.PoolCreate(ctx, poolName, 8, ""); err != nil {
@@ -513,8 +520,9 @@ func TestAccCephPoolDataSource_autoscaler(t *testing.T) {
 				t.Fatalf("Failed to set autoscale mode: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)
@@ -560,7 +568,7 @@ func TestAccCephPoolDataSource_configuration(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.PoolCreate(ctx, poolName, 8, ""); err != nil {
@@ -571,8 +579,9 @@ func TestAccCephPoolDataSource_configuration(t *testing.T) {
 				t.Fatalf("Failed to set noscrub flag: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.PoolDelete(cleanupCtx, poolName)

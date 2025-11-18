@@ -22,7 +22,7 @@ func TestAccCephErasureCodeProfileDataSource_k2m1(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.ErasureCodeProfileSet(ctx, profileName, map[string]string{
@@ -33,8 +33,9 @@ func TestAccCephErasureCodeProfileDataSource_k2m1(t *testing.T) {
 				t.Fatalf("Failed to create erasure code profile: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 30*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.ErasureCodeProfileRemove(cleanupCtx, profileName)
@@ -89,7 +90,7 @@ func TestAccCephErasureCodeProfileDataSource_k3m2(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
 
 			if err := cephTestClusterCLI.ErasureCodeProfileSet(ctx, profileName, map[string]string{
@@ -100,8 +101,9 @@ func TestAccCephErasureCodeProfileDataSource_k3m2(t *testing.T) {
 				t.Fatalf("Failed to create erasure code profile: %v", err)
 			}
 
+			cleanupCtxParent := t.Context()
 			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+				cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 30*time.Second)
 				defer cleanupCancel()
 
 				_ = cephTestClusterCLI.ErasureCodeProfileRemove(cleanupCtx, profileName)

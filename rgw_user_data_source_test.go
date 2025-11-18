@@ -91,7 +91,7 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 					defer cancel()
 
 					admin := true
@@ -117,7 +117,7 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 					defer cancel()
 
 					admin := false
@@ -171,7 +171,7 @@ func TestAccCephRGWUserDataSource_deletedOutOfBand(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 					defer cancel()
 
 					if err := cephTestClusterCLI.RgwUserRemove(ctx, testUID, true); err != nil {
@@ -194,7 +194,7 @@ func TestAccCephRGWUserDataSource_deletedOutOfBand(t *testing.T) {
 func createTestRGWUser(t *testing.T, uid, displayName string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
 	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
@@ -204,8 +204,9 @@ func createTestRGWUser(t *testing.T, uid, displayName string) {
 
 	t.Logf("Created test RGW user: %s", uid)
 
+	cleanupCtxParent := t.Context()
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
 		defer cleanupCancel()
 
 		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
