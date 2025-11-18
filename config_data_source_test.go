@@ -74,6 +74,8 @@ func TestAccCephConfigDataSource_multiLevel(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 
