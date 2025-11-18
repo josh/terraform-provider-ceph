@@ -752,3 +752,46 @@ func (c *CephCLI) RgwBucketInfo(ctx context.Context, bucket string) (*RgwBucketI
 
 	return &bucketInfo, nil
 }
+
+type CephHealthStatus struct {
+	Mgrmap CephHealthStatusMgrmap `json:"mgrmap"`
+	Monmap CephHealthStatusMonmap `json:"monmap"`
+	Osdmap CephHealthStatusOsdmap `json:"osdmap"`
+}
+
+type CephHealthStatusMonmap struct {
+	NumMons int `json:"num_mons"`
+}
+
+type CephHealthStatusMgrmap struct {
+	Available bool `json:"available"`
+}
+
+type CephHealthStatusOsdmap struct {
+	NumUpOsds int `json:"num_up_osds"`
+}
+
+func (c *CephCLI) CheckHealth(ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "status", "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to check cluster status: %w", err)
+	}
+
+	var status CephHealthStatus
+	if err := json.Unmarshal(output, &status); err != nil {
+		return fmt.Errorf("failed to parse cluster status: %w", err)
+	}
+
+	if status.Monmap.NumMons == 0 {
+		return fmt.Errorf("no monitors available")
+	}
+	if !status.Mgrmap.Available {
+		return fmt.Errorf("manager not available")
+	}
+	if status.Osdmap.NumUpOsds == 0 {
+		return fmt.Errorf("no OSDs available")
+	}
+
+	return nil
+}

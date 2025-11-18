@@ -512,6 +512,7 @@ func TestAccCephRGWUserResource_alreadyExists(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
 			createTestRGWUserDirectly(t, testUID, "Pre-existing User")
 		},
 		Steps: []resource.TestStep{

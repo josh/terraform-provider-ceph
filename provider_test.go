@@ -614,6 +614,16 @@ func checkCephStatus(ctx context.Context, confPath string) (cephStatus, error) {
 	return status, err
 }
 
+func testAccPreCheckCephHealth(t *testing.T) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+
+	if err := cephTestClusterCLI.CheckHealth(ctx); err != nil {
+		t.Fatalf("Ceph cluster health check failed: %v", err)
+	}
+}
+
 type TestWriter struct {
 	t *testing.T
 }
