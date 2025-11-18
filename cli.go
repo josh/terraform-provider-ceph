@@ -25,17 +25,14 @@ func NewCephCLI(confPath string) *CephCLI {
 }
 
 type CephAuthInfo struct {
-	Key  string            `json:"key"`
 	Caps map[string]string `json:"caps"`
 }
 
 type ConfigDumpEntry struct {
-	Section  string `json:"section"`
-	Mask     string `json:"mask"`
-	Name     string `json:"name"`
-	Value    string `json:"value"`
-	Level    string `json:"level"`
-	ReadOnly bool   `json:"readonly"`
+	Section string `json:"section"`
+	Mask    string `json:"mask"`
+	Name    string `json:"name"`
+	Value   string `json:"value"`
 }
 
 const floatComparisonEpsilon = 1e-9
@@ -737,7 +734,6 @@ func (c *CephCLI) PoolApplicationEnable(ctx context.Context, poolName, applicati
 type RgwBucketInfo struct {
 	Bucket string `json:"bucket"`
 	Owner  string `json:"owner"`
-	ID     string `json:"id"`
 }
 
 func (c *CephCLI) RgwBucketInfo(ctx context.Context, bucket string) (*RgwBucketInfo, error) {
