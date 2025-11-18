@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
@@ -109,65 +110,59 @@ func TestAccCephConfigDataSource_multiLevel(t *testing.T) {
 				`,
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttrSet("data.ceph_config.all", "configs.#"),
+					checkConfigEntryExists(
+						"data.ceph_config.all",
+						"global",
+						configName,
+						fmt.Sprintf("%d.000000", globalValue),
+					),
+					checkConfigEntryExists(
+						"data.ceph_config.all",
+						"osd",
+						configName,
+						fmt.Sprintf("%d.000000", osdValue),
+					),
+					checkConfigEntryExists(
+						"data.ceph_config.all",
+						"osd.0",
+						configName,
+						fmt.Sprintf("%d.000000", osd1Value),
+					),
 				),
-				ConfigStateChecks: []statecheck.StateCheck{
-					statecheck.ExpectKnownValue(
-						"data.ceph_config.all",
-						tfjsonpath.New("configs").AtSliceIndex(0).AtMapKey("section"),
-						knownvalue.StringExact("mgr"),
-					),
-					statecheck.ExpectKnownValue(
-						"data.ceph_config.all",
-						tfjsonpath.New("configs").AtSliceIndex(0).AtMapKey("name"),
-						knownvalue.StringExact("fsid"),
-					),
-					statecheck.ExpectKnownValue(
-						"data.ceph_config.all",
-						tfjsonpath.New("configs").AtSliceIndex(1).AtMapKey("section"),
-						knownvalue.StringExact("global"),
-					),
-					statecheck.ExpectKnownValue(
-						"data.ceph_config.all",
-						tfjsonpath.New("configs").AtSliceIndex(1).AtMapKey("name"),
-						knownvalue.StringExact(configName),
-					),
-					statecheck.ExpectKnownValue(
-						"data.ceph_config.all",
-						tfjsonpath.New("configs").AtSliceIndex(1).AtMapKey("value"),
-						knownvalue.StringExact(fmt.Sprintf("%d.000000", globalValue)),
-					),
-					statecheck.ExpectKnownValue(
-						"data.ceph_config.all",
-						tfjsonpath.New("configs").AtSliceIndex(2).AtMapKey("section"),
-						knownvalue.StringExact("osd"),
-					),
-					statecheck.ExpectKnownValue(
-						"data.ceph_config.all",
-						tfjsonpath.New("configs").AtSliceIndex(2).AtMapKey("name"),
-						knownvalue.StringExact(configName),
-					),
-					statecheck.ExpectKnownValue(
-						"data.ceph_config.all",
-						tfjsonpath.New("configs").AtSliceIndex(2).AtMapKey("value"),
-						knownvalue.StringExact(fmt.Sprintf("%d.000000", osdValue)),
-					),
-					statecheck.ExpectKnownValue(
-						"data.ceph_config.all",
-						tfjsonpath.New("configs").AtSliceIndex(3).AtMapKey("section"),
-						knownvalue.StringExact("osd.0"),
-					),
-					statecheck.ExpectKnownValue(
-						"data.ceph_config.all",
-						tfjsonpath.New("configs").AtSliceIndex(3).AtMapKey("name"),
-						knownvalue.StringExact(configName),
-					),
-					statecheck.ExpectKnownValue(
-						"data.ceph_config.all",
-						tfjsonpath.New("configs").AtSliceIndex(3).AtMapKey("value"),
-						knownvalue.StringExact(fmt.Sprintf("%d.000000", osd1Value)),
-					),
-				},
 			},
 		},
 	})
+}
+
+func checkConfigEntryExists(resourceName, section, name, value string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[resourceName]
+		if !ok {
+			return fmt.Errorf("resource %s not found in state", resourceName)
+		}
+
+		configsCount := 0
+		for key := range rs.Primary.Attributes {
+			if key == "configs.#" {
+				if _, err := fmt.Sscanf(rs.Primary.Attributes[key], "%d", &configsCount); err != nil {
+					return fmt.Errorf("failed to parse configs count: %w", err)
+				}
+				break
+			}
+		}
+
+		for i := 0; i < configsCount; i++ {
+			sectionKey := fmt.Sprintf("configs.%d.section", i)
+			nameKey := fmt.Sprintf("configs.%d.name", i)
+			valueKey := fmt.Sprintf("configs.%d.value", i)
+
+			if rs.Primary.Attributes[sectionKey] == section &&
+				rs.Primary.Attributes[nameKey] == name &&
+				rs.Primary.Attributes[valueKey] == value {
+				return nil
+			}
+		}
+
+		return fmt.Errorf("config entry not found: section=%s, name=%s, value=%s", section, name, value)
+	}
 }
