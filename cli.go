@@ -12,8 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 type CephCLI struct {
@@ -679,11 +677,6 @@ func (c *CephCLI) PoolSet(ctx context.Context, poolName, key, value string) erro
 		case <-ticker.C:
 			actualValue, err := c.PoolGet(ctx, poolName, key)
 			if err != nil {
-				tflog.Warn(ctx, "Pool property verification failed, retrying", map[string]any{
-					"pool":  poolName,
-					"key":   key,
-					"error": err.Error(),
-				})
 				continue
 			}
 			lastValue = actualValue
