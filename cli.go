@@ -30,12 +30,10 @@ type CephAuthInfo struct {
 }
 
 type ConfigDumpEntry struct {
-	Section  string `json:"section"`
-	Mask     string `json:"mask"`
-	Name     string `json:"name"`
-	Value    string `json:"value"`
-	Level    string `json:"level"`
-	ReadOnly bool   `json:"readonly"`
+	Section string `json:"section"`
+	Mask    string `json:"mask"`
+	Name    string `json:"name"`
+	Value   string `json:"value"`
 }
 
 const floatComparisonEpsilon = 1e-9
