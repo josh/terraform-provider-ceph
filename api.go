@@ -1290,56 +1290,8 @@ func (c *CephAPIClient) ClusterDeleteConf(ctx context.Context, name string, sect
 	return nil
 }
 
-// <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-mgr-module>
-
-type CephAPIMgrModule struct {
-	Name     string                            `json:"name"`
-	Enabled  bool                              `json:"enabled"`
-	AlwaysOn bool                              `json:"always_on"`
-	Options  map[string]CephAPIMgrModuleOption `json:"options"`
-}
-
 type CephAPIMgrModuleOption struct {
 	DefaultValue any `json:"default_value"`
-}
-
-func (c *CephAPIClient) MgrListModules(ctx context.Context) ([]CephAPIMgrModule, error) {
-	url := c.endpoint.JoinPath("/api/mgr/module").String()
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
-
-	logRequest := logAPIRequest(ctx, httpReq)
-	httpResp, err := c.client.Do(httpReq)
-	logRequest(httpResp, err)
-	if err != nil {
-		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
-	}
-	defer httpResp.Body.Close() //nolint:errcheck
-
-	if httpResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(httpResp.Body)
-		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read response body: %w", err)
-	}
-
-	var modules []CephAPIMgrModule
-	err = json.Unmarshal(body, &modules)
-	if err != nil {
-		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
-	}
-
-	return modules, nil
 }
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-mgr-module-module_name>
