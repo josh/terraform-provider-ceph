@@ -235,7 +235,7 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 		},
 	}
 
-	for i := 0; i < testNumOsds; i++ {
+	for i := range testNumOsds {
 		keyringConfig[fmt.Sprintf("osd.%d", i)] = map[string]string{
 			"key":      "AQCzsPFolNPNNhAAkglWKcr2qZB4lCK/u9A1Zw==",
 			"caps mon": "allow profile osd",
@@ -254,7 +254,7 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 		return confPath, err
 	}
 
-	for i := 0; i < testNumOsds; i++ {
+	for i := range testNumOsds {
 		err = os.MkdirAll(filepath.Join(tmpDir, "osd", fmt.Sprintf("ceph-%d", i)), 0o755)
 		if err != nil {
 			return confPath, err
@@ -383,7 +383,7 @@ func waitForCephMon(ctx context.Context, confPath string) error {
 }
 
 func startCephOsd(wg *sync.WaitGroup, ctx context.Context, confPath string, tmpDir string, out io.Writer) error {
-	for i := 0; i < testNumOsds; i++ {
+	for i := range testNumOsds {
 		osdID := fmt.Sprintf("%d", i)
 
 		cmd := exec.CommandContext(ctx, "ceph-osd", "--conf", confPath, "--id", osdID, "--mkfs")
@@ -634,7 +634,7 @@ func (log *LogDemux) Write(p []byte) (n int, err error) {
 	defer log.mu.Unlock()
 
 	var writeErr error
-	log.outs.Range(func(key, _ interface{}) bool {
+	log.outs.Range(func(key, _ any) bool {
 		if writer, ok := key.(io.Writer); ok {
 			if written, err := writer.Write(p); err != nil {
 				writeErr = err

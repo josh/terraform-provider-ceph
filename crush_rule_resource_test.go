@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"slices"
 	"testing"
 	"time"
 
@@ -342,10 +343,8 @@ func testAccCheckCephCrushRuleDestroy(s *terraform.State) error {
 			return fmt.Errorf("failed to list CRUSH rules: %w", err)
 		}
 
-		for _, rule := range rules {
-			if rule == ruleName {
-				return fmt.Errorf("CRUSH rule %q still exists in Ceph", ruleName)
-			}
+		if slices.Contains(rules, ruleName) {
+			return fmt.Errorf("CRUSH rule %q still exists in Ceph", ruleName)
 		}
 	}
 

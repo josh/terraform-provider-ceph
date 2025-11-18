@@ -116,7 +116,7 @@ func (d *MgrModuleConfigDataSource) Read(ctx context.Context, req datasource.Rea
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func formatMgrModuleConfigValue(val interface{}) (string, error) {
+func formatMgrModuleConfigValue(val any) (string, error) {
 	switch v := val.(type) {
 	case float64:
 		if v == float64(int64(v)) {
