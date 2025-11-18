@@ -201,15 +201,12 @@ func createTestRGWUserWithCustomS3Key(t *testing.T, uid, displayName, accessKey,
 
 	t.Logf("Created test RGW user: %s with custom S3 key: %s", uid, accessKey)
 
-	cleanupCtxParent := t.Context()
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cleanupCancel()
 
 		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
-			t.Logf("Warning: Failed to cleanup test RGW user %s: %v", uid, err)
-		} else {
-			t.Logf("Cleaned up test RGW user: %s", uid)
+			t.Logf("Note: cleanup of RGW user %s reported an error (may already be deleted): %v", uid, err)
 		}
 	})
 }
@@ -249,15 +246,12 @@ func createTestRGWUserWithSubuserAndS3Keys(t *testing.T, uid, displayName, subus
 
 	t.Logf("Created test RGW user: %s with subuser: %s and S3 keys", uid, subuser)
 
-	cleanupCtxParent := t.Context()
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cleanupCancel()
 
 		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
-			t.Logf("Warning: Failed to cleanup test RGW user %s: %v", uid, err)
-		} else {
-			t.Logf("Cleaned up test RGW user: %s", uid)
+			t.Logf("Note: cleanup of RGW user %s reported an error (may already be deleted): %v", uid, err)
 		}
 	})
 }
@@ -289,15 +283,12 @@ func createTestRGWUserWithMultipleS3Keys(t *testing.T, uid, displayName, accessK
 
 	t.Logf("Created test RGW user: %s with multiple S3 keys", uid)
 
-	cleanupCtxParent := t.Context()
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cleanupCancel()
 
 		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
-			t.Logf("Warning: Failed to cleanup test RGW user %s: %v", uid, err)
-		} else {
-			t.Logf("Cleaned up test RGW user: %s", uid)
+			t.Logf("Note: cleanup of RGW user %s reported an error (may already be deleted): %v", uid, err)
 		}
 	})
 }
@@ -327,15 +318,12 @@ func createTestRGWUserWithoutKeys(t *testing.T, uid, displayName string) {
 
 	t.Logf("Created test RGW user without keys: %s", uid)
 
-	cleanupCtxParent := t.Context()
 	t.Cleanup(func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(cleanupCtxParent, 10*time.Second)
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cleanupCancel()
 
 		if err := cephTestClusterCLI.RgwUserRemove(cleanupCtx, uid, true); err != nil {
-			t.Logf("Warning: Failed to cleanup test RGW user %s: %v", uid, err)
-		} else {
-			t.Logf("Cleaned up test RGW user: %s", uid)
+			t.Logf("Note: cleanup of RGW user %s reported an error (may already be deleted): %v", uid, err)
 		}
 	})
 }
