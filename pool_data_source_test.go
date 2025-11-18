@@ -30,6 +30,10 @@ func TestAccCephPoolDataSource(t *testing.T) {
 				t.Fatalf("Failed to create pool: %v", err)
 			}
 
+			if err := cephTestClusterCLI.PoolSet(ctx, poolName, "pg_autoscale_mode", "off"); err != nil {
+				t.Fatalf("Failed to disable autoscaler: %v", err)
+			}
+
 			t.Cleanup(func() {
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
@@ -102,6 +106,10 @@ func TestAccCephPoolDataSource_erasureCoded(t *testing.T) {
 				t.Fatalf("Failed to create erasure coded pool: %v", err)
 			}
 
+			if err := cephTestClusterCLI.PoolSet(ctx, poolName, "pg_autoscale_mode", "off"); err != nil {
+				t.Fatalf("Failed to disable autoscaler: %v", err)
+			}
+
 			t.Cleanup(func() {
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
@@ -161,6 +169,10 @@ func TestAccCephPoolDataSource_withApplication(t *testing.T) {
 
 			if err := cephTestClusterCLI.PoolCreate(ctx, poolName, 8, ""); err != nil {
 				t.Fatalf("Failed to create pool: %v", err)
+			}
+
+			if err := cephTestClusterCLI.PoolSet(ctx, poolName, "pg_autoscale_mode", "off"); err != nil {
+				t.Fatalf("Failed to disable autoscaler: %v", err)
 			}
 
 			if err := cephTestClusterCLI.PoolApplicationEnable(ctx, poolName, "rbd"); err != nil {
@@ -227,6 +239,10 @@ func TestAccCephPoolDataSource_compression(t *testing.T) {
 
 			if err := cephTestClusterCLI.PoolCreate(ctx, poolName, 8, ""); err != nil {
 				t.Fatalf("Failed to create pool: %v", err)
+			}
+
+			if err := cephTestClusterCLI.PoolSet(ctx, poolName, "pg_autoscale_mode", "off"); err != nil {
+				t.Fatalf("Failed to disable autoscaler: %v", err)
 			}
 
 			if err := cephTestClusterCLI.PoolSet(ctx, poolName, "compression_mode", "aggressive"); err != nil {
@@ -308,6 +324,10 @@ func TestAccCephPoolDataSource_configurationChanges(t *testing.T) {
 				t.Fatalf("Failed to create pool: %v", err)
 			}
 
+			if err := cephTestClusterCLI.PoolSet(ctx, poolName, "pg_autoscale_mode", "off"); err != nil {
+				t.Fatalf("Failed to disable autoscaler: %v", err)
+			}
+
 			t.Cleanup(func() {
 				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cleanupCancel()
@@ -345,29 +365,15 @@ func TestAccCephPoolDataSource_configurationChanges(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					setCtx, setCancel := context.WithTimeout(t.Context(), 5*time.Second)
-					defer setCancel()
+					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+					defer cancel()
 
-					_ = cephTestClusterCLI.PoolSetUnchecked(setCtx, poolName, "pg_num", "16")
-					_ = cephTestClusterCLI.PoolSetUnchecked(setCtx, poolName, "size", "2")
-
-					timer := time.NewTimer(3 * time.Second)
-					defer timer.Stop()
-
-					select {
-					case <-timer.C:
-					case <-t.Context().Done():
-						return
+					if err := cephTestClusterCLI.PoolSet(ctx, poolName, "pg_num", "16"); err != nil {
+						t.Fatalf("Failed to set pg_num: %v", err)
 					}
 
-					verifyCtx, verifyCancel := context.WithTimeout(t.Context(), 5*time.Second)
-					defer verifyCancel()
-
-					if val, err := cephTestClusterCLI.PoolGet(verifyCtx, poolName, "pg_num"); err != nil || val != "16" {
-						t.Logf("WARNING: pg_num verification failed (got %q, err: %v), continuing anyway", val, err)
-					}
-					if val, err := cephTestClusterCLI.PoolGet(verifyCtx, poolName, "size"); err != nil || val != "2" {
-						t.Logf("WARNING: size verification failed (got %q, err: %v), continuing anyway", val, err)
+					if err := cephTestClusterCLI.PoolSet(ctx, poolName, "size", "2"); err != nil {
+						t.Fatalf("Failed to set size: %v", err)
 					}
 				},
 				ConfigVariables: testAccProviderConfig(),
@@ -415,6 +421,10 @@ func TestAccCephPoolDataSource_customPGCount(t *testing.T) {
 
 			if err := cephTestClusterCLI.PoolCreate(ctx, poolName, 32, ""); err != nil {
 				t.Fatalf("Failed to create pool: %v", err)
+			}
+
+			if err := cephTestClusterCLI.PoolSet(ctx, poolName, "pg_autoscale_mode", "off"); err != nil {
+				t.Fatalf("Failed to disable autoscaler: %v", err)
 			}
 
 			t.Cleanup(func() {
@@ -473,6 +483,10 @@ func TestAccCephPoolDataSource_targetSize(t *testing.T) {
 
 			if err := cephTestClusterCLI.PoolCreate(ctx, poolName, 8, ""); err != nil {
 				t.Fatalf("Failed to create pool: %v", err)
+			}
+
+			if err := cephTestClusterCLI.PoolSet(ctx, poolName, "pg_autoscale_mode", "off"); err != nil {
+				t.Fatalf("Failed to disable autoscaler: %v", err)
 			}
 
 			if err := cephTestClusterCLI.PoolSet(ctx, poolName, "target_size_ratio", "0.1"); err != nil {
@@ -604,6 +618,10 @@ func TestAccCephPoolDataSource_configuration(t *testing.T) {
 
 			if err := cephTestClusterCLI.PoolCreate(ctx, poolName, 8, ""); err != nil {
 				t.Fatalf("Failed to create pool: %v", err)
+			}
+
+			if err := cephTestClusterCLI.PoolSet(ctx, poolName, "pg_autoscale_mode", "off"); err != nil {
+				t.Fatalf("Failed to disable autoscaler: %v", err)
 			}
 
 			if err := cephTestClusterCLI.PoolSet(ctx, poolName, "noscrub", "true"); err != nil {
