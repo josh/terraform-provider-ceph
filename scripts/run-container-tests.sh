@@ -28,9 +28,9 @@ fi
 # $ docker run --rm -v terraform-provider-ceph-go-cache:/go --user root alpine chown -R 1000:1000 /go
 GO_CACHE_ARGS=()
 if $CONTAINER_RUNTIME volume inspect terraform-provider-ceph-go-cache >/dev/null 2>&1; then
-	GO_CACHE_ARGS=(--volume "terraform-provider-ceph-go-cache:/go" --env GOCACHE=/go/cache --env GOMODCACHE=/go/pkg/mod)
+	GO_CACHE_ARGS=(--volume "terraform-provider-ceph-go-cache:/go:z" --env GOCACHE=/go/cache --env GOMODCACHE=/go/pkg/mod)
 fi
 
 set -o xtrace
 $CONTAINER_RUNTIME build --file .devcontainer/Dockerfile --tag terraform-provider-ceph:latest .
-$CONTAINER_RUNTIME run --rm --name terraform-provider-ceph --env TF_ACC=1 --volume "$PWD":/workspace "${GO_CACHE_ARGS[@]}" terraform-provider-ceph:latest go test "$@"
+$CONTAINER_RUNTIME run --rm --name terraform-provider-ceph --env TF_ACC=1 --volume "$PWD:/workspace:z" "${GO_CACHE_ARGS[@]}" terraform-provider-ceph:latest go test "$@"
