@@ -23,7 +23,7 @@ func TestAccCephRGWUserResource(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -144,7 +144,7 @@ func TestAccCephRGWUserResource_fullConfig(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -215,7 +215,7 @@ func TestAccCephRGWUserResource_suspendedUser(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -264,7 +264,7 @@ func TestAccCephRGWUserResource_systemUser(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -299,7 +299,7 @@ func TestAccCephRGWUserResourceImport(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -338,7 +338,7 @@ func TestAccCephRGWUserResourceImport_nonExistent(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -365,7 +365,7 @@ func TestAccCephRGWUserResource_minimalConfig(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -386,23 +386,25 @@ func TestAccCephRGWUserResource_minimalConfig(t *testing.T) {
 	})
 }
 
-func testAccCheckCephRGWUserDestroy(s *terraform.State) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+func testAccCheckCephRGWUserDestroy(t *testing.T) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
 
-	for _, rs := range s.RootModule().Resources {
-		if rs.Type != "ceph_rgw_user" {
-			continue
+		for _, rs := range s.RootModule().Resources {
+			if rs.Type != "ceph_rgw_user" {
+				continue
+			}
+
+			userID := rs.Primary.Attributes["user_id"]
+
+			_, err := cephTestClusterCLI.RgwUserInfo(ctx, userID)
+			if err == nil {
+				return fmt.Errorf("ceph_rgw_user resource %s still exists", userID)
+			}
 		}
-
-		userID := rs.Primary.Attributes["user_id"]
-
-		_, err := cephTestClusterCLI.RgwUserInfo(ctx, userID)
-		if err == nil {
-			return fmt.Errorf("ceph_rgw_user resource %s still exists", userID)
-		}
+		return nil
 	}
-	return nil
 }
 
 func checkCephRGWUserExists(t *testing.T, userID string) resource.TestCheckFunc {
@@ -429,7 +431,7 @@ func TestAccCephRGWUserResource_noKeys(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -457,7 +459,7 @@ func TestAccCephRGWUserResource_managedS3Keys(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -561,7 +563,7 @@ func TestAccCephRGWUserResource_suspendUnsuspendCycle(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -693,7 +695,7 @@ func TestAccCephRGWUserResource_emailUpdate(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -815,7 +817,7 @@ func TestAccCephRGWUserResource_maxBucketsValidation(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -915,7 +917,7 @@ func TestAccCephRGWUserResource_suspendOutOfBand(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephRGWUserDestroy,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),

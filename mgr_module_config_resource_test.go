@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
@@ -251,7 +253,9 @@ func TestAccCephMgrModuleConfigResource_largeIntegerValues(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					func(s *terraform.State) error {
-						return assertCephMgrModuleConfigValue("dashboard", "jwt_token_ttl", "31556952")
+						ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+						defer cancel()
+						return assertCephMgrModuleConfigValue(ctx, "dashboard", "jwt_token_ttl", "31556952")
 					},
 				),
 			},
@@ -320,16 +324,19 @@ func TestAccCephMgrModuleConfigResource_mixedNumericTypes(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					func(s *terraform.State) error {
-						if err := assertCephMgrModuleConfigValue("dashboard", "server_port", "8080"); err != nil {
+						ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+						defer cancel()
+
+						if err := assertCephMgrModuleConfigValue(ctx, "dashboard", "server_port", "8080"); err != nil {
 							return err
 						}
-						if err := assertCephMgrModuleConfigValue("dashboard", "standby_error_status_code", "503"); err != nil {
+						if err := assertCephMgrModuleConfigValue(ctx, "dashboard", "standby_error_status_code", "503"); err != nil {
 							return err
 						}
-						if err := assertCephMgrModuleConfigValue("dashboard", "jwt_token_ttl", "31556952"); err != nil {
+						if err := assertCephMgrModuleConfigValue(ctx, "dashboard", "jwt_token_ttl", "31556952"); err != nil {
 							return err
 						}
-						return assertCephMgrModuleConfigValue("dashboard", "ssl", "false")
+						return assertCephMgrModuleConfigValue(ctx, "dashboard", "ssl", "false")
 					},
 				),
 			},
@@ -363,7 +370,9 @@ func TestAccCephMgrModuleConfigResource_booleanValues(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					func(s *terraform.State) error {
-						return assertCephMgrModuleConfigValue("dashboard", "ssl", "false")
+						ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+						defer cancel()
+						return assertCephMgrModuleConfigValue(ctx, "dashboard", "ssl", "false")
 					},
 				),
 			},
@@ -386,7 +395,9 @@ func TestAccCephMgrModuleConfigResource_booleanValues(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					func(s *terraform.State) error {
-						return assertCephMgrModuleConfigValue("dashboard", "ssl", "false")
+						ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+						defer cancel()
+						return assertCephMgrModuleConfigValue(ctx, "dashboard", "ssl", "false")
 					},
 				),
 			},
@@ -409,7 +420,9 @@ func TestAccCephMgrModuleConfigResource_booleanValues(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					func(s *terraform.State) error {
-						return assertCephMgrModuleConfigValue("dashboard", "ssl", "true")
+						ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+						defer cancel()
+						return assertCephMgrModuleConfigValue(ctx, "dashboard", "ssl", "true")
 					},
 				),
 			},
@@ -432,7 +445,9 @@ func TestAccCephMgrModuleConfigResource_booleanValues(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					func(s *terraform.State) error {
-						return assertCephMgrModuleConfigValue("dashboard", "ssl", "true")
+						ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+						defer cancel()
+						return assertCephMgrModuleConfigValue(ctx, "dashboard", "ssl", "true")
 					},
 				),
 			},
@@ -472,10 +487,13 @@ func TestAccCephMgrModuleConfigResource_stringValues(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					func(s *terraform.State) error {
-						if err := assertCephMgrModuleConfigValue("dashboard", "url_prefix", "/ceph-dashboard"); err != nil {
+						ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+						defer cancel()
+
+						if err := assertCephMgrModuleConfigValue(ctx, "dashboard", "url_prefix", "/ceph-dashboard"); err != nil {
 							return err
 						}
-						return assertCephMgrModuleConfigValue("dashboard", "standby_behaviour", "redirect")
+						return assertCephMgrModuleConfigValue(ctx, "dashboard", "standby_behaviour", "redirect")
 					},
 				),
 			},
@@ -543,7 +561,9 @@ func TestAccCephMgrModuleConfigResource_importLargeInteger(t *testing.T) {
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					func(s *terraform.State) error {
-						return assertCephMgrModuleConfigValue("dashboard", "jwt_token_ttl", "31556952")
+						ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+						defer cancel()
+						return assertCephMgrModuleConfigValue(ctx, "dashboard", "jwt_token_ttl", "31556952")
 					},
 				),
 			},

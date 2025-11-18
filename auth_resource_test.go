@@ -52,7 +52,7 @@ func TestAccCephAuthResource(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephAuthDestroy,
+		CheckDestroy:             testAccCheckCephAuthDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -192,7 +192,7 @@ func TestAccCephAuthResource_invalidCapTypeOnUpdate(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephAuthDestroy,
+		CheckDestroy:             testAccCheckCephAuthDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -230,7 +230,7 @@ func TestAccCephAuthResourceImport(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephAuthDestroy,
+		CheckDestroy:             testAccCheckCephAuthDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -293,23 +293,25 @@ func TestAccCephAuthResourceImport_nonExistent(t *testing.T) {
 	})
 }
 
-func testAccCheckCephAuthDestroy(s *terraform.State) error {
-	for _, rs := range s.RootModule().Resources {
-		if rs.Type != "ceph_auth" {
-			continue
+func testAccCheckCephAuthDestroy(t *testing.T) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		for _, rs := range s.RootModule().Resources {
+			if rs.Type != "ceph_auth" {
+				continue
+			}
+
+			entity := rs.Primary.Attributes["entity"]
+
+			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+			defer cancel()
+
+			_, err := cephTestClusterCLI.AuthGet(ctx, entity)
+			if err == nil {
+				return fmt.Errorf("ceph_auth resource %s still exists", entity)
+			}
 		}
-
-		entity := rs.Primary.Attributes["entity"]
-
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		_, err := cephTestClusterCLI.AuthGet(ctx, entity)
-		if err == nil {
-			return fmt.Errorf("ceph_auth resource %s still exists", entity)
-		}
+		return nil
 	}
-	return nil
 }
 
 func checkCephAuthExists(t *testing.T, entity string) resource.TestCheckFunc {
@@ -382,7 +384,7 @@ func TestAccCephAuthResource_staticKey(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephAuthDestroy,
+		CheckDestroy:             testAccCheckCephAuthDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -428,7 +430,7 @@ func TestAccCephAuthResource_capsDriftDetection(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephAuthDestroy,
+		CheckDestroy:             testAccCheckCephAuthDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
