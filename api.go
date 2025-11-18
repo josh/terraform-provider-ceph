@@ -459,46 +459,6 @@ func (c *CephAPIClient) ClusterDeleteUser(ctx context.Context, userEntities stri
 	return nil
 }
 
-// <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-rgw-bucket>
-
-func (c *CephAPIClient) RGWListBucketNames(ctx context.Context) ([]string, error) {
-	url := c.endpoint.JoinPath("/api/rgw/bucket").String()
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
-
-	logRequest := logAPIRequest(ctx, httpReq)
-	httpResp, err := c.client.Do(httpReq)
-	logRequest(httpResp, err)
-	if err != nil {
-		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
-	}
-	defer httpResp.Body.Close() //nolint:errcheck
-
-	if httpResp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
-	}
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read response body: %w", err)
-	}
-
-	var buckets []string
-	err = json.Unmarshal(body, &buckets)
-	if err != nil {
-		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
-	}
-
-	return buckets, nil
-}
-
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-rgw-bucket-bucket>
 
 type CephAPIRGWBucket struct {
@@ -627,46 +587,6 @@ func (c *CephAPIClient) RGWDeleteBucket(ctx context.Context, bucketName string) 
 	}
 
 	return nil
-}
-
-// <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-rgw-user>
-
-func (c *CephAPIClient) RGWListUserNames(ctx context.Context) ([]string, error) {
-	url := c.endpoint.JoinPath("/api/rgw/user").String()
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
-
-	logRequest := logAPIRequest(ctx, httpReq)
-	httpResp, err := c.client.Do(httpReq)
-	logRequest(httpResp, err)
-	if err != nil {
-		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
-	}
-	defer httpResp.Body.Close() //nolint:errcheck
-
-	if httpResp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
-	}
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read response body: %w", err)
-	}
-
-	var users []string
-	err = json.Unmarshal(body, &users)
-	if err != nil {
-		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
-	}
-
-	return users, nil
 }
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-rgw-user-ratelimit>
