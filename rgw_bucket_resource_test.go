@@ -21,7 +21,7 @@ func TestAccCephRGWBucketResource(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephRGWBucketDestroy,
+		CheckDestroy:             testAccCheckCephRGWBucketDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -62,7 +62,7 @@ func TestAccCephRGWBucketResourceImport(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephRGWBucketDestroy,
+		CheckDestroy:             testAccCheckCephRGWBucketDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -137,23 +137,25 @@ func TestAccCephRGWBucketResourceImport_nonExistent(t *testing.T) {
 	})
 }
 
-func testAccCheckCephRGWBucketDestroy(s *terraform.State) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+func testAccCheckCephRGWBucketDestroy(t *testing.T) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
 
-	for _, rs := range s.RootModule().Resources {
-		if rs.Type != "ceph_rgw_bucket" {
-			continue
+		for _, rs := range s.RootModule().Resources {
+			if rs.Type != "ceph_rgw_bucket" {
+				continue
+			}
+
+			bucketName := rs.Primary.Attributes["bucket"]
+
+			_, err := cephTestClusterCLI.RgwBucketInfo(ctx, bucketName)
+			if err == nil {
+				return fmt.Errorf("ceph_rgw_bucket resource %s still exists", bucketName)
+			}
 		}
-
-		bucketName := rs.Primary.Attributes["bucket"]
-
-		_, err := cephTestClusterCLI.RgwBucketInfo(ctx, bucketName)
-		if err == nil {
-			return fmt.Errorf("ceph_rgw_bucket resource %s still exists", bucketName)
-		}
+		return nil
 	}
-	return nil
 }
 
 func checkCephRGWBucketExists(t *testing.T, bucketName string) resource.TestCheckFunc {

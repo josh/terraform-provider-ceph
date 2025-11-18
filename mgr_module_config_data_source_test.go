@@ -68,7 +68,10 @@ func TestAccCephMgrModuleConfigDataSource_largeIntegerValues(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				PreConfig: func() {
-					err := setCephMgrModuleConfigValue("dashboard", "jwt_token_ttl", "31556952")
+					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+					defer cancel()
+
+					err := setCephMgrModuleConfigValue(ctx, "dashboard", "jwt_token_ttl", "31556952")
 					if err != nil {
 						t.Fatalf("Failed to set config value out of band: %v", err)
 					}
@@ -101,13 +104,18 @@ func TestAccCephMgrModuleConfigDataSource_largeIntegerValues(t *testing.T) {
 						return nil
 					},
 					func(s *terraform.State) error {
-						return assertCephMgrModuleConfigValue("dashboard", "jwt_token_ttl", "31556952")
+						ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+						defer cancel()
+						return assertCephMgrModuleConfigValue(ctx, "dashboard", "jwt_token_ttl", "31556952")
 					},
 				),
 			},
 			{
 				PreConfig: func() {
-					err := removeCephMgrModuleConfigValue("dashboard", "jwt_token_ttl")
+					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+					defer cancel()
+
+					err := removeCephMgrModuleConfigValue(ctx, "dashboard", "jwt_token_ttl")
 					if err != nil {
 						t.Fatalf("Failed to remove config value out of band: %v", err)
 					}
@@ -119,32 +127,23 @@ func TestAccCephMgrModuleConfigDataSource_largeIntegerValues(t *testing.T) {
 	})
 }
 
-func getCephMgrModuleConfigValue(module, option string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
+func getCephMgrModuleConfigValue(ctx context.Context, module, option string) (string, error) {
 	configKey := fmt.Sprintf("mgr/%s/%s", module, option)
 	return cephTestClusterCLI.ConfigGet(ctx, "mgr", configKey)
 }
 
-func setCephMgrModuleConfigValue(module, option, value string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
+func setCephMgrModuleConfigValue(ctx context.Context, module, option, value string) error {
 	configKey := fmt.Sprintf("mgr/%s/%s", module, option)
 	return cephTestClusterCLI.ConfigSet(ctx, "mgr", configKey, value)
 }
 
-func removeCephMgrModuleConfigValue(module, option string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
+func removeCephMgrModuleConfigValue(ctx context.Context, module, option string) error {
 	configKey := fmt.Sprintf("mgr/%s/%s", module, option)
 	return cephTestClusterCLI.ConfigRemove(ctx, "mgr", configKey)
 }
 
-func assertCephMgrModuleConfigValue(module, option, expected string) error {
-	actual, err := getCephMgrModuleConfigValue(module, option)
+func assertCephMgrModuleConfigValue(ctx context.Context, module, option, expected string) error {
+	actual, err := getCephMgrModuleConfigValue(ctx, module, option)
 	if err != nil {
 		return err
 	}

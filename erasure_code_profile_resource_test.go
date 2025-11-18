@@ -23,7 +23,7 @@ func TestAccCephErasureCodeProfileResource_k2m1(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephErasureCodeProfileDestroy,
+		CheckDestroy:             testAccCheckCephErasureCodeProfileDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -63,7 +63,7 @@ func TestAccCephErasureCodeProfileResource_k2m1(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephErasureCodeProfileExists(profileName),
+					checkCephErasureCodeProfileExists(t, profileName),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "name", profileName),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "k", "2"),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "m", "1"),
@@ -91,7 +91,7 @@ func TestAccCephErasureCodeProfileResource_k3m2(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephErasureCodeProfileDestroy,
+		CheckDestroy:             testAccCheckCephErasureCodeProfileDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -126,7 +126,7 @@ func TestAccCephErasureCodeProfileResource_k3m2(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephErasureCodeProfileExists(profileName),
+					checkCephErasureCodeProfileExists(t, profileName),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "k", "3"),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "m", "2"),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "crush_failure_domain", "host"),
@@ -144,7 +144,7 @@ func TestAccCephErasureCodeProfileResource_withOptionalParams(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephErasureCodeProfileDestroy,
+		CheckDestroy:             testAccCheckCephErasureCodeProfileDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -182,7 +182,7 @@ func TestAccCephErasureCodeProfileResource_withOptionalParams(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephErasureCodeProfileExists(profileName),
+					checkCephErasureCodeProfileExists(t, profileName),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "plugin", "jerasure"),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "technique", "reed_sol_van"),
 					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "crush_device_class", "hdd"),
@@ -200,7 +200,7 @@ func TestAccCephErasureCodeProfileResource_defaults(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephErasureCodeProfileDestroy,
+		CheckDestroy:             testAccCheckCephErasureCodeProfileDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -232,7 +232,7 @@ func TestAccCephErasureCodeProfileResource_defaults(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephErasureCodeProfileExists(profileName),
+					checkCephErasureCodeProfileExists(t, profileName),
 					resource.TestCheckResourceAttrSet("ceph_erasure_code_profile.test", "k"),
 					resource.TestCheckResourceAttrSet("ceph_erasure_code_profile.test", "m"),
 					resource.TestCheckResourceAttrSet("ceph_erasure_code_profile.test", "plugin"),
@@ -243,9 +243,9 @@ func TestAccCephErasureCodeProfileResource_defaults(t *testing.T) {
 	})
 }
 
-func checkCephErasureCodeProfileExists(profileName string) resource.TestCheckFunc {
+func checkCephErasureCodeProfileExists(t *testing.T, profileName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 
 		profile, err := cephTestClusterCLI.ErasureCodeProfileGet(ctx, profileName)
@@ -261,26 +261,28 @@ func checkCephErasureCodeProfileExists(profileName string) resource.TestCheckFun
 	}
 }
 
-func testAccCheckCephErasureCodeProfileDestroy(s *terraform.State) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+func testAccCheckCephErasureCodeProfileDestroy(t *testing.T) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
 
-	for _, rs := range s.RootModule().Resources {
-		if rs.Type != "ceph_erasure_code_profile" {
-			continue
+		for _, rs := range s.RootModule().Resources {
+			if rs.Type != "ceph_erasure_code_profile" {
+				continue
+			}
+
+			profileName := rs.Primary.Attributes["name"]
+
+			profiles, err := cephTestClusterCLI.ErasureCodeProfileList(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to list erasure code profiles: %w", err)
+			}
+
+			if slices.Contains(profiles, profileName) {
+				return fmt.Errorf("erasure code profile %q still exists in Ceph", profileName)
+			}
 		}
 
-		profileName := rs.Primary.Attributes["name"]
-
-		profiles, err := cephTestClusterCLI.ErasureCodeProfileList(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to list erasure code profiles: %w", err)
-		}
-
-		if slices.Contains(profiles, profileName) {
-			return fmt.Errorf("erasure code profile %q still exists in Ceph", profileName)
-		}
+		return nil
 	}
-
-	return nil
 }

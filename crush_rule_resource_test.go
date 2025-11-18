@@ -24,7 +24,7 @@ func TestAccCephCrushRuleResource_replicated(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephCrushRuleDestroy,
+		CheckDestroy:             testAccCheckCephCrushRuleDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanCrushRuleState(t)
@@ -92,7 +92,7 @@ func TestAccCephCrushRuleResource_replicated(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephCrushRuleExists(ruleName),
+					checkCephCrushRuleExists(t, ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "name", ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "pool_type", "replicated"),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "failure_domain", "host"),
@@ -122,7 +122,7 @@ func TestAccCephCrushRuleResource_erasure(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephCrushRuleDestroy,
+		CheckDestroy:             testAccCheckCephCrushRuleDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanCrushRuleState(t)
@@ -223,7 +223,7 @@ func TestAccCephCrushRuleResource_erasure(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephCrushRuleExists(ruleName),
+					checkCephCrushRuleExists(t, ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "name", ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "pool_type", "erasure"),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "type", "3"),
@@ -250,7 +250,7 @@ func TestAccCephCrushRuleResource_withDeviceClass(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephCrushRuleDestroy,
+		CheckDestroy:             testAccCheckCephCrushRuleDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanCrushRuleState(t)
@@ -294,7 +294,7 @@ func TestAccCephCrushRuleResource_withDeviceClass(t *testing.T) {
 					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
-					checkCephCrushRuleExists(ruleName),
+					checkCephCrushRuleExists(t, ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "device_class", "hdd"),
 				),
 			},
@@ -321,9 +321,9 @@ func TestAccCephCrushRuleResource_InvalidPoolType(t *testing.T) {
 	})
 }
 
-func checkCephCrushRuleExists(ruleName string) resource.TestCheckFunc {
+func checkCephCrushRuleExists(t *testing.T, ruleName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
 
 		rule, err := cephTestClusterCLI.CrushRuleDump(ctx, ruleName)
@@ -339,26 +339,28 @@ func checkCephCrushRuleExists(ruleName string) resource.TestCheckFunc {
 	}
 }
 
-func testAccCheckCephCrushRuleDestroy(s *terraform.State) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+func testAccCheckCephCrushRuleDestroy(t *testing.T) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
 
-	for _, rs := range s.RootModule().Resources {
-		if rs.Type != "ceph_crush_rule" {
-			continue
+		for _, rs := range s.RootModule().Resources {
+			if rs.Type != "ceph_crush_rule" {
+				continue
+			}
+
+			ruleName := rs.Primary.Attributes["name"]
+
+			rules, err := cephTestClusterCLI.CrushRuleList(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to list CRUSH rules: %w", err)
+			}
+
+			if slices.Contains(rules, ruleName) {
+				return fmt.Errorf("CRUSH rule %q still exists in Ceph", ruleName)
+			}
 		}
 
-		ruleName := rs.Primary.Attributes["name"]
-
-		rules, err := cephTestClusterCLI.CrushRuleList(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to list CRUSH rules: %w", err)
-		}
-
-		if slices.Contains(rules, ruleName) {
-			return fmt.Errorf("CRUSH rule %q still exists in Ceph", ruleName)
-		}
+		return nil
 	}
-
-	return nil
 }
