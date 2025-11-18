@@ -28,7 +28,7 @@ func logAPIRequest(ctx context.Context, req *http.Request) func(*http.Response, 
 
 	return func(resp *http.Response, err error) {
 		duration := time.Since(startTime)
-		fields := map[string]interface{}{
+		fields := map[string]any{
 			"method":      req.Method,
 			"url":         requestURL,
 			"host":        host,
@@ -57,7 +57,7 @@ func (c *CephAPIClient) Configure(ctx context.Context, endpoints []*url.URL, use
 	}
 
 	c.endpoint = endpoint
-	tflog.Info(ctx, "Using ceph mgr endpoint", map[string]interface{}{
+	tflog.Info(ctx, "Using ceph mgr endpoint", map[string]any{
 		"endpoint": endpoint.String(),
 	})
 
@@ -1216,7 +1216,7 @@ func (c *CephAPIClient) ClusterGetConf(ctx context.Context, name string) (CephAP
 // https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-cluster_conf
 
 func (c *CephAPIClient) ClusterUpdateConf(ctx context.Context, name string, section string, value string) error {
-	requestBody := map[string]interface{}{
+	requestBody := map[string]any{
 		"name": name,
 		"value": []map[string]string{
 			{
@@ -1300,7 +1300,7 @@ type CephAPIMgrModule struct {
 }
 
 type CephAPIMgrModuleOption struct {
-	DefaultValue interface{} `json:"default_value"`
+	DefaultValue any `json:"default_value"`
 }
 
 func (c *CephAPIClient) MgrListModules(ctx context.Context) ([]CephAPIMgrModule, error) {
@@ -1344,7 +1344,7 @@ func (c *CephAPIClient) MgrListModules(ctx context.Context) ([]CephAPIMgrModule,
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-mgr-module-module_name>
 
-type CephAPIMgrModuleConfig map[string]interface{}
+type CephAPIMgrModuleConfig map[string]any
 
 func (c *CephAPIClient) MgrGetModuleConfig(ctx context.Context, moduleName string) (CephAPIMgrModuleConfig, error) {
 	url := c.endpoint.JoinPath("/api/mgr/module", moduleName).String()
@@ -1777,8 +1777,8 @@ func (c *CephAPIClient) UpdatePool(ctx context.Context, poolName string, req Cep
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-pool--pool_name-configuration>
 
 type CephAPIPoolConfigItem struct {
-	Name  string      `json:"name"`
-	Value interface{} `json:"value"`
+	Name  string `json:"name"`
+	Value any    `json:"value"`
 }
 
 type CephAPIPoolConfiguration []CephAPIPoolConfigItem

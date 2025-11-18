@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -276,10 +277,8 @@ func testAccCheckCephErasureCodeProfileDestroy(s *terraform.State) error {
 			return fmt.Errorf("failed to list erasure code profiles: %w", err)
 		}
 
-		for _, profile := range profiles {
-			if profile == profileName {
-				return fmt.Errorf("erasure code profile %q still exists in Ceph", profileName)
-			}
+		if slices.Contains(profiles, profileName) {
+			return fmt.Errorf("erasure code profile %q still exists in Ceph", profileName)
 		}
 	}
 

@@ -7,6 +7,7 @@ import (
 	"math"
 	"os/exec"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -680,7 +681,7 @@ func (c *CephCLI) PoolSet(ctx context.Context, poolName, key, value string) erro
 		case <-ticker.C:
 			actualValue, err := c.PoolGet(ctx, poolName, key)
 			if err != nil {
-				tflog.Warn(ctx, "Pool property verification failed, retrying", map[string]interface{}{
+				tflog.Warn(ctx, "Pool property verification failed, retrying", map[string]any{
 					"pool":  poolName,
 					"key":   key,
 					"error": err.Error(),
@@ -704,7 +705,7 @@ func (c *CephCLI) PoolApplicationGet(ctx context.Context, poolName string) ([]st
 		return nil, fmt.Errorf("failed to get pool %s applications: %w", poolName, err)
 	}
 
-	var apps map[string]interface{}
+	var apps map[string]any
 	if err := json.Unmarshal(output, &apps); err != nil {
 		return nil, fmt.Errorf("failed to parse pool applications: %w", err)
 	}
@@ -727,10 +728,8 @@ func (c *CephCLI) PoolApplicationEnable(ctx context.Context, poolName, applicati
 		return fmt.Errorf("failed to verify application was enabled: %w", err)
 	}
 
-	for _, app := range apps {
-		if app == application {
-			return nil
-		}
+	if slices.Contains(apps, application) {
+		return nil
 	}
 	return fmt.Errorf("application %s not found in pool %s applications after enabling", application, poolName)
 }
