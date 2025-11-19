@@ -295,15 +295,14 @@ func TestAccCephAuthResourceImport_nonExistent(t *testing.T) {
 
 func testAccCheckCephAuthDestroy(t *testing.T) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
+		ctx := t.Context()
+
 		for _, rs := range s.RootModule().Resources {
 			if rs.Type != "ceph_auth" {
 				continue
 			}
 
 			entity := rs.Primary.Attributes["entity"]
-
-			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-			defer cancel()
 
 			_, err := cephTestClusterCLI.AuthGet(ctx, entity)
 			if err == nil {

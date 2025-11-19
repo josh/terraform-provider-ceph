@@ -16,8 +16,7 @@ import (
 
 func testAccCheckCephMgrModuleConfigDestroy(t *testing.T) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
+		ctx := t.Context()
 
 		configDump, err := cephTestClusterCLI.ConfigDump(ctx)
 		if err != nil {
