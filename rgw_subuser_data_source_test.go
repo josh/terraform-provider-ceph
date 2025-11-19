@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"testing"
@@ -89,7 +90,9 @@ func createTestRGWUserWithSubuser(t *testing.T, uid, displayName, subuser, permi
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
-	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
+	if err := cephTestClusterCLI.RgwUserRemove(ctx, uid, true); err != nil && !errors.Is(err, ErrRGWUserNotFound) {
+		t.Fatalf("Pre-cleanup: failed to remove user %s: %v", uid, err)
+	}
 
 	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
 	if err != nil {
