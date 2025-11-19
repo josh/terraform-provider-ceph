@@ -139,8 +139,7 @@ func TestAccCephRGWBucketResourceImport_nonExistent(t *testing.T) {
 
 func testAccCheckCephRGWBucketDestroy(t *testing.T) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
+		ctx := t.Context()
 
 		for _, rs := range s.RootModule().Resources {
 			if rs.Type != "ceph_rgw_bucket" {

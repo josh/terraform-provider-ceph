@@ -1,12 +1,10 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -954,8 +952,7 @@ func TestAccCephConfigResource_differentSections(t *testing.T) {
 
 func testAccCheckCephConfigDestroy(t *testing.T) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
+		ctx := t.Context()
 
 		for _, rs := range s.RootModule().Resources {
 			if rs.Type != "ceph_config" {
