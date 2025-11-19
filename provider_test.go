@@ -437,13 +437,6 @@ func configureCrushRules(ctx context.Context, confPath string, out io.Writer) er
 		return fmt.Errorf("failed to override default erasure code profile: %w", err)
 	}
 
-	cmd = exec.CommandContext(ctx, "ceph", "--conf", confPath, "osd", "crush", "rule", "create-erasure", "erasure-code", "default")
-	cmd.Stdout = out
-	cmd.Stderr = out
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to create erasure-code crush rule: %w", err)
-	}
-
 	return nil
 }
 
