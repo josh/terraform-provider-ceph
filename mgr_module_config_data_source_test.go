@@ -75,6 +75,15 @@ func TestAccCephMgrModuleConfigDataSource_largeIntegerValues(t *testing.T) {
 					if err != nil {
 						t.Fatalf("Failed to set config value out of band: %v", err)
 					}
+
+					t.Cleanup(func() {
+						cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+						defer cleanupCancel()
+
+						if err := removeCephMgrModuleConfigValue(cleanupCtx, "dashboard", "jwt_token_ttl"); err != nil {
+							t.Errorf("Failed to cleanup mgr/dashboard/jwt_token_ttl: %v", err)
+						}
+					})
 				},
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + `
@@ -109,19 +118,6 @@ func TestAccCephMgrModuleConfigDataSource_largeIntegerValues(t *testing.T) {
 						return assertCephMgrModuleConfigValue(ctx, "dashboard", "jwt_token_ttl", "31556952")
 					},
 				),
-			},
-			{
-				PreConfig: func() {
-					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-					defer cancel()
-
-					err := removeCephMgrModuleConfigValue(ctx, "dashboard", "jwt_token_ttl")
-					if err != nil {
-						t.Fatalf("Failed to remove config value out of band: %v", err)
-					}
-				},
-				ConfigVariables: testAccProviderConfig(),
-				Config:          testAccProviderConfigBlock,
 			},
 		},
 	})
