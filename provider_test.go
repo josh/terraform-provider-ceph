@@ -624,6 +624,15 @@ func testAccPreCheckCephHealth(t *testing.T) {
 	}
 }
 
+func testCleanup(t *testing.T, fn func(context.Context)) {
+	t.Helper()
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		fn(ctx)
+	})
+}
+
 type TestWriter struct {
 	t *testing.T
 }

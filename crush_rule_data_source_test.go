@@ -31,11 +31,8 @@ func TestAccCephCrushRuleDataSource_replicated(t *testing.T) {
 				t.Fatalf("Failed to create replicated crush rule: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.CrushRuleRemove(cleanupCtx, ruleName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.CrushRuleRemove(ctx, ruleName); err != nil {
 					t.Errorf("Failed to cleanup crush rule %s: %v", ruleName, err)
 				}
 			})
@@ -113,11 +110,8 @@ func TestAccCephCrushRuleDataSource_simple(t *testing.T) {
 				t.Fatalf("Failed to create simple crush rule: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.CrushRuleRemove(cleanupCtx, ruleName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.CrushRuleRemove(ctx, ruleName); err != nil {
 					t.Errorf("Failed to cleanup crush rule %s: %v", ruleName, err)
 				}
 			})
@@ -204,14 +198,11 @@ func TestAccCephCrushRuleDataSource_erasure(t *testing.T) {
 				t.Fatalf("Failed to create erasure crush rule: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.CrushRuleRemove(cleanupCtx, ruleName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.CrushRuleRemove(ctx, ruleName); err != nil {
 					t.Errorf("Failed to cleanup crush rule %s: %v", ruleName, err)
 				}
-				if err := cephTestClusterCLI.ErasureCodeProfileRemove(cleanupCtx, profileName); err != nil {
+				if err := cephTestClusterCLI.ErasureCodeProfileRemove(ctx, profileName); err != nil {
 					t.Errorf("Failed to cleanup erasure code profile %s: %v", profileName, err)
 				}
 			})

@@ -33,11 +33,8 @@ func TestAccCephPoolDataSource(t *testing.T) {
 				t.Fatalf("Failed to disable autoscaler: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
 					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
 				}
 			})
@@ -108,11 +105,8 @@ func TestAccCephPoolDataSource_erasureCoded(t *testing.T) {
 				t.Fatalf("Failed to disable autoscaler: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
 					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
 				}
 			})
@@ -176,11 +170,8 @@ func TestAccCephPoolDataSource_withApplication(t *testing.T) {
 				t.Fatalf("Failed to enable application: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
 					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
 				}
 			})
@@ -253,11 +244,8 @@ func TestAccCephPoolDataSource_compression(t *testing.T) {
 				t.Fatalf("Failed to set compression required ratio: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
 					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
 				}
 			})
@@ -323,11 +311,8 @@ func TestAccCephPoolDataSource_configurationChanges(t *testing.T) {
 				t.Fatalf("Failed to disable autoscaler: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
 					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
 				}
 			})
@@ -421,11 +406,8 @@ func TestAccCephPoolDataSource_customPGCount(t *testing.T) {
 				t.Fatalf("Failed to disable autoscaler: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
 					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
 				}
 			})
@@ -490,11 +472,8 @@ func TestAccCephPoolDataSource_targetSize(t *testing.T) {
 				t.Fatalf("Failed to set target size bytes: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
 					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
 				}
 			})
@@ -555,11 +534,8 @@ func TestAccCephPoolDataSource_autoscaler(t *testing.T) {
 				t.Fatalf("Failed to set autoscale mode: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
 					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
 				}
 			})
@@ -619,11 +595,8 @@ func TestAccCephPoolDataSource_configuration(t *testing.T) {
 				t.Fatalf("Failed to set noscrub flag: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.PoolDelete(cleanupCtx, poolName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
 					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
 				}
 			})
