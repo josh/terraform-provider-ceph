@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"testing"
@@ -189,7 +190,9 @@ func createTestRGWUserWithCustomS3Key(t *testing.T, uid, displayName, accessKey,
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
-	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
+	if err := cephTestClusterCLI.RgwUserRemove(ctx, uid, true); err != nil && !errors.Is(err, ErrRGWUserNotFound) {
+		t.Fatalf("Pre-cleanup: failed to remove user %s: %v", uid, err)
+	}
 
 	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, &RgwUserCreateOptions{
 		AccessKey: accessKey,
@@ -214,7 +217,9 @@ func createTestRGWUserWithSubuserAndS3Keys(t *testing.T, uid, displayName, subus
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
-	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
+	if err := cephTestClusterCLI.RgwUserRemove(ctx, uid, true); err != nil && !errors.Is(err, ErrRGWUserNotFound) {
+		t.Fatalf("Pre-cleanup: failed to remove user %s: %v", uid, err)
+	}
 
 	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, &RgwUserCreateOptions{
 		AccessKey: parentAccessKey,
@@ -256,7 +261,9 @@ func createTestRGWUserWithMultipleS3Keys(t *testing.T, uid, displayName, accessK
 	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 	defer cancel()
 
-	_ = cephTestClusterCLI.RgwUserRemove(ctx, uid, true)
+	if err := cephTestClusterCLI.RgwUserRemove(ctx, uid, true); err != nil && !errors.Is(err, ErrRGWUserNotFound) {
+		t.Fatalf("Pre-cleanup: failed to remove user %s: %v", uid, err)
+	}
 
 	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, &RgwUserCreateOptions{
 		AccessKey: accessKey1,

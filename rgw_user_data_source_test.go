@@ -99,8 +99,7 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 						Admin: &admin,
 					})
 					if err != nil {
-						t.Logf("radosgw-admin failed (expected in test environment): %v", err)
-						return
+						t.Fatalf("Failed to set admin flag (required for test): %v", err)
 					}
 					t.Logf("Set admin flag to true for user: %s", testUID)
 				},
@@ -125,8 +124,7 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 						Admin: &admin,
 					})
 					if err != nil {
-						t.Logf("radosgw-admin failed (expected in test environment): %v", err)
-						return
+						t.Fatalf("Failed to set admin flag (required for test): %v", err)
 					}
 					t.Logf("Set admin flag to false for user: %s", testUID)
 				},

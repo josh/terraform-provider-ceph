@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"os/exec"
@@ -13,6 +14,8 @@ import (
 	"strings"
 	"time"
 )
+
+var ErrRGWUserNotFound = errors.New("rgw user not found")
 
 type CephCLI struct {
 	confPath string
@@ -401,6 +404,12 @@ func (c *CephCLI) RgwUserInfo(ctx context.Context, uid string) (*RgwUserInfo, er
 	cmd := exec.CommandContext(ctx, "radosgw-admin", "--conf", c.confPath, "--format=json", "user", "info", "--uid="+uid)
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderr := string(exitErr.Stderr)
+			if strings.Contains(stderr, "could not fetch user info") {
+				return nil, fmt.Errorf("failed to get rgw user info for %s: %w", uid, ErrRGWUserNotFound)
+			}
+		}
 		return nil, fmt.Errorf("failed to get rgw user info for %s: %w", uid, err)
 	}
 
@@ -468,15 +477,25 @@ func (c *CephCLI) RgwUserRemove(ctx context.Context, uid string, purgeData bool)
 	}
 
 	cmd := exec.CommandContext(ctx, "radosgw-admin", args...)
-	if err := cmd.Run(); err != nil {
+	_, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderr := string(exitErr.Stderr)
+			if strings.Contains(stderr, "user does not exist") {
+				return fmt.Errorf("failed to remove rgw user %s: %w", uid, ErrRGWUserNotFound)
+			}
+		}
 		return fmt.Errorf("failed to remove rgw user %s: %w", uid, err)
 	}
 
-	_, err := c.RgwUserInfo(ctx, uid)
+	_, err = c.RgwUserInfo(ctx, uid)
 	if err == nil {
 		return fmt.Errorf("user still exists after removal: %s", uid)
 	}
-	return nil
+	if errors.Is(err, ErrRGWUserNotFound) {
+		return nil
+	}
+	return fmt.Errorf("unexpected error verifying user removal: %w", err)
 }
 
 func (c *CephCLI) RgwUserSuspend(ctx context.Context, uid string, suspend bool) error {
