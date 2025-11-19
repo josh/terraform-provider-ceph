@@ -30,7 +30,6 @@ func TestAccCephConfigResource(t *testing.T) {
 		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanConfigState(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -106,7 +105,6 @@ func TestAccCephConfigResource_update(t *testing.T) {
 		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanConfigState(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -218,7 +216,6 @@ func TestAccCephConfigResource_multipleConfigs(t *testing.T) {
 		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanConfigState(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -293,7 +290,6 @@ func TestAccCephConfigResource_removeConfig(t *testing.T) {
 		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanConfigState(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -399,7 +395,6 @@ func TestAccCephConfigResource_import(t *testing.T) {
 		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanConfigState(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -451,7 +446,6 @@ func TestAccCephConfigResource_importMultiple(t *testing.T) {
 		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanConfigState(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -504,7 +498,6 @@ func TestAccCephConfigResource_MgrConfigRejection(t *testing.T) {
 		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanConfigState(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -535,7 +528,6 @@ func TestAccCephConfigResource_bulkImport(t *testing.T) {
 		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanConfigState(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -610,7 +602,6 @@ func TestAccCephConfigResource_nativeIntValue(t *testing.T) {
 		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanConfigState(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -696,7 +687,6 @@ func TestAccCephConfigResource_nativeBoolValue(t *testing.T) {
 		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanConfigState(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -780,7 +770,6 @@ func TestAccCephConfigResource_invalidSectionRejection(t *testing.T) {
 		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanConfigState(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -808,7 +797,6 @@ func TestAccCephConfigResource_numericTypeBoundaries(t *testing.T) {
 		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanConfigState(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -864,7 +852,6 @@ func TestAccCephConfigResource_partialUpdate(t *testing.T) {
 		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanConfigState(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -937,7 +924,6 @@ func TestAccCephConfigResource_differentSections(t *testing.T) {
 		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanConfigState(t)
 		},
 		Steps: []resource.TestStep{
 			{

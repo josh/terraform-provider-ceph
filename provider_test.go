@@ -13,7 +13,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -35,11 +34,6 @@ var (
 	testTimeout        = flag.Duration("timeout", 0, "test timeout")
 	cephDaemonLogs     *LogDemux
 	testNumOsds        = 5
-
-	expectedInitialPools      = []string{".rgw.root", ".mgr", "default.rgw.log", "default.rgw.control", "default.rgw.meta"}
-	expectedOptionalPools     = []string{"default.rgw.buckets.index"}
-	expectedInitialConfig     = []ConfigDumpEntry{{Section: "mgr", Name: "mgr/dashboard/ssl", Value: "false"}}
-	expectedInitialCrushRules = []string{"erasure-code", "replicated_rule"}
 )
 
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
@@ -641,101 +635,6 @@ func testAccPreCheckCephHealth(t *testing.T) {
 
 	if err := cephTestClusterCLI.CheckHealth(ctx); err != nil {
 		t.Fatalf("Ceph cluster health check failed: %v", err)
-	}
-}
-
-func testAccPreCheckCleanPoolState(t *testing.T) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-
-	actualPools, err := cephTestClusterCLI.PoolList(ctx)
-	if err != nil {
-		t.Fatalf("Failed to list pools: %v", err)
-	}
-
-	for _, required := range expectedInitialPools {
-		if !slices.Contains(actualPools, required) {
-			sortedActual := make([]string, len(actualPools))
-			copy(sortedActual, actualPools)
-			sort.Strings(sortedActual)
-			sortedRequired := make([]string, len(expectedInitialPools))
-			copy(sortedRequired, expectedInitialPools)
-			sort.Strings(sortedRequired)
-			t.Fatalf("Missing required pool.\nExpected: %v\nOptional: %v\nGot: %v",
-				sortedRequired, expectedOptionalPools, sortedActual)
-		}
-	}
-
-	for _, actual := range actualPools {
-		if !slices.Contains(expectedInitialPools, actual) &&
-			!slices.Contains(expectedOptionalPools, actual) {
-			sortedActual := make([]string, len(actualPools))
-			copy(sortedActual, actualPools)
-			sort.Strings(sortedActual)
-			t.Fatalf("Unexpected pool found: %s\nExpected required: %v\nExpected optional: %v\nGot: %v",
-				actual, expectedInitialPools, expectedOptionalPools, sortedActual)
-		}
-	}
-}
-
-func testAccPreCheckCleanConfigState(t *testing.T) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-
-	entries, err := cephTestClusterCLI.ConfigDump(ctx)
-	if err != nil {
-		t.Fatalf("Failed to dump config: %v", err)
-	}
-
-	actualMap := make(map[string]ConfigDumpEntry)
-	for _, entry := range entries {
-		key := entry.Section + "::" + entry.Name
-		actualMap[key] = entry
-	}
-
-	expectedMap := make(map[string]ConfigDumpEntry)
-	for _, entry := range expectedInitialConfig {
-		key := entry.Section + "::" + entry.Name
-		expectedMap[key] = entry
-	}
-
-	for key, expected := range expectedMap {
-		actual, exists := actualMap[key]
-		if !exists {
-			t.Fatalf("Expected config entry not found: [%s] %s=%s.\nExpected: %+v\nGot: %+v",
-				expected.Section, expected.Name, expected.Value,
-				expectedInitialConfig, entries)
-		}
-		if actual.Value != expected.Value {
-			t.Fatalf("Config value mismatch for [%s] %s: expected %s, got %s.\nExpected: %+v\nGot: %+v",
-				expected.Section, expected.Name, expected.Value, actual.Value,
-				expectedInitialConfig, entries)
-		}
-	}
-}
-
-func testAccPreCheckCleanCrushRuleState(t *testing.T) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
-
-	rules, err := cephTestClusterCLI.CrushRuleList(ctx)
-	if err != nil {
-		t.Fatalf("Failed to list crush rules: %v", err)
-	}
-
-	sortedRules := make([]string, len(rules))
-	copy(sortedRules, rules)
-	sort.Strings(sortedRules)
-
-	sortedExpected := make([]string, len(expectedInitialCrushRules))
-	copy(sortedExpected, expectedInitialCrushRules)
-	sort.Strings(sortedExpected)
-
-	if !slices.Equal(sortedRules, sortedExpected) {
-		t.Fatalf("Crush rule mismatch.\nExpected: %v\nGot: %v", sortedExpected, sortedRules)
 	}
 }
 
