@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -211,8 +212,8 @@ func createTestRGWUserWithSubuserWithoutKeys(t *testing.T, uid, displayName, sub
 	t.Logf("Created test RGW user: %s with subuser: %s", uid, subuser)
 
 	testCleanup(t, func(ctx context.Context) {
-		if err := cephTestClusterCLI.RgwUserRemove(ctx, uid, true); err != nil {
-			t.Logf("Note: cleanup of RGW user %s reported an error (may already be deleted): %v", uid, err)
+		if err := cephTestClusterCLI.RgwUserRemove(ctx, uid, true); err != nil && !errors.Is(err, ErrRGWUserNotFound) {
+			t.Fatalf("Failed to cleanup RGW user %s: %v", uid, err)
 		}
 	})
 }
