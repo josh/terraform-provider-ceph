@@ -113,9 +113,7 @@ func TestAccCephMgrModuleConfigDataSource_largeIntegerValues(t *testing.T) {
 						return nil
 					},
 					func(s *terraform.State) error {
-						ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-						defer cancel()
-						return assertCephMgrModuleConfigValue(ctx, "dashboard", "jwt_token_ttl", "31556952")
+						return assertCephMgrModuleConfigValue(t.Context(), "dashboard", "jwt_token_ttl", "31556952")
 					},
 				),
 			},
