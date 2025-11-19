@@ -726,9 +726,7 @@ func (c *CephCLI) PoolApplicationEnable(ctx context.Context, poolName, applicati
 }
 
 type RgwBucketInfo struct {
-	Bucket string `json:"bucket"`
-	Owner  string `json:"owner"`
-	ID     string `json:"id"`
+	Owner string `json:"owner"`
 }
 
 func (c *CephCLI) RgwBucketInfo(ctx context.Context, bucket string) (*RgwBucketInfo, error) {
