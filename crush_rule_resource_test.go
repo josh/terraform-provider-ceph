@@ -1,12 +1,10 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -320,10 +318,7 @@ func TestAccCephCrushRuleResource_InvalidPoolType(t *testing.T) {
 
 func checkCephCrushRuleExists(t *testing.T, ruleName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
-
-		rule, err := cephTestClusterCLI.CrushRuleDump(ctx, ruleName)
+		rule, err := cephTestClusterCLI.CrushRuleDump(t.Context(), ruleName)
 		if err != nil {
 			return fmt.Errorf("failed to get CRUSH rule '%s': %w", ruleName, err)
 		}

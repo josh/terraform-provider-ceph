@@ -1,12 +1,10 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"slices"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -246,10 +244,7 @@ func TestAccCephErasureCodeProfileResource_defaults(t *testing.T) {
 
 func checkCephErasureCodeProfileExists(t *testing.T, profileName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
-
-		profile, err := cephTestClusterCLI.ErasureCodeProfileGet(ctx, profileName)
+		profile, err := cephTestClusterCLI.ErasureCodeProfileGet(t.Context(), profileName)
 		if err != nil {
 			return fmt.Errorf("failed to get erasure code profile '%s': %w", profileName, err)
 		}
