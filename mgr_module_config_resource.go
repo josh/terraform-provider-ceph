@@ -286,28 +286,14 @@ func (r *MgrModuleConfigResource) Delete(ctx context.Context, req resource.Delet
 		return
 	}
 
-	options, err := r.client.MgrGetModuleOptions(ctx, moduleName)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"API Request Error",
-			fmt.Sprintf("Unable to get module options for '%s': %s", moduleName, err),
-		)
-		return
-	}
-
-	defaultConfigs := make(CephAPIMgrModuleConfig)
 	for key := range currentConfigsMap {
-		if option, ok := options[key]; ok {
-			defaultConfigs[key] = option.DefaultValue
-		}
-	}
+		configName := fmt.Sprintf("mgr/%s/%s", moduleName, key)
 
-	if len(defaultConfigs) > 0 {
-		err = r.client.MgrSetModuleConfig(ctx, moduleName, defaultConfigs)
+		err := r.client.ClusterDeleteConf(ctx, configName, "mgr")
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"API Request Error",
-				fmt.Sprintf("Unable to reset MGR module config for '%s' to defaults: %s", moduleName, err),
+				fmt.Sprintf("Unable to delete MGR module config '%s': %s", configName, err),
 			)
 			return
 		}

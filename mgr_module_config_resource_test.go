@@ -14,11 +14,40 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
-func testAccCheckDashboardConfigReset(t *testing.T) resource.TestCheckFunc {
+func testAccCheckCephMgrModuleConfigDestroy(t *testing.T) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 		defer cancel()
-		return cephTestClusterCLI.ConfigSet(ctx, "mgr", "mgr/dashboard/ssl", "false")
+
+		configDump, err := cephTestClusterCLI.ConfigDump(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get config dump: %w", err)
+		}
+
+		for _, rs := range s.RootModule().Resources {
+			if rs.Type != "ceph_mgr_module_config" {
+				continue
+			}
+
+			moduleName := rs.Primary.Attributes["module_name"]
+
+			for key := range rs.Primary.Attributes {
+				if !strings.HasPrefix(key, "configs.") || key == "configs.%" {
+					continue
+				}
+
+				configKey := strings.TrimPrefix(key, "configs.")
+				fullKey := fmt.Sprintf("mgr/%s/%s", moduleName, configKey)
+
+				for _, entry := range configDump {
+					if entry.Section == "mgr" && entry.Name == fullKey {
+						return fmt.Errorf("config %s still exists in config dump after destroy", fullKey)
+					}
+				}
+			}
+		}
+
+		return nil
 	}
 }
 
@@ -28,7 +57,7 @@ func TestAccCephMgrModuleConfigResource(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckDashboardConfigReset(t),
+		CheckDestroy:             testAccCheckCephMgrModuleConfigDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -104,7 +133,7 @@ func TestAccCephMgrModuleConfigResource_nonStringLiterals(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckDashboardConfigReset(t),
+		CheckDestroy:             testAccCheckCephMgrModuleConfigDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -140,6 +169,7 @@ func TestAccCephMgrModuleConfigResource_delete(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephMgrModuleConfigDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -296,7 +326,7 @@ func TestAccCephMgrModuleConfigResource_mixedNumericTypes(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckDashboardConfigReset(t),
+		CheckDestroy:             testAccCheckCephMgrModuleConfigDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -361,7 +391,7 @@ func TestAccCephMgrModuleConfigResource_booleanValues(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckDashboardConfigReset(t),
+		CheckDestroy:             testAccCheckCephMgrModuleConfigDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
