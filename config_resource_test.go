@@ -1,14 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"regexp"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
@@ -23,6 +27,7 @@ func TestAccCephConfigResource(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanConfigState(t)
@@ -98,6 +103,7 @@ func TestAccCephConfigResource_update(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanConfigState(t)
@@ -209,6 +215,7 @@ func TestAccCephConfigResource_multipleConfigs(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanConfigState(t)
@@ -283,6 +290,7 @@ func TestAccCephConfigResource_removeConfig(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanConfigState(t)
@@ -388,6 +396,7 @@ func TestAccCephConfigResource_import(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanConfigState(t)
@@ -439,6 +448,7 @@ func TestAccCephConfigResource_importMultiple(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanConfigState(t)
@@ -491,6 +501,7 @@ func TestAccCephConfigResource_MgrConfigRejection(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanConfigState(t)
@@ -521,6 +532,7 @@ func TestAccCephConfigResource_bulkImport(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanConfigState(t)
@@ -595,6 +607,7 @@ func TestAccCephConfigResource_nativeIntValue(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanConfigState(t)
@@ -680,6 +693,7 @@ func TestAccCephConfigResource_nativeBoolValue(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanConfigState(t)
@@ -763,6 +777,7 @@ func TestAccCephConfigResource_invalidSectionRejection(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanConfigState(t)
@@ -790,6 +805,7 @@ func TestAccCephConfigResource_numericTypeBoundaries(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanConfigState(t)
@@ -845,6 +861,7 @@ func TestAccCephConfigResource_partialUpdate(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanConfigState(t)
@@ -917,6 +934,7 @@ func TestAccCephConfigResource_differentSections(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 			testAccPreCheckCleanConfigState(t)
@@ -946,4 +964,33 @@ func TestAccCephConfigResource_differentSections(t *testing.T) {
 			},
 		},
 	})
+}
+
+func testAccCheckCephConfigDestroy(t *testing.T) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+
+		for _, rs := range s.RootModule().Resources {
+			if rs.Type != "ceph_config" {
+				continue
+			}
+
+			section := rs.Primary.Attributes["section"]
+
+			for key := range rs.Primary.Attributes {
+				if !strings.HasPrefix(key, "config.") || key == "config.%" {
+					continue
+				}
+
+				configName := strings.TrimPrefix(key, "config.")
+
+				_, err := cephTestClusterCLI.ConfigGetFromDump(ctx, section, configName)
+				if err == nil {
+					return fmt.Errorf("ceph_config %s/%s still exists after destroy", section, configName)
+				}
+			}
+		}
+		return nil
+	}
 }

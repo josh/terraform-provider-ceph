@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
+	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
@@ -22,6 +24,7 @@ func TestAccCephRGWS3KeyResource(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWS3KeyDestroy(t),
 		PreCheck: func() {
 			createTestRGWUserWithoutKeys(t, testUID, "Test S3 Key Resource User")
 		},
@@ -72,6 +75,7 @@ func TestAccCephRGWS3KeyResource_customKeys(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWS3KeyDestroy(t),
 		PreCheck: func() {
 			createTestRGWUserWithoutKeys(t, testUID, "Test S3 Key Custom User")
 		},
@@ -104,6 +108,7 @@ func TestAccCephRGWS3KeyResource_multipleKeys(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWS3KeyDestroy(t),
 		PreCheck: func() {
 			createTestRGWUserWithoutKeys(t, testUID, "Test S3 Key Multi User")
 		},
@@ -140,6 +145,7 @@ func TestAccCephRGWS3KeyResource_subuser(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWS3KeyDestroy(t),
 		PreCheck: func() {
 			createTestRGWUserWithSubuserWithoutKeys(t, testUID, "Test S3 Key Subuser User", testSubuser)
 		},
@@ -169,6 +175,7 @@ func TestAccCephRGWS3KeyResource_nonExistentUser(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWS3KeyDestroy(t),
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
@@ -221,6 +228,7 @@ func TestAccCephRGWS3KeyResource_rotationWorkflow(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWS3KeyDestroy(t),
 		PreCheck: func() {
 			createTestRGWUserWithoutKeys(t, testUID, "Key Rotation Test User")
 		},
@@ -287,6 +295,7 @@ func TestAccCephRGWS3KeyResource_customKeyValidation(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWS3KeyDestroy(t),
 		PreCheck: func() {
 			createTestRGWUserWithoutKeys(t, testUID, "Custom Key Validation User")
 		},
@@ -339,6 +348,7 @@ func TestAccCephRGWS3KeyResource_importWithMultipleKeys(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWS3KeyDestroy(t),
 		PreCheck: func() {
 			createTestRGWUserWithoutKeys(t, testUID, "Import Multiple Keys Test User")
 		},
@@ -392,6 +402,7 @@ func TestAccCephRGWS3KeyResource_deletionAndRecreation(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWS3KeyDestroy(t),
 		PreCheck: func() {
 			createTestRGWUserWithoutKeys(t, testUID, "Deletion Recreate Test User")
 		},
@@ -446,6 +457,7 @@ func TestAccCephRGWS3KeyResource_importMultipleKeysManagement(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWS3KeyDestroy(t),
 		PreCheck: func() {
 			createTestRGWUserWithoutKeys(t, testUID, "Import Multiple Keys Management User")
 		},
@@ -528,4 +540,35 @@ func createRGWS3Key(t *testing.T, userID, accessKey, secretKey string) {
 	}
 
 	t.Logf("Created RGW S3 key %s for user %s", accessKey, userID)
+}
+
+func testAccCheckCephRGWS3KeyDestroy(t *testing.T) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+		defer cancel()
+
+		for _, rs := range s.RootModule().Resources {
+			if rs.Type != "ceph_rgw_s3_key" {
+				continue
+			}
+
+			userID := rs.Primary.Attributes["user_id"]
+			accessKey := rs.Primary.Attributes["access_key"]
+
+			parts := strings.SplitN(userID, ":", 2)
+			parentUID := parts[0]
+
+			userInfo, err := cephTestClusterCLI.RgwUserInfo(ctx, parentUID)
+			if err != nil {
+				continue
+			}
+
+			for _, key := range userInfo.Keys {
+				if key.User == userID && key.AccessKey == accessKey {
+					return fmt.Errorf("ceph_rgw_s3_key %s for user %s still exists", accessKey, userID)
+				}
+			}
+		}
+		return nil
+	}
 }
