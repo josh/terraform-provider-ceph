@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -24,10 +23,7 @@ func TestAccCephCrushRuleDataSource_replicated(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-			defer cancel()
-
-			if err := cephTestClusterCLI.CrushRuleCreateReplicated(ctx, ruleName, "default", "host"); err != nil {
+			if err := cephTestClusterCLI.CrushRuleCreateReplicated(t.Context(), ruleName, "default", "host"); err != nil {
 				t.Fatalf("Failed to create replicated crush rule: %v", err)
 			}
 
@@ -103,10 +99,7 @@ func TestAccCephCrushRuleDataSource_simple(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-			defer cancel()
-
-			if err := cephTestClusterCLI.CrushRuleCreateSimple(ctx, ruleName, "default", "host"); err != nil {
+			if err := cephTestClusterCLI.CrushRuleCreateSimple(t.Context(), ruleName, "default", "host"); err != nil {
 				t.Fatalf("Failed to create simple crush rule: %v", err)
 			}
 
@@ -183,10 +176,7 @@ func TestAccCephCrushRuleDataSource_erasure(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-			defer cancel()
-
-			if err := cephTestClusterCLI.ErasureCodeProfileSet(ctx, profileName, map[string]string{
+			if err := cephTestClusterCLI.ErasureCodeProfileSet(t.Context(), profileName, map[string]string{
 				"k":                    "2",
 				"m":                    "1",
 				"crush-failure-domain": "osd",
@@ -194,7 +184,7 @@ func TestAccCephCrushRuleDataSource_erasure(t *testing.T) {
 				t.Fatalf("Failed to create erasure code profile: %v", err)
 			}
 
-			if err := cephTestClusterCLI.CrushRuleCreateErasure(ctx, ruleName, profileName); err != nil {
+			if err := cephTestClusterCLI.CrushRuleCreateErasure(t.Context(), ruleName, profileName); err != nil {
 				t.Fatalf("Failed to create erasure crush rule: %v", err)
 			}
 

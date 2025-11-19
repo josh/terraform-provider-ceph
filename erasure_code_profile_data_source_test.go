@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -22,10 +21,7 @@ func TestAccCephErasureCodeProfileDataSource_k2m1(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-			defer cancel()
-
-			if err := cephTestClusterCLI.ErasureCodeProfileSet(ctx, profileName, map[string]string{
+			if err := cephTestClusterCLI.ErasureCodeProfileSet(t.Context(), profileName, map[string]string{
 				"k":                    "2",
 				"m":                    "1",
 				"crush-failure-domain": "osd",
@@ -88,10 +84,7 @@ func TestAccCephErasureCodeProfileDataSource_k3m2(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
-			defer cancel()
-
-			if err := cephTestClusterCLI.ErasureCodeProfileSet(ctx, profileName, map[string]string{
+			if err := cephTestClusterCLI.ErasureCodeProfileSet(t.Context(), profileName, map[string]string{
 				"k":                    "3",
 				"m":                    "2",
 				"crush-failure-domain": "host",
