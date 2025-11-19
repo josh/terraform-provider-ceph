@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -77,18 +76,15 @@ func TestAccCephConfigDataSource_multiLevel(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-			defer cancel()
-
-			if err := cephTestClusterCLI.ConfigSet(ctx, "global", configName, fmt.Sprintf("%d", globalValue)); err != nil {
+			if err := cephTestClusterCLI.ConfigSet(t.Context(), "global", configName, fmt.Sprintf("%d", globalValue)); err != nil {
 				t.Fatalf("Failed to set global config: %v", err)
 			}
 
-			if err := cephTestClusterCLI.ConfigSet(ctx, "osd", configName, fmt.Sprintf("%d", osdValue)); err != nil {
+			if err := cephTestClusterCLI.ConfigSet(t.Context(), "osd", configName, fmt.Sprintf("%d", osdValue)); err != nil {
 				t.Fatalf("Failed to set osd config: %v", err)
 			}
 
-			if err := cephTestClusterCLI.ConfigSet(ctx, "osd.0", configName, fmt.Sprintf("%d", osd1Value)); err != nil {
+			if err := cephTestClusterCLI.ConfigSet(t.Context(), "osd.0", configName, fmt.Sprintf("%d", osd1Value)); err != nil {
 				t.Fatalf("Failed to set osd.0 config: %v", err)
 			}
 

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -26,10 +25,7 @@ func TestAccCephConfigValueDataSource(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-			defer cancel()
-
-			if err := cephTestClusterCLI.ConfigSet(ctx, "global", configName, fmt.Sprintf("%d", testValue)); err != nil {
+			if err := cephTestClusterCLI.ConfigSet(t.Context(), "global", configName, fmt.Sprintf("%d", testValue)); err != nil {
 				t.Fatalf("Failed to set test config: %v", err)
 			}
 
@@ -94,14 +90,11 @@ func TestAccCephConfigValueDataSource_multipleSections(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-			defer cancel()
-
-			if err := cephTestClusterCLI.ConfigSet(ctx, "global", configName, fmt.Sprintf("%d", testValue1)); err != nil {
+			if err := cephTestClusterCLI.ConfigSet(t.Context(), "global", configName, fmt.Sprintf("%d", testValue1)); err != nil {
 				t.Fatalf("Failed to set test config for global: %v", err)
 			}
 
-			if err := cephTestClusterCLI.ConfigSet(ctx, "mon", configName, fmt.Sprintf("%d", testValue2)); err != nil {
+			if err := cephTestClusterCLI.ConfigSet(t.Context(), "mon", configName, fmt.Sprintf("%d", testValue2)); err != nil {
 				t.Fatalf("Failed to set test config for mon: %v", err)
 			}
 
@@ -199,10 +192,7 @@ func TestAccCephConfigValueDataSource_readMaskedConfig(t *testing.T) {
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
-			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-			defer cancel()
-
-			if err := cephTestClusterCLI.ConfigSet(ctx, "osd/class:ssd", configName, fmt.Sprintf("%d", testValue)); err != nil {
+			if err := cephTestClusterCLI.ConfigSet(t.Context(), "osd/class:ssd", configName, fmt.Sprintf("%d", testValue)); err != nil {
 				t.Fatalf("Failed to set masked config via CLI: %v", err)
 			}
 

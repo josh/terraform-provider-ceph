@@ -616,10 +616,8 @@ func checkCephStatus(ctx context.Context, confPath string) (cephStatus, error) {
 
 func testAccPreCheckCephHealth(t *testing.T) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
-	defer cancel()
 
-	if err := cephTestClusterCLI.CheckHealth(ctx); err != nil {
+	if err := cephTestClusterCLI.CheckHealth(t.Context()); err != nil {
 		t.Fatalf("Ceph cluster health check failed: %v", err)
 	}
 }
@@ -830,16 +828,13 @@ func TestAccProvider_tokenAuthentication(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-			defer cancel()
-
 			client := &CephAPIClient{}
 			endpoint, err := url.Parse(testDashboardURL)
 			if err != nil {
 				t.Fatalf("Failed to parse test dashboard URL: %v", err)
 			}
 
-			if err := client.Configure(ctx, []*url.URL{endpoint}, "admin", "password", ""); err != nil {
+			if err := client.Configure(t.Context(), []*url.URL{endpoint}, "admin", "password", ""); err != nil {
 				t.Fatalf("Failed to configure client: %v", err)
 			}
 
