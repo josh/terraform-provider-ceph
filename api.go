@@ -955,7 +955,9 @@ func (c *CephAPIClient) ClusterListConf(ctx context.Context) ([]CephAPIClusterCo
 // https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-cluster_conf-name
 
 func (c *CephAPIClient) ClusterGetConf(ctx context.Context, name string) (CephAPIClusterConf, error) {
-	url := c.endpoint.JoinPath("/api/cluster_conf", name).String()
+	encodedName := url.PathEscape(name)
+	endpoint := c.endpoint.JoinPath("/api/cluster_conf", encodedName)
+	url := endpoint.String()
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -1040,7 +1042,8 @@ func (c *CephAPIClient) ClusterUpdateConf(ctx context.Context, name string, sect
 // https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-cluster_conf-name
 
 func (c *CephAPIClient) ClusterDeleteConf(ctx context.Context, name string, section string) error {
-	endpoint := c.endpoint.JoinPath("/api/cluster_conf", name)
+	encodedName := url.PathEscape(name)
+	endpoint := c.endpoint.JoinPath("/api/cluster_conf", encodedName)
 	query := url.Values{}
 	query.Add("section", section)
 	endpoint.RawQuery = query.Encode()
