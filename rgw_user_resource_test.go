@@ -410,10 +410,7 @@ func testAccCheckCephRGWUserDestroy(t *testing.T) resource.TestCheckFunc {
 func checkCephRGWUserExists(t *testing.T, userID string) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
-
-		user, err := cephTestClusterCLI.RgwUserInfo(ctx, userID)
+		user, err := cephTestClusterCLI.RgwUserInfo(t.Context(), userID)
 		if err != nil {
 			return fmt.Errorf("RGW user %s does not exist: %w", userID, err)
 		}
@@ -487,10 +484,7 @@ func TestAccCephRGWUserResource_managedS3Keys(t *testing.T) {
 func checkCephRGWUserKeyCount(t *testing.T, userID string, expectedCount int) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
-
-		userInfo, err := cephTestClusterCLI.RgwUserInfo(ctx, userID)
+		userInfo, err := cephTestClusterCLI.RgwUserInfo(t.Context(), userID)
 		if err != nil {
 			return fmt.Errorf("radosgw-admin failed to get user info: %v", err)
 		}
