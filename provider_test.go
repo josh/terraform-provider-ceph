@@ -552,13 +552,6 @@ func enableCephDashboard(ctx context.Context, confPath string, out io.Writer) (s
 		return "", fmt.Errorf("failed to disable dashboard SSL: %w", err)
 	}
 
-	cmd = exec.CommandContext(ctx, "ceph", "--conf", confPath, "dashboard", "set-rgw-credentials")
-	cmd.Stdout = out
-	cmd.Stderr = out
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to set RGW credentials: %w", err)
-	}
-
 	cmd = exec.CommandContext(ctx, "ceph", "--conf", confPath, "dashboard", "ac-user-create", "admin", "-i", "/dev/stdin", "administrator")
 	cmd.Stdin = strings.NewReader("password")
 	cmd.Stdout = out
