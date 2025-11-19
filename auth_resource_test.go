@@ -1,11 +1,9 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -443,10 +441,7 @@ func TestAccCephAuthResource_capsDriftDetection(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-					defer cancel()
-
-					err := cephTestClusterCLI.AuthSetCaps(ctx, testEntity, map[string]string{
+					err := cephTestClusterCLI.AuthSetCaps(t.Context(), testEntity, map[string]string{
 						"mon": "allow rw",
 						"osd": "allow rw pool=modified",
 						"mgr": "allow r",

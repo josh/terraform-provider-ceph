@@ -984,11 +984,8 @@ func TestAccCephRGWUserResource_driftDetection(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-					defer cancel()
-
 					maxBuckets := 200
-					err := cephTestClusterCLI.RgwUserModify(ctx, testUID, &RgwUserModifyOptions{
+					err := cephTestClusterCLI.RgwUserModify(t.Context(), testUID, &RgwUserModifyOptions{
 						DisplayName: "Modified Display Name",
 						MaxBuckets:  &maxBuckets,
 					})
