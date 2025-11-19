@@ -27,7 +27,6 @@ func TestAccCephCrushRuleResource_replicated(t *testing.T) {
 		CheckDestroy:             testAccCheckCephCrushRuleDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanCrushRuleState(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -125,7 +124,6 @@ func TestAccCephCrushRuleResource_erasure(t *testing.T) {
 		CheckDestroy:             testAccCheckCephCrushRuleDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanCrushRuleState(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -253,7 +251,6 @@ func TestAccCephCrushRuleResource_withDeviceClass(t *testing.T) {
 		CheckDestroy:             testAccCheckCephCrushRuleDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanCrushRuleState(t)
 		},
 		Steps: []resource.TestStep{
 			{

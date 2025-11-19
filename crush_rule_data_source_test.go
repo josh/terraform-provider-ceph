@@ -23,7 +23,6 @@ func TestAccCephCrushRuleDataSource_replicated(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanCrushRuleState(t)
 
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
@@ -106,7 +105,6 @@ func TestAccCephCrushRuleDataSource_simple(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanCrushRuleState(t)
 
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
@@ -190,7 +188,6 @@ func TestAccCephCrushRuleDataSource_erasure(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
-			testAccPreCheckCleanCrushRuleState(t)
 
 			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
 			defer cancel()
