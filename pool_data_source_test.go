@@ -363,11 +363,11 @@ func TestAccCephPoolDataSource_configurationChanges(t *testing.T) {
 					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
 					defer cancel()
 
-					if err := cephTestClusterCLI.PoolSet(ctx, poolName, "pg_num", "16"); err != nil {
+					if err := cephTestClusterCLI.PoolSetWait(ctx, poolName, "pg_num", "16"); err != nil {
 						t.Fatalf("Failed to set pg_num: %v", err)
 					}
 
-					if err := cephTestClusterCLI.PoolSet(ctx, poolName, "size", "2"); err != nil {
+					if err := cephTestClusterCLI.PoolSetWait(ctx, poolName, "size", "2"); err != nil {
 						t.Fatalf("Failed to set size: %v", err)
 					}
 				},
