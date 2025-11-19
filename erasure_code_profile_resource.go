@@ -4,17 +4,21 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
 var (
-	_ resource.Resource                = &ErasureCodeProfileResource{}
-	_ resource.ResourceWithImportState = &ErasureCodeProfileResource{}
+	_ resource.Resource                     = &ErasureCodeProfileResource{}
+	_ resource.ResourceWithImportState      = &ErasureCodeProfileResource{}
+	_ resource.ResourceWithConfigValidators = &ErasureCodeProfileResource{}
 )
 
 func newErasureCodeProfileResource() resource.Resource {
@@ -37,8 +41,58 @@ type ErasureCodeProfileResourceModel struct {
 	Directory          types.String `tfsdk:"directory"`
 }
 
+type erasureCodeKMValidator struct{}
+
+func (v erasureCodeKMValidator) Description(ctx context.Context) string {
+	return "validates k and m values for erasure code profile"
+}
+
+func (v erasureCodeKMValidator) MarkdownDescription(ctx context.Context) string {
+	return "Validates k and m values meet Ceph requirements: k+m <= 255 and m < k is recommended."
+}
+
+func (v erasureCodeKMValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var config ErasureCodeProfileResourceModel
+
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if config.K.IsUnknown() || config.M.IsUnknown() {
+		return
+	}
+
+	if config.K.IsNull() || config.M.IsNull() {
+		return
+	}
+
+	k := config.K.ValueInt64()
+	m := config.M.ValueInt64()
+
+	if k+m > 255 {
+		resp.Diagnostics.Append(diag.NewErrorDiagnostic(
+			"Invalid Erasure Code Configuration",
+			fmt.Sprintf("The sum of k and m must not exceed 255. Got k=%d, m=%d, sum=%d.", k, m, k+m),
+		))
+	}
+
+	if m >= k {
+		resp.Diagnostics.Append(diag.NewWarningDiagnostic(
+			"Unusual Erasure Code Configuration",
+			fmt.Sprintf("The coding chunks (m=%d) should typically be less than data chunks (k=%d) for efficiency. This configuration is valid but may not provide optimal storage efficiency.", m, k),
+		))
+	}
+}
+
 func (r *ErasureCodeProfileResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_erasure_code_profile"
+}
+
+func (r *ErasureCodeProfileResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
+	return []resource.ConfigValidator{
+		erasureCodeKMValidator{},
+	}
 }
 
 func (r *ErasureCodeProfileResource) Schema(ctx context.Context, req resource.SchemaRequest, resp *resource.SchemaResponse) {
@@ -53,18 +107,24 @@ func (r *ErasureCodeProfileResource) Schema(ctx context.Context, req resource.Sc
 				},
 			},
 			"k": resourceSchema.Int64Attribute{
-				MarkdownDescription: "Number of data chunks. Must be a positive integer. Defaults to 2 if not specified.",
+				MarkdownDescription: "Number of data chunks. Must be at least 2. Defaults to 2 if not specified.",
 				Optional:            true,
 				Computed:            true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(2),
+				},
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.RequiresReplace(),
 					int64planmodifier.UseStateForUnknown(),
 				},
 			},
 			"m": resourceSchema.Int64Attribute{
-				MarkdownDescription: "Number of coding chunks (parity). Must be a positive integer. Defaults to 1 if not specified.",
+				MarkdownDescription: "Number of coding chunks (parity). Must be at least 1. Defaults to 1 if not specified.",
 				Optional:            true,
 				Computed:            true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+				},
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.RequiresReplace(),
 					int64planmodifier.UseStateForUnknown(),
