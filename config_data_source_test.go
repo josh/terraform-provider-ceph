@@ -92,17 +92,14 @@ func TestAccCephConfigDataSource_multiLevel(t *testing.T) {
 				t.Fatalf("Failed to set osd.0 config: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.ConfigRemove(cleanupCtx, "global", configName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.ConfigRemove(ctx, "global", configName); err != nil {
 					t.Errorf("Failed to cleanup config global/%s: %v", configName, err)
 				}
-				if err := cephTestClusterCLI.ConfigRemove(cleanupCtx, "osd", configName); err != nil {
+				if err := cephTestClusterCLI.ConfigRemove(ctx, "osd", configName); err != nil {
 					t.Errorf("Failed to cleanup config osd/%s: %v", configName, err)
 				}
-				if err := cephTestClusterCLI.ConfigRemove(cleanupCtx, "osd.0", configName); err != nil {
+				if err := cephTestClusterCLI.ConfigRemove(ctx, "osd.0", configName); err != nil {
 					t.Errorf("Failed to cleanup config osd.0/%s: %v", configName, err)
 				}
 			})

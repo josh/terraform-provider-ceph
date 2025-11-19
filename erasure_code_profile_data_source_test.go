@@ -33,11 +33,8 @@ func TestAccCephErasureCodeProfileDataSource_k2m1(t *testing.T) {
 				t.Fatalf("Failed to create erasure code profile: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.ErasureCodeProfileRemove(cleanupCtx, profileName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.ErasureCodeProfileRemove(ctx, profileName); err != nil {
 					t.Errorf("Failed to cleanup erasure code profile %s: %v", profileName, err)
 				}
 			})
@@ -102,11 +99,8 @@ func TestAccCephErasureCodeProfileDataSource_k3m2(t *testing.T) {
 				t.Fatalf("Failed to create erasure code profile: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.ErasureCodeProfileRemove(cleanupCtx, profileName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.ErasureCodeProfileRemove(ctx, profileName); err != nil {
 					t.Errorf("Failed to cleanup erasure code profile %s: %v", profileName, err)
 				}
 			})

@@ -33,11 +33,8 @@ func TestAccCephConfigValueDataSource(t *testing.T) {
 				t.Fatalf("Failed to set test config: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.ConfigRemove(cleanupCtx, "global", configName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.ConfigRemove(ctx, "global", configName); err != nil {
 					t.Errorf("Failed to cleanup config global/%s: %v", configName, err)
 				}
 			})
@@ -108,14 +105,11 @@ func TestAccCephConfigValueDataSource_multipleSections(t *testing.T) {
 				t.Fatalf("Failed to set test config for mon: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.ConfigRemove(cleanupCtx, "global", configName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.ConfigRemove(ctx, "global", configName); err != nil {
 					t.Errorf("Failed to cleanup config global/%s: %v", configName, err)
 				}
-				if err := cephTestClusterCLI.ConfigRemove(cleanupCtx, "mon", configName); err != nil {
+				if err := cephTestClusterCLI.ConfigRemove(ctx, "mon", configName); err != nil {
 					t.Errorf("Failed to cleanup config mon/%s: %v", configName, err)
 				}
 			})
@@ -212,11 +206,8 @@ func TestAccCephConfigValueDataSource_readMaskedConfig(t *testing.T) {
 				t.Fatalf("Failed to set masked config via CLI: %v", err)
 			}
 
-			t.Cleanup(func() {
-				cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cleanupCancel()
-
-				if err := cephTestClusterCLI.ConfigRemove(cleanupCtx, "osd/class:ssd", configName); err != nil {
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.ConfigRemove(ctx, "osd/class:ssd", configName); err != nil {
 					t.Errorf("Failed to cleanup config osd/class:ssd/%s: %v", configName, err)
 				}
 			})
