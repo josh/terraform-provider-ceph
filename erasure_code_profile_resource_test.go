@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"slices"
 	"testing"
 	"time"
@@ -285,4 +286,112 @@ func testAccCheckCephErasureCodeProfileDestroy(t *testing.T) resource.TestCheckF
 
 		return nil
 	}
+}
+
+func TestAccCephErasureCodeProfileResource_invalidK(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_erasure_code_profile" "test" {
+						name = "test-invalid-k"
+						k    = 1
+						m    = 1
+					}
+				`,
+				ExpectError: regexp.MustCompile(`(?i)Attribute k value must be at least 2`),
+			},
+		},
+	})
+}
+
+func TestAccCephErasureCodeProfileResource_invalidM(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_erasure_code_profile" "test" {
+						name = "test-invalid-m"
+						k    = 2
+						m    = 0
+					}
+				`,
+				ExpectError: regexp.MustCompile(`(?i)Attribute m value must be at least 1`),
+			},
+		},
+	})
+}
+
+func TestAccCephErasureCodeProfileResource_invalidKPlusMExceeds255(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_erasure_code_profile" "test" {
+						name = "test-invalid-sum"
+						k    = 200
+						m    = 100
+					}
+				`,
+				ExpectError: regexp.MustCompile(`(?i)Invalid Erasure Code Configuration`),
+			},
+		},
+	})
+}
+
+func TestAccCephErasureCodeProfileResource_warningMGreaterThanOrEqualK(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	profileName := fmt.Sprintf("test-profile-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephErasureCodeProfileDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_erasure_code_profile" "test" {
+						name                 = %q
+						k                    = 2
+						m                    = 2
+						crush_failure_domain = "osd"
+					}
+				`, profileName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_erasure_code_profile.test",
+						tfjsonpath.New("k"),
+						knownvalue.Int64Exact(2),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_erasure_code_profile.test",
+						tfjsonpath.New("m"),
+						knownvalue.Int64Exact(2),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephErasureCodeProfileExists(t, profileName),
+					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "k", "2"),
+					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "m", "2"),
+				),
+			},
+		},
+	})
 }
