@@ -1,11 +1,9 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -160,10 +158,7 @@ func testAccCheckCephRGWBucketDestroy(t *testing.T) resource.TestCheckFunc {
 func checkCephRGWBucketExists(t *testing.T, bucketName string) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
-
-		bucket, err := cephTestClusterCLI.RgwBucketInfo(ctx, bucketName)
+		bucket, err := cephTestClusterCLI.RgwBucketInfo(t.Context(), bucketName)
 		if err != nil {
 			return fmt.Errorf("RGW bucket %s does not exist: %w", bucketName, err)
 		}

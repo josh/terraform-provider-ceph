@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"regexp"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -87,19 +86,16 @@ func TestAccCephRGWSubuserDataSource_invalidFormat(t *testing.T) {
 func createTestRGWUserWithSubuser(t *testing.T, uid, displayName, subuser, permissions string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-
-	if err := cephTestClusterCLI.RgwUserRemove(ctx, uid, true); err != nil && !errors.Is(err, ErrRGWUserNotFound) {
+	if err := cephTestClusterCLI.RgwUserRemove(t.Context(), uid, true); err != nil && !errors.Is(err, ErrRGWUserNotFound) {
 		t.Fatalf("Pre-cleanup: failed to remove user %s: %v", uid, err)
 	}
 
-	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
+	err := cephTestClusterCLI.RgwUserCreate(t.Context(), uid, displayName, nil)
 	if err != nil {
 		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
 
-	err = cephTestClusterCLI.RgwSubuserCreate(ctx, uid, uid+":"+subuser, &RgwSubuserCreateOptions{
+	err = cephTestClusterCLI.RgwSubuserCreate(t.Context(), uid, uid+":"+subuser, &RgwSubuserCreateOptions{
 		Access: permissions,
 	})
 	if err != nil {

@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -194,15 +193,12 @@ func TestAccCephRGWS3KeyResource_nonExistentUser(t *testing.T) {
 func createTestRGWUserWithSubuserWithoutKeys(t *testing.T, uid, displayName, subuser string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-
-	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
+	err := cephTestClusterCLI.RgwUserCreate(t.Context(), uid, displayName, nil)
 	if err != nil {
 		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
 
-	err = cephTestClusterCLI.RgwSubuserCreate(ctx, uid, uid+":"+subuser, &RgwSubuserCreateOptions{
+	err = cephTestClusterCLI.RgwSubuserCreate(t.Context(), uid, uid+":"+subuser, &RgwSubuserCreateOptions{
 		Access: "full",
 	})
 	if err != nil {
@@ -526,10 +522,7 @@ func TestAccCephRGWS3KeyResource_importMultipleKeysManagement(t *testing.T) {
 func createRGWS3Key(t *testing.T, userID, accessKey, secretKey string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-
-	err := cephTestClusterCLI.RgwKeyCreate(ctx, userID, &RgwKeyCreateOptions{
+	err := cephTestClusterCLI.RgwKeyCreate(t.Context(), userID, &RgwKeyCreateOptions{
 		AccessKey: accessKey,
 		SecretKey: secretKey,
 	})
