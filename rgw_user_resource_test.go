@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"regexp"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -529,10 +528,7 @@ func TestAccCephRGWUserResource_alreadyExists(t *testing.T) {
 func createTestRGWUserDirectly(t *testing.T, uid, displayName string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-
-	err := cephTestClusterCLI.RgwUserCreate(ctx, uid, displayName, nil)
+	err := cephTestClusterCLI.RgwUserCreate(t.Context(), uid, displayName, nil)
 	if err != nil {
 		t.Fatalf("Failed to pre-create test RGW user: %v", err)
 	}
@@ -660,10 +656,7 @@ func TestAccCephRGWUserResource_suspendUnsuspendCycle(t *testing.T) {
 func checkCephRGWUserSuspended(t *testing.T, userID string, expectedSuspended bool) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
-
-		userInfo, err := cephTestClusterCLI.RgwUserInfo(ctx, userID)
+		userInfo, err := cephTestClusterCLI.RgwUserInfo(t.Context(), userID)
 		if err != nil {
 			return fmt.Errorf("radosgw-admin failed to get user info: %w", err)
 		}
@@ -783,10 +776,7 @@ func TestAccCephRGWUserResource_emailUpdate(t *testing.T) {
 func checkCephRGWUserEmail(t *testing.T, userID string, expectedEmail string) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
-
-		userInfo, err := cephTestClusterCLI.RgwUserInfo(ctx, userID)
+		userInfo, err := cephTestClusterCLI.RgwUserInfo(t.Context(), userID)
 		if err != nil {
 			return fmt.Errorf("radosgw-admin failed to get user info: %w", err)
 		}
@@ -883,10 +873,7 @@ func TestAccCephRGWUserResource_maxBucketsValidation(t *testing.T) {
 func checkCephRGWUserMaxBuckets(t *testing.T, userID string, expectedMaxBuckets int) resource.TestCheckFunc {
 	t.Helper()
 	return func(s *terraform.State) error {
-		ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-		defer cancel()
-
-		userInfo, err := cephTestClusterCLI.RgwUserInfo(ctx, userID)
+		userInfo, err := cephTestClusterCLI.RgwUserInfo(t.Context(), userID)
 		if err != nil {
 			return fmt.Errorf("radosgw-admin failed to get user info: %w", err)
 		}
@@ -949,10 +936,7 @@ func TestAccCephRGWUserResource_suspendOutOfBand(t *testing.T) {
 func suspendUserViaCLI(t *testing.T, userID string) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	defer cancel()
-
-	if err := cephTestClusterCLI.RgwUserSuspend(ctx, userID, true); err != nil {
+	if err := cephTestClusterCLI.RgwUserSuspend(t.Context(), userID, true); err != nil {
 		t.Fatalf("Failed to suspend user via CLI: %v", err)
 	}
 	t.Logf("Suspended user %s via CLI", userID)
