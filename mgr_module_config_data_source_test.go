@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
@@ -73,11 +72,8 @@ func TestAccCephMgrModuleConfigDataSource_largeIntegerValues(t *testing.T) {
 						t.Fatalf("Failed to set config value out of band: %v", err)
 					}
 
-					t.Cleanup(func() {
-						cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
-						defer cleanupCancel()
-
-						if err := removeCephMgrModuleConfigValue(cleanupCtx, "dashboard", "jwt_token_ttl"); err != nil {
+					testCleanup(t, func(ctx context.Context) {
+						if err := removeCephMgrModuleConfigValue(ctx, "dashboard", "jwt_token_ttl"); err != nil {
 							t.Errorf("Failed to cleanup mgr/dashboard/jwt_token_ttl: %v", err)
 						}
 					})
