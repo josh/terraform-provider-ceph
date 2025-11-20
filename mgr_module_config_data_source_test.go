@@ -68,10 +68,7 @@ func TestAccCephMgrModuleConfigDataSource_largeIntegerValues(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				PreConfig: func() {
-					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-					defer cancel()
-
-					err := setCephMgrModuleConfigValue(ctx, "dashboard", "jwt_token_ttl", "31556952")
+					err := setCephMgrModuleConfigValue(t.Context(), "dashboard", "jwt_token_ttl", "31556952")
 					if err != nil {
 						t.Fatalf("Failed to set config value out of band: %v", err)
 					}

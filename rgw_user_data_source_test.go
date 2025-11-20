@@ -92,11 +92,8 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-					defer cancel()
-
 					admin := true
-					err := cephTestClusterCLI.RgwUserModify(ctx, testUID, &RgwUserModifyOptions{
+					err := cephTestClusterCLI.RgwUserModify(t.Context(), testUID, &RgwUserModifyOptions{
 						Admin: &admin,
 					})
 					if err != nil {
@@ -117,11 +114,8 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-					defer cancel()
-
 					admin := false
-					err := cephTestClusterCLI.RgwUserModify(ctx, testUID, &RgwUserModifyOptions{
+					err := cephTestClusterCLI.RgwUserModify(t.Context(), testUID, &RgwUserModifyOptions{
 						Admin: &admin,
 					})
 					if err != nil {
@@ -170,10 +164,7 @@ func TestAccCephRGWUserDataSource_deletedOutOfBand(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-					defer cancel()
-
-					if err := cephTestClusterCLI.RgwUserRemove(ctx, testUID, true); err != nil {
+					if err := cephTestClusterCLI.RgwUserRemove(t.Context(), testUID, true); err != nil {
 						t.Fatalf("Failed to delete user out of band: %v", err)
 					}
 					t.Logf("Deleted user %s out of band", testUID)
