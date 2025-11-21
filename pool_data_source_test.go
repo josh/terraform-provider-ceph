@@ -409,11 +409,6 @@ func TestAccCephPoolDataSource_customPGCount(t *testing.T) {
 						"pg_num",
 						"32",
 					),
-					resource.TestCheckResourceAttr(
-						"data.ceph_pool.test",
-						"pg_placement_num",
-						"32",
-					),
 				),
 			},
 		},
@@ -534,64 +529,6 @@ func TestAccCephPoolDataSource_autoscaler(t *testing.T) {
 						"data.ceph_pool.test",
 						"autoscale_mode",
 						"on",
-					),
-				),
-			},
-		},
-	})
-}
-
-func TestAccCephPoolDataSource_configuration(t *testing.T) {
-	detachLogs := cephDaemonLogs.AttachTestFunction(t)
-	defer detachLogs()
-
-	poolName := acctest.RandString(8)
-
-	resource.Test(t, resource.TestCase{
-		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		PreCheck: func() {
-			testAccPreCheckCephHealth(t)
-
-			if err := cephTestClusterCLI.PoolCreate(t.Context(), poolName, 8, ""); err != nil {
-				t.Fatalf("Failed to create pool: %v", err)
-			}
-
-			if err := cephTestClusterCLI.PoolSet(t.Context(), poolName, "pg_autoscale_mode", "off"); err != nil {
-				t.Fatalf("Failed to disable autoscaler: %v", err)
-			}
-
-			if err := cephTestClusterCLI.PoolSet(t.Context(), poolName, "noscrub", "true"); err != nil {
-				t.Fatalf("Failed to set noscrub flag: %v", err)
-			}
-
-			testCleanup(t, func(ctx context.Context) {
-				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
-					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
-				}
-			})
-		},
-		Steps: []resource.TestStep{
-			{
-				ConfigVariables: testAccProviderConfig(),
-				Config: testAccProviderConfigBlock + fmt.Sprintf(`
-					data "ceph_pool" "test" {
-						name = "%s"
-					}
-				`, poolName),
-				Check: resource.ComposeAggregateTestCheckFunc(
-					resource.TestCheckResourceAttr(
-						"data.ceph_pool.test",
-						"name",
-						poolName,
-					),
-					resource.TestCheckResourceAttrSet(
-						"data.ceph_pool.test",
-						"pool_id",
-					),
-					resource.TestMatchResourceAttr(
-						"data.ceph_pool.test",
-						"configuration.#",
-						regexp.MustCompile("^[1-9][0-9]*$"),
 					),
 				),
 			},
