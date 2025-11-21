@@ -420,7 +420,7 @@ func TestAccCephPoolDataSource_customPGCount(t *testing.T) {
 	})
 }
 
-func TestAccCephPoolDataSource_targetSize(t *testing.T) {
+func TestAccCephPoolDataSource_quota(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
@@ -439,12 +439,12 @@ func TestAccCephPoolDataSource_targetSize(t *testing.T) {
 				t.Fatalf("Failed to disable autoscaler: %v", err)
 			}
 
-			if err := cephTestClusterCLI.PoolSet(t.Context(), poolName, "target_size_ratio", "0.1"); err != nil {
-				t.Fatalf("Failed to set target size ratio: %v", err)
+			if err := cephTestClusterCLI.PoolSetQuota(t.Context(), poolName, "max_objects", 1000); err != nil {
+				t.Fatalf("Failed to set quota max objects: %v", err)
 			}
 
-			if err := cephTestClusterCLI.PoolSet(t.Context(), poolName, "target_size_bytes", "1073741824"); err != nil {
-				t.Fatalf("Failed to set target size bytes: %v", err)
+			if err := cephTestClusterCLI.PoolSetQuota(t.Context(), poolName, "max_bytes", 1073741824); err != nil {
+				t.Fatalf("Failed to set quota max bytes: %v", err)
 			}
 
 			testCleanup(t, func(ctx context.Context) {
@@ -473,12 +473,12 @@ func TestAccCephPoolDataSource_targetSize(t *testing.T) {
 					),
 					resource.TestCheckResourceAttr(
 						"data.ceph_pool.test",
-						"target_size_ratio",
-						"0.1",
+						"quota_max_objects",
+						"1000",
 					),
 					resource.TestCheckResourceAttr(
 						"data.ceph_pool.test",
-						"target_size_bytes",
+						"quota_max_bytes",
 						"1073741824",
 					),
 				),
