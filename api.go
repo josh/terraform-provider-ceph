@@ -1271,8 +1271,8 @@ type CephAPIPoolOptions struct {
 	CompressionRequiredRatio float64 `json:"compression_required_ratio"`
 	CompressionMinBlobSize   int     `json:"compression_min_blob_size"`
 	CompressionMaxBlobSize   int     `json:"compression_max_blob_size"`
-	TargetSizeRatio          float64 `json:"target_size_ratio"`
-	TargetSizeBytes          int     `json:"target_size_bytes"`
+	QuotaMaxObjects          int     `json:"quota_max_objects"`
+	QuotaMaxBytes            int     `json:"quota_max_bytes"`
 	PGNumMin                 int     `json:"pg_num_min"`
 	PGNumMax                 int     `json:"pg_num_max"`
 }
@@ -1293,6 +1293,8 @@ type CephAPIPool struct {
 	Flags               int                `json:"flags"`
 	ErasureCodeProfile  string             `json:"erasure_code_profile"`
 	PGAutoscaleMode     string             `json:"pg_autoscale_mode"`
+	QuotaMaxObjects     int                `json:"quota_max_objects"`
+	QuotaMaxBytes       int                `json:"quota_max_bytes"`
 	TargetSizeRatioRel  float64            `json:"target_size_ratio_rel"`
 	MinPGNum            int                `json:"min_pg_num"`
 	PGAutoscalerProfile string             `json:"pg_autoscaler_profile"`
@@ -1351,8 +1353,8 @@ type CephAPIPoolCreateRequest struct {
 	MinSize                  *int     `json:"min_size,omitempty"`
 	Size                     *int     `json:"size,omitempty"`
 	PgAutoscaleMode          *string  `json:"pg_autoscale_mode,omitempty"`
-	TargetSizeRatio          *float64 `json:"target_size_ratio,omitempty"`
-	TargetSizeBytes          *int     `json:"target_size_bytes,omitempty"`
+	QuotaMaxObjects          *int     `json:"quota_max_objects,omitempty"`
+	QuotaMaxBytes            *int     `json:"quota_max_bytes,omitempty"`
 	CompressionMode          *string  `json:"compression_mode,omitempty"`
 	CompressionAlgorithm     *string  `json:"compression_algorithm,omitempty"`
 	CompressionRequiredRatio *float64 `json:"compression_required_ratio,omitempty"`
@@ -1471,6 +1473,8 @@ type CephAPIPoolUpdateRequest struct {
 	Size                     *int     `json:"size,omitempty"`
 	MinSize                  *int     `json:"min_size,omitempty"`
 	PgAutoscaleMode          *string  `json:"pg_autoscale_mode,omitempty"`
+	QuotaMaxObjects          *int     `json:"quota_max_objects,omitempty"`
+	QuotaMaxBytes            *int     `json:"quota_max_bytes,omitempty"`
 	CompressionMode          *string  `json:"compression_mode,omitempty"`
 	CompressionAlgorithm     *string  `json:"compression_algorithm,omitempty"`
 	CompressionRequiredRatio *float64 `json:"compression_required_ratio,omitempty"`

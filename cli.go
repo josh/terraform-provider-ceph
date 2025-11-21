@@ -30,6 +30,15 @@ type CephAuthInfo struct {
 	Caps map[string]string `json:"caps"`
 }
 
+type PoolQuotaInfo struct {
+	PoolName          string `json:"pool_name"`
+	PoolID            uint64 `json:"pool_id"`
+	QuotaMaxObjects   int64  `json:"quota_max_objects"`
+	CurrentNumObjects int64  `json:"current_num_objects"`
+	QuotaMaxBytes     int64  `json:"quota_max_bytes"`
+	CurrentNumBytes   int64  `json:"current_num_bytes"`
+}
+
 type ConfigDumpEntry struct {
 	Section string `json:"section"`
 	Mask    string `json:"mask"`
@@ -721,6 +730,46 @@ func (c *CephCLI) PoolSetWait(ctx context.Context, poolName, key, value string) 
 		case <-ctx.Done():
 			return fmt.Errorf("pool property %s not updated: expected %q, got %q: %w", key, value, lastValue, ctx.Err())
 		}
+	}
+}
+
+func (c *CephCLI) PoolSetQuota(ctx context.Context, poolName, field string, value int64) error {
+	valueStr := strconv.FormatInt(value, 10)
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "pool", "set-quota", poolName, field, valueStr)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to set pool %s quota %s=%v: %w", poolName, field, value, err)
+	}
+
+	actualValue, err := c.PoolGetQuota(ctx, poolName, field)
+	if err != nil {
+		return fmt.Errorf("failed to verify pool quota: %w", err)
+	}
+
+	if value != actualValue {
+		return fmt.Errorf("pool quota %s not updated: expected %v, got %v", field, value, actualValue)
+	}
+	return nil
+}
+
+func (c *CephCLI) PoolGetQuota(ctx context.Context, poolName, field string) (int64, error) {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "pool", "get-quota", poolName, "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get pool %s quota: %w", poolName, err)
+	}
+
+	var quotaInfo PoolQuotaInfo
+	if err := json.Unmarshal(output, &quotaInfo); err != nil {
+		return 0, fmt.Errorf("failed to parse quota JSON: %w", err)
+	}
+
+	switch field {
+	case "max_objects":
+		return quotaInfo.QuotaMaxObjects, nil
+	case "max_bytes":
+		return quotaInfo.QuotaMaxBytes, nil
+	default:
+		return 0, fmt.Errorf("unknown quota field: %s", field)
 	}
 }
 

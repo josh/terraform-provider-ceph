@@ -34,8 +34,8 @@ type PoolDataSourceModel struct {
 	Flags                    types.Int64   `tfsdk:"flags"`
 	ErasureCodeProfile       types.String  `tfsdk:"erasure_code_profile"`
 	AutoscaleMode            types.String  `tfsdk:"autoscale_mode"`
-	TargetSizeRatio          types.Float64 `tfsdk:"target_size_ratio"`
-	TargetSizeBytes          types.Int64   `tfsdk:"target_size_bytes"`
+	QuotaMaxObjects          types.Int64   `tfsdk:"quota_max_objects"`
+	QuotaMaxBytes            types.Int64   `tfsdk:"quota_max_bytes"`
 	TargetSizeRatioRel       types.Float64 `tfsdk:"target_size_ratio_rel"`
 	MinPGNum                 types.Int64   `tfsdk:"min_pg_num"`
 	PGAutoscalerProfile      types.String  `tfsdk:"pg_autoscaler_profile"`
@@ -108,12 +108,12 @@ func (d *PoolDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 				MarkdownDescription: "The autoscale mode of the pool.",
 				Computed:            true,
 			},
-			"target_size_ratio": dataSourceSchema.Float64Attribute{
-				MarkdownDescription: "The target size ratio of the pool.",
+			"quota_max_objects": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "The maximum number of objects allowed in the pool (hard limit).",
 				Computed:            true,
 			},
-			"target_size_bytes": dataSourceSchema.Int64Attribute{
-				MarkdownDescription: "The target size in bytes of the pool.",
+			"quota_max_bytes": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "The maximum bytes allowed in the pool (hard limit).",
 				Computed:            true,
 			},
 			"target_size_ratio_rel": dataSourceSchema.Float64Attribute{
@@ -217,8 +217,8 @@ func (d *PoolDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	data.PrimaryAffinity = types.Float64Value(pool.PrimaryAffinity)
 	data.ErasureCodeProfile = types.StringValue(pool.ErasureCodeProfile)
 	data.AutoscaleMode = types.StringValue(pool.PGAutoscaleMode)
-	data.TargetSizeRatio = types.Float64Value(pool.Options.TargetSizeRatio)
-	data.TargetSizeBytes = types.Int64Value(int64(pool.Options.TargetSizeBytes))
+	data.QuotaMaxObjects = types.Int64Value(int64(pool.QuotaMaxObjects))
+	data.QuotaMaxBytes = types.Int64Value(int64(pool.QuotaMaxBytes))
 	data.TargetSizeRatioRel = types.Float64Value(pool.TargetSizeRatioRel)
 	data.MinPGNum = types.Int64Value(int64(pool.MinPGNum))
 	data.PGAutoscalerProfile = types.StringValue(pool.PGAutoscalerProfile)
