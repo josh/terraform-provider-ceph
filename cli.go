@@ -31,12 +31,8 @@ type CephAuthInfo struct {
 }
 
 type PoolQuotaInfo struct {
-	PoolName          string `json:"pool_name"`
-	PoolID            uint64 `json:"pool_id"`
-	QuotaMaxObjects   int64  `json:"quota_max_objects"`
-	CurrentNumObjects int64  `json:"current_num_objects"`
-	QuotaMaxBytes     int64  `json:"quota_max_bytes"`
-	CurrentNumBytes   int64  `json:"current_num_bytes"`
+	QuotaMaxObjects int64 `json:"quota_max_objects"`
+	QuotaMaxBytes   int64 `json:"quota_max_bytes"`
 }
 
 type ConfigDumpEntry struct {
