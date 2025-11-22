@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -118,10 +117,21 @@ func (r *AuthEphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequ
 		return
 	}
 
-	updateAuthEphemeralModelFromCephExport(ctx, r.client, entity, &data, &resp.Diagnostics)
+	resourceModel := AuthResourceModel{
+		Entity:  data.Entity,
+		Caps:    data.Caps,
+		Key:     data.Key,
+		Keyring: data.Keyring,
+	}
+
+	updateAuthModelFromCephExport(ctx, r.client, entity, &resourceModel, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
+
+	data.Caps = resourceModel.Caps
+	data.Key = resourceModel.Key
+	data.Keyring = resourceModel.Keyring
 
 	resp.Diagnostics.Append(resp.Result.Set(ctx, &data)...)
 }
@@ -151,22 +161,4 @@ func (r *AuthEphemeralResource) Close(ctx context.Context, req ephemeral.CloseRe
 		)
 		return
 	}
-}
-
-func updateAuthEphemeralModelFromCephExport(ctx context.Context, client *CephAPIClient, entity string, data *AuthEphemeralResourceModel, diagnostics *diag.Diagnostics) {
-	resourceModel := AuthResourceModel{
-		Entity:  data.Entity,
-		Caps:    data.Caps,
-		Key:     data.Key,
-		Keyring: data.Keyring,
-	}
-
-	updateAuthModelFromCephExport(ctx, client, entity, &resourceModel, diagnostics)
-	if diagnostics.HasError() {
-		return
-	}
-
-	data.Caps = resourceModel.Caps
-	data.Key = resourceModel.Key
-	data.Keyring = resourceModel.Keyring
 }
