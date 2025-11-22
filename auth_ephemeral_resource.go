@@ -117,12 +117,7 @@ func (r *AuthEphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequ
 		return
 	}
 
-	resourceModel := AuthResourceModel{
-		Entity:  data.Entity,
-		Caps:    data.Caps,
-		Key:     data.Key,
-		Keyring: data.Keyring,
-	}
+	resourceModel := AuthResourceModel(data)
 
 	updateAuthModelFromCephExport(ctx, r.client, entity, &resourceModel, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
