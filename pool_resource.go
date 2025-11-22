@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 var (
@@ -26,9 +27,9 @@ var (
 )
 
 const (
-	maxPoolReadRetries   = 10
-	poolReadRetryDelay   = 500 * time.Millisecond
-	poolUpdateSettleTime = 5 * time.Second
+	poolPropertiesTimeout     = 60 * time.Second
+	poolPropertyCheckInterval = 500 * time.Millisecond
+	poolRenameSettleTime      = 5 * time.Second
 )
 
 func newPoolResource() resource.Resource {
@@ -59,7 +60,6 @@ type PoolResourceModel struct {
 	PoolID                   types.Int64   `tfsdk:"pool_id"`
 	PrimaryAffinity          types.Float64 `tfsdk:"primary_affinity"`
 	ApplicationMetadata      types.List    `tfsdk:"application_metadata"`
-	Flags                    types.Int64   `tfsdk:"flags"`
 }
 
 func (r *PoolResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -188,10 +188,6 @@ func (r *PoolResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Computed:            true,
 				ElementType:         types.StringType,
 			},
-			"flags": resourceSchema.Int64Attribute{
-				MarkdownDescription: "The flags of the pool.",
-				Computed:            true,
-			},
 		},
 	}
 }
@@ -223,122 +219,116 @@ func (r *PoolResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
-	if !data.PgAutoscaleMode.IsNull() && !data.PgAutoscaleMode.IsUnknown() {
-		if data.PgAutoscaleMode.ValueString() == "on" {
-			if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() {
-				resp.Diagnostics.AddError(
-					"Invalid Attribute Combination",
-					"pg_num cannot be set when pg_autoscale_mode is 'on'. When autoscaling is enabled, Ceph automatically manages the number of placement groups.",
-				)
-				return
-			}
-			if !data.PgpNum.IsNull() && !data.PgpNum.IsUnknown() {
-				resp.Diagnostics.AddError(
-					"Invalid Attribute Combination",
-					"pgp_num cannot be set when pg_autoscale_mode is 'on'. When autoscaling is enabled, Ceph automatically manages the number of placement groups.",
-				)
-				return
-			}
+	createReq := CephAPIPoolCreateRequest{
+		Pool: data.Name.ValueString(),
+	}
+
+	poolType := data.PoolType.ValueString()
+	createReq.PoolType = &poolType
+
+	if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() {
+		pgNum := int(data.PgNum.ValueInt64())
+		createReq.PgNum = &pgNum
+	}
+
+	if !data.PgpNum.IsNull() && !data.PgpNum.IsUnknown() {
+		pgpNum := int(data.PgpNum.ValueInt64())
+		createReq.PgpNum = &pgpNum
+	}
+
+	if !data.CrushRule.IsNull() && !data.CrushRule.IsUnknown() {
+		crushRule := data.CrushRule.ValueString()
+		createReq.CrushRule = &crushRule
+	}
+
+	if poolType == "erasure" {
+		erasureProfile := "default"
+		if !data.ErasureCodeProfile.IsNull() && !data.ErasureCodeProfile.IsUnknown() {
+			erasureProfile = data.ErasureCodeProfile.ValueString()
+		}
+		createReq.ErasureCodeProfile = &erasureProfile
+	}
+
+	if poolType == "replicated" {
+		if !data.Size.IsNull() && !data.Size.IsUnknown() {
+			size := int(data.Size.ValueInt64())
+			createReq.Size = &size
+		}
+
+		if !data.MinSize.IsNull() && !data.MinSize.IsUnknown() {
+			minSize := int(data.MinSize.ValueInt64())
+			createReq.MinSize = &minSize
 		}
 	}
 
-	createReq := r.buildCreateRequest(ctx, &data)
-
-	err := r.client.CreatePool(ctx, createReq)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"API Request Error",
-			fmt.Sprintf("Unable to create pool: %s", err),
-		)
-		return
-	}
-
-	poolName := data.Name.ValueString()
-	_, err = r.waitForPoolReadable(ctx, poolName)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Unable to Read Pool After Creation",
-			fmt.Sprintf("Failed to read pool %s: %s", poolName, err),
-		)
-		return
-	}
-
-	updateReq := CephAPIPoolUpdateRequest{}
-	needsUpdate := false
-
 	if !data.PgAutoscaleMode.IsNull() && !data.PgAutoscaleMode.IsUnknown() {
-		val := data.PgAutoscaleMode.ValueString()
-		updateReq.PgAutoscaleMode = &val
-		needsUpdate = true
+		pgAutoscaleMode := data.PgAutoscaleMode.ValueString()
+		createReq.PgAutoscaleMode = &pgAutoscaleMode
+	}
+
+	if !data.QuotaMaxObjects.IsNull() && !data.QuotaMaxObjects.IsUnknown() {
+		quotaMaxObjects := int(data.QuotaMaxObjects.ValueInt64())
+		createReq.QuotaMaxObjects = &quotaMaxObjects
+	}
+
+	if !data.QuotaMaxBytes.IsNull() && !data.QuotaMaxBytes.IsUnknown() {
+		quotaMaxBytes := int(data.QuotaMaxBytes.ValueInt64())
+		createReq.QuotaMaxBytes = &quotaMaxBytes
 	}
 
 	if !data.CompressionMode.IsNull() && !data.CompressionMode.IsUnknown() {
-		val := data.CompressionMode.ValueString()
-		updateReq.CompressionMode = &val
-		needsUpdate = true
+		compressionMode := data.CompressionMode.ValueString()
+		createReq.CompressionMode = &compressionMode
 	}
 
 	if !data.CompressionAlgorithm.IsNull() && !data.CompressionAlgorithm.IsUnknown() {
-		val := data.CompressionAlgorithm.ValueString()
-		updateReq.CompressionAlgorithm = &val
-		needsUpdate = true
+		compressionAlgorithm := data.CompressionAlgorithm.ValueString()
+		createReq.CompressionAlgorithm = &compressionAlgorithm
 	}
 
 	if !data.CompressionRequiredRatio.IsNull() && !data.CompressionRequiredRatio.IsUnknown() {
 		compressionRequiredRatio := data.CompressionRequiredRatio.ValueFloat64()
-		updateReq.CompressionRequiredRatio = &compressionRequiredRatio
-		needsUpdate = true
+		createReq.CompressionRequiredRatio = &compressionRequiredRatio
 	}
 
 	if !data.CompressionMinBlobSize.IsNull() && !data.CompressionMinBlobSize.IsUnknown() {
 		compressionMinBlobSize := int(data.CompressionMinBlobSize.ValueInt64())
-		updateReq.CompressionMinBlobSize = &compressionMinBlobSize
-		needsUpdate = true
+		createReq.CompressionMinBlobSize = &compressionMinBlobSize
 	}
 
 	if !data.CompressionMaxBlobSize.IsNull() && !data.CompressionMaxBlobSize.IsUnknown() {
 		compressionMaxBlobSize := int(data.CompressionMaxBlobSize.ValueInt64())
-		updateReq.CompressionMaxBlobSize = &compressionMaxBlobSize
-		needsUpdate = true
+		createReq.CompressionMaxBlobSize = &compressionMaxBlobSize
 	}
 
-	if needsUpdate {
-		err = r.client.UpdatePool(ctx, poolName, updateReq)
-		if err != nil {
-			resp.Diagnostics.AddError(
-				"API Request Error",
-				fmt.Sprintf("Pool was created but unable to set properties: %s", err),
-			)
+	if !data.ApplicationMetadata.IsNull() && !data.ApplicationMetadata.IsUnknown() {
+		var apps []string
+		resp.Diagnostics.Append(data.ApplicationMetadata.ElementsAs(ctx, &apps, false)...)
+		if resp.Diagnostics.HasError() {
 			return
 		}
-
-		timer := time.NewTimer(poolUpdateSettleTime)
-		select {
-		case <-timer.C:
-		case <-ctx.Done():
-			timer.Stop()
-			resp.Diagnostics.AddError(
-				"Context Cancelled",
-				"Pool creation was cancelled after update",
-			)
-			return
-		}
+		createReq.ApplicationMetadata = apps
 	}
 
-	pool, err := r.waitForPoolPropertiesAfterCreate(ctx, poolName, &data)
+	err := r.client.CreatePool(ctx, createReq)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Pool Properties Verification Failed",
-			fmt.Sprintf("Pool %s was created but properties did not converge: %s", poolName, err),
+			"Error creating pool",
+			fmt.Sprintf("Unable to create pool %q: %s", data.Name.ValueString(), err),
 		)
 		return
 	}
 
-	r.updateModelFromAPI(ctx, &data, pool, &resp.Diagnostics)
-
-	if resp.Diagnostics.HasError() {
+	pool, err := r.waitForPoolProperties(ctx, data.Name.ValueString(), &data)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Error reading pool after creation",
+			fmt.Sprintf("Unable to read pool %q after creation: %s", data.Name.ValueString(), err),
+		)
 		return
 	}
+
+	mapPoolToModel(ctx, pool, &data, &resp.Diagnostics)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -354,18 +344,18 @@ func (r *PoolResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	pool, err := r.client.GetPool(ctx, data.Name.ValueString())
 	if err != nil {
+		if strings.Contains(err.Error(), "status 404") {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError(
-			"API Request Error",
-			fmt.Sprintf("Unable to read pool: %s", err),
+			"Error reading pool",
+			fmt.Sprintf("Unable to read pool %q: %s", data.Name.ValueString(), err),
 		)
 		return
 	}
 
-	r.updateModelFromAPI(ctx, &data, pool, &resp.Diagnostics)
-
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	mapPoolToModel(ctx, pool, &data, &resp.Diagnostics)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -381,81 +371,124 @@ func (r *PoolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	if !data.PgAutoscaleMode.IsNull() && !data.PgAutoscaleMode.IsUnknown() {
-		if data.PgAutoscaleMode.ValueString() == "on" {
-			if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() {
-				resp.Diagnostics.AddError(
-					"Invalid Attribute Combination",
-					"pg_num cannot be set when pg_autoscale_mode is 'on'. When autoscaling is enabled, Ceph automatically manages the number of placement groups.",
-				)
-				return
-			}
-			if !data.PgpNum.IsNull() && !data.PgpNum.IsUnknown() {
-				resp.Diagnostics.AddError(
-					"Invalid Attribute Combination",
-					"pgp_num cannot be set when pg_autoscale_mode is 'on'. When autoscaling is enabled, Ceph automatically manages the number of placement groups.",
-				)
-				return
-			}
-		}
-	}
+	updateReq := CephAPIPoolUpdateRequest{}
 
-	updateReq := r.buildUpdateRequest(ctx, &data)
-
-	poolName := state.Name.ValueString()
 	if !data.Name.Equal(state.Name) {
 		newName := data.Name.ValueString()
 		updateReq.Pool = &newName
 	}
 
-	err := r.waitForPoolStateStable(ctx, poolName)
+	if !data.PgNum.Equal(state.PgNum) {
+		pgNum := int(data.PgNum.ValueInt64())
+		if pgNum > 0 {
+			updateReq.PgNum = &pgNum
+		}
+	}
+
+	if !data.PgpNum.Equal(state.PgpNum) {
+		pgpNum := int(data.PgpNum.ValueInt64())
+		if pgpNum > 0 {
+			updateReq.PgpNum = &pgpNum
+		}
+	}
+
+	if !data.MinSize.Equal(state.MinSize) {
+		minSize := int(data.MinSize.ValueInt64())
+		updateReq.MinSize = &minSize
+	}
+
+	if !data.PgAutoscaleMode.Equal(state.PgAutoscaleMode) {
+		pgAutoscaleMode := data.PgAutoscaleMode.ValueString()
+		updateReq.PgAutoscaleMode = &pgAutoscaleMode
+	}
+
+	if !data.QuotaMaxObjects.Equal(state.QuotaMaxObjects) {
+		quotaMaxObjects := int(data.QuotaMaxObjects.ValueInt64())
+		updateReq.QuotaMaxObjects = &quotaMaxObjects
+	}
+
+	if !data.QuotaMaxBytes.Equal(state.QuotaMaxBytes) {
+		quotaMaxBytes := int(data.QuotaMaxBytes.ValueInt64())
+		updateReq.QuotaMaxBytes = &quotaMaxBytes
+	}
+
+	if !data.CompressionMode.Equal(state.CompressionMode) {
+		if !data.CompressionMode.IsNull() && !data.CompressionMode.IsUnknown() {
+			compressionMode := data.CompressionMode.ValueString()
+			updateReq.CompressionMode = &compressionMode
+		}
+	}
+
+	if !data.CompressionAlgorithm.Equal(state.CompressionAlgorithm) {
+		if !data.CompressionAlgorithm.IsNull() && !data.CompressionAlgorithm.IsUnknown() {
+			compressionAlgorithm := data.CompressionAlgorithm.ValueString()
+			updateReq.CompressionAlgorithm = &compressionAlgorithm
+		}
+	}
+
+	if !data.CompressionRequiredRatio.Equal(state.CompressionRequiredRatio) {
+		if !data.CompressionRequiredRatio.IsNull() && !data.CompressionRequiredRatio.IsUnknown() {
+			compressionRequiredRatio := data.CompressionRequiredRatio.ValueFloat64()
+			updateReq.CompressionRequiredRatio = &compressionRequiredRatio
+		}
+	}
+
+	if !data.CompressionMinBlobSize.Equal(state.CompressionMinBlobSize) {
+		if !data.CompressionMinBlobSize.IsNull() && !data.CompressionMinBlobSize.IsUnknown() {
+			compressionMinBlobSize := int(data.CompressionMinBlobSize.ValueInt64())
+			updateReq.CompressionMinBlobSize = &compressionMinBlobSize
+		}
+	}
+
+	if !data.CompressionMaxBlobSize.Equal(state.CompressionMaxBlobSize) {
+		if !data.CompressionMaxBlobSize.IsNull() && !data.CompressionMaxBlobSize.IsUnknown() {
+			compressionMaxBlobSize := int(data.CompressionMaxBlobSize.ValueInt64())
+			updateReq.CompressionMaxBlobSize = &compressionMaxBlobSize
+		}
+	}
+
+	if !data.ApplicationMetadata.Equal(state.ApplicationMetadata) {
+		if !data.ApplicationMetadata.IsNull() && !data.ApplicationMetadata.IsUnknown() {
+			var apps []string
+			resp.Diagnostics.Append(data.ApplicationMetadata.ElementsAs(ctx, &apps, false)...)
+			if resp.Diagnostics.HasError() {
+				return
+			}
+			updateReq.ApplicationMetadata = apps
+		}
+	}
+
+	currentName := state.Name.ValueString()
+
+	err := r.client.UpdatePool(ctx, currentName, updateReq)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Pool State Stability Check Failed",
-			fmt.Sprintf("Unable to verify pool state is stable before update: %s", err),
+			"Error updating pool",
+			fmt.Sprintf("Unable to update pool %q: %s", currentName, err),
 		)
 		return
 	}
 
-	err = r.client.UpdatePool(ctx, poolName, updateReq)
+	newName := data.Name.ValueString()
+	if !data.Name.Equal(state.Name) {
+		timer := time.NewTimer(poolRenameSettleTime)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+		}
+	}
+	pool, err := r.waitForPoolProperties(ctx, newName, &data)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"API Request Error",
-			fmt.Sprintf("Unable to update pool: %s", err),
+			"Error reading pool after update",
+			fmt.Sprintf("Unable to read pool %q after update: %s", newName, err),
 		)
 		return
 	}
 
-	if updateReq.Pool != nil {
-		poolName = *updateReq.Pool
-	}
-
-	timer := time.NewTimer(poolUpdateSettleTime)
-	select {
-	case <-timer.C:
-	case <-ctx.Done():
-		timer.Stop()
-		resp.Diagnostics.AddError(
-			"Context Cancelled",
-			"Update operation was cancelled before completion",
-		)
-		return
-	}
-
-	pool, err := r.waitForPoolPropertiesAfterUpdate(ctx, poolName, &data)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"Pool Properties Verification Failed",
-			fmt.Sprintf("Pool %s was updated but properties did not converge: %s", poolName, err),
-		)
-		return
-	}
-
-	r.updateModelFromAPI(ctx, &data, pool, &resp.Diagnostics)
-
-	if resp.Diagnostics.HasError() {
-		return
-	}
+	mapPoolToModel(ctx, pool, &data, &resp.Diagnostics)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -472,35 +505,15 @@ func (r *PoolResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	err := r.client.DeletePool(ctx, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"API Request Error",
-			fmt.Sprintf("Unable to delete pool: %s", err),
+			"Error deleting pool",
+			fmt.Sprintf("Unable to delete pool %q: %s", data.Name.ValueString(), err),
 		)
 		return
 	}
 }
 
 func (r *PoolResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	poolName := req.ID
-
-	pool, err := r.client.GetPool(ctx, poolName)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"API Request Error",
-			fmt.Sprintf("Unable to read pool during import: %s", err),
-		)
-		return
-	}
-
-	var data PoolResourceModel
-	data.Name = types.StringValue(poolName)
-
-	r.updateModelFromAPI(ctx, &data, pool, &resp.Diagnostics)
-
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
 }
 
 func (r *PoolResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
@@ -595,569 +608,247 @@ func (r *PoolResource) ValidateConfig(ctx context.Context, req resource.Validate
 
 }
 
-func (r *PoolResource) buildCreateRequest(ctx context.Context, data *PoolResourceModel) CephAPIPoolCreateRequest {
-	poolType := data.PoolType.ValueString()
-	createReq := CephAPIPoolCreateRequest{
-		Pool:     data.Name.ValueString(),
-		PoolType: &poolType,
-	}
+func (r *PoolResource) waitForPoolProperties(ctx context.Context, poolName string, expected *PoolResourceModel) (*CephAPIPool, error) {
+	tflog.Debug(ctx, "Starting to wait for pool properties", map[string]interface{}{
+		"pool_name": poolName,
+		"timeout":   "60s",
+	})
 
-	if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() {
-		pgNum := int(data.PgNum.ValueInt64())
-		createReq.PgNum = &pgNum
-	}
-	if !data.PgpNum.IsNull() && !data.PgpNum.IsUnknown() {
-		pgpNum := int(data.PgpNum.ValueInt64())
-		createReq.PgpNum = &pgpNum
-	}
-	if !data.CrushRule.IsNull() && !data.CrushRule.IsUnknown() {
-		val := data.CrushRule.ValueString()
-		createReq.CrushRule = &val
-	}
-	if !data.ErasureCodeProfile.IsNull() && !data.ErasureCodeProfile.IsUnknown() {
-		val := data.ErasureCodeProfile.ValueString()
-		createReq.ErasureCodeProfile = &val
-	}
-	if !data.ApplicationMetadata.IsNull() && !data.ApplicationMetadata.IsUnknown() {
-		var apps []string
-		diags := data.ApplicationMetadata.ElementsAs(ctx, &apps, false)
-		if !diags.HasError() {
-			createReq.ApplicationMetadata = apps
-		}
-	}
-	if !data.MinSize.IsNull() && !data.MinSize.IsUnknown() {
-		minSize := int(data.MinSize.ValueInt64())
-		createReq.MinSize = &minSize
-	}
-	if !data.Size.IsNull() && !data.Size.IsUnknown() {
-		size := int(data.Size.ValueInt64())
-		createReq.Size = &size
-	}
-	if !data.PgAutoscaleMode.IsNull() && !data.PgAutoscaleMode.IsUnknown() {
-		val := data.PgAutoscaleMode.ValueString()
-		createReq.PgAutoscaleMode = &val
-	}
-	if !data.QuotaMaxObjects.IsNull() && !data.QuotaMaxObjects.IsUnknown() {
-		quotaMaxObjects := int(data.QuotaMaxObjects.ValueInt64())
-		createReq.QuotaMaxObjects = &quotaMaxObjects
-	}
-	if !data.QuotaMaxBytes.IsNull() && !data.QuotaMaxBytes.IsUnknown() {
-		quotaMaxBytes := int(data.QuotaMaxBytes.ValueInt64())
-		createReq.QuotaMaxBytes = &quotaMaxBytes
-	}
-	if !data.CompressionMode.IsNull() && !data.CompressionMode.IsUnknown() {
-		val := data.CompressionMode.ValueString()
-		createReq.CompressionMode = &val
-	}
-	if !data.CompressionAlgorithm.IsNull() && !data.CompressionAlgorithm.IsUnknown() {
-		val := data.CompressionAlgorithm.ValueString()
-		createReq.CompressionAlgorithm = &val
-	}
-	if !data.CompressionRequiredRatio.IsNull() && !data.CompressionRequiredRatio.IsUnknown() {
-		compressionRequiredRatio := data.CompressionRequiredRatio.ValueFloat64()
-		createReq.CompressionRequiredRatio = &compressionRequiredRatio
-	}
-	if !data.CompressionMinBlobSize.IsNull() && !data.CompressionMinBlobSize.IsUnknown() {
-		compressionMinBlobSize := int(data.CompressionMinBlobSize.ValueInt64())
-		createReq.CompressionMinBlobSize = &compressionMinBlobSize
-	}
-	if !data.CompressionMaxBlobSize.IsNull() && !data.CompressionMaxBlobSize.IsUnknown() {
-		compressionMaxBlobSize := int(data.CompressionMaxBlobSize.ValueInt64())
-		createReq.CompressionMaxBlobSize = &compressionMaxBlobSize
-	}
+	ctx, cancel := context.WithTimeout(ctx, poolPropertiesTimeout)
+	defer cancel()
 
-	return createReq
-}
+	ticker := time.NewTicker(poolPropertyCheckInterval)
+	defer ticker.Stop()
 
-func (r *PoolResource) buildUpdateRequest(ctx context.Context, data *PoolResourceModel) CephAPIPoolUpdateRequest {
-	updateReq := CephAPIPoolUpdateRequest{}
-
-	if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() {
-		pgNum := int(data.PgNum.ValueInt64())
-		updateReq.PgNum = &pgNum
-	}
-	if !data.PgpNum.IsNull() && !data.PgpNum.IsUnknown() {
-		pgpNum := int(data.PgpNum.ValueInt64())
-		updateReq.PgpNum = &pgpNum
-	}
-	if !data.CrushRule.IsNull() && !data.CrushRule.IsUnknown() {
-		val := data.CrushRule.ValueString()
-		updateReq.CrushRule = &val
-	}
-	if !data.Size.IsNull() && !data.Size.IsUnknown() {
-		size := int(data.Size.ValueInt64())
-		updateReq.Size = &size
-	}
-	if !data.MinSize.IsNull() && !data.MinSize.IsUnknown() {
-		minSize := int(data.MinSize.ValueInt64())
-		updateReq.MinSize = &minSize
-	}
-	if !data.PgAutoscaleMode.IsNull() && !data.PgAutoscaleMode.IsUnknown() {
-		val := data.PgAutoscaleMode.ValueString()
-		updateReq.PgAutoscaleMode = &val
-	}
-	if !data.QuotaMaxObjects.IsNull() && !data.QuotaMaxObjects.IsUnknown() {
-		quotaMaxObjects := int(data.QuotaMaxObjects.ValueInt64())
-		updateReq.QuotaMaxObjects = &quotaMaxObjects
-	}
-	if !data.QuotaMaxBytes.IsNull() && !data.QuotaMaxBytes.IsUnknown() {
-		quotaMaxBytes := int(data.QuotaMaxBytes.ValueInt64())
-		updateReq.QuotaMaxBytes = &quotaMaxBytes
-	}
-	if !data.CompressionMode.IsNull() && !data.CompressionMode.IsUnknown() {
-		val := data.CompressionMode.ValueString()
-		updateReq.CompressionMode = &val
-	}
-	if !data.CompressionAlgorithm.IsNull() && !data.CompressionAlgorithm.IsUnknown() {
-		val := data.CompressionAlgorithm.ValueString()
-		updateReq.CompressionAlgorithm = &val
-	}
-	if !data.CompressionRequiredRatio.IsNull() && !data.CompressionRequiredRatio.IsUnknown() {
-		compressionRequiredRatio := data.CompressionRequiredRatio.ValueFloat64()
-		updateReq.CompressionRequiredRatio = &compressionRequiredRatio
-	}
-	if !data.CompressionMinBlobSize.IsNull() && !data.CompressionMinBlobSize.IsUnknown() {
-		compressionMinBlobSize := int(data.CompressionMinBlobSize.ValueInt64())
-		updateReq.CompressionMinBlobSize = &compressionMinBlobSize
-	}
-	if !data.CompressionMaxBlobSize.IsNull() && !data.CompressionMaxBlobSize.IsUnknown() {
-		compressionMaxBlobSize := int(data.CompressionMaxBlobSize.ValueInt64())
-		updateReq.CompressionMaxBlobSize = &compressionMaxBlobSize
-	}
-	if !data.ApplicationMetadata.IsNull() && !data.ApplicationMetadata.IsUnknown() {
-		var apps []string
-		diags := data.ApplicationMetadata.ElementsAs(ctx, &apps, false)
-		if !diags.HasError() {
-			updateReq.ApplicationMetadata = apps
-		}
-	}
-
-	return updateReq
-}
-
-func (r *PoolResource) waitForPoolReadable(ctx context.Context, poolName string) (*CephAPIPool, error) {
-	var pool *CephAPIPool
-	var err error
-
-	for i := range maxPoolReadRetries {
-		pool, err = r.client.GetPool(ctx, poolName)
-		if err == nil {
-			return pool, nil
+	attemptCount := 0
+	for {
+		attemptCount++
+		pool, err := r.client.GetPool(ctx, poolName)
+		if err != nil {
+			if strings.Contains(err.Error(), "404") || strings.Contains(err.Error(), "Not Found") {
+				tflog.Debug(ctx, "Pool not found (404), continuing to poll", map[string]interface{}{
+					"pool_name": poolName,
+					"attempt":   attemptCount,
+				})
+				select {
+				case <-ctx.Done():
+					tflog.Warn(ctx, "Context timeout waiting for pool, making final attempt", map[string]interface{}{
+						"pool_name": poolName,
+						"attempts":  attemptCount,
+					})
+					return r.client.GetPool(context.Background(), poolName)
+				case <-ticker.C:
+					continue
+				}
+			}
+			tflog.Error(ctx, "Error getting pool", map[string]interface{}{
+				"pool_name": poolName,
+				"error":     err.Error(),
+				"attempt":   attemptCount,
+			})
+			return nil, err
 		}
 
-		if strings.Contains(err.Error(), "404") && i < maxPoolReadRetries-1 {
-			select {
-			case <-time.After(poolReadRetryDelay):
-				continue
-			case <-ctx.Done():
-				return nil, ctx.Err()
+		propertiesMatch := true
+
+		if !expected.Size.IsNull() && !expected.Size.IsUnknown() {
+			if expected.PoolType.ValueString() == "replicated" {
+				expectedSize := int(expected.Size.ValueInt64())
+				if pool.Size != expectedSize {
+					tflog.Debug(ctx, "Size mismatch", map[string]interface{}{
+						"expected": expectedSize,
+						"actual":   pool.Size,
+						"attempt":  attemptCount,
+					})
+					propertiesMatch = false
+				}
 			}
 		}
-	}
 
-	return nil, err
-}
+		if !expected.MinSize.IsNull() && !expected.MinSize.IsUnknown() {
+			expectedMinSize := int(expected.MinSize.ValueInt64())
+			if pool.MinSize != expectedMinSize {
+				tflog.Debug(ctx, "MinSize mismatch", map[string]interface{}{
+					"expected": expectedMinSize,
+					"actual":   pool.MinSize,
+					"attempt":  attemptCount,
+				})
+				propertiesMatch = false
+			}
+		}
 
-func (r *PoolResource) waitForPoolStateStable(ctx context.Context, poolName string) error {
-	const maxStabilityRetries = 5
-	const stabilityCheckDelay = 500 * time.Millisecond
+		if !expected.PgAutoscaleMode.IsNull() && !expected.PgAutoscaleMode.IsUnknown() {
+			expectedMode := expected.PgAutoscaleMode.ValueString()
+			if pool.PGAutoscaleMode != expectedMode {
+				tflog.Debug(ctx, "PgAutoscaleMode mismatch", map[string]interface{}{
+					"expected": expectedMode,
+					"actual":   pool.PGAutoscaleMode,
+					"attempt":  attemptCount,
+				})
+				propertiesMatch = false
+			}
+		}
 
-	for i := 0; i < maxStabilityRetries; i++ {
-		pool1, err1 := r.client.GetPool(ctx, poolName)
-		if err1 != nil {
-			return fmt.Errorf("unable to read pool for stability check: %w", err1)
+		if !expected.QuotaMaxObjects.IsNull() && !expected.QuotaMaxObjects.IsUnknown() {
+			expectedQuota := int(expected.QuotaMaxObjects.ValueInt64())
+			if pool.QuotaMaxObjects != expectedQuota {
+				tflog.Debug(ctx, "QuotaMaxObjects mismatch", map[string]interface{}{
+					"expected": expectedQuota,
+					"actual":   pool.QuotaMaxObjects,
+					"attempt":  attemptCount,
+				})
+				propertiesMatch = false
+			}
+		}
+
+		if !expected.QuotaMaxBytes.IsNull() && !expected.QuotaMaxBytes.IsUnknown() {
+			expectedQuota := int(expected.QuotaMaxBytes.ValueInt64())
+			if pool.QuotaMaxBytes != expectedQuota {
+				tflog.Debug(ctx, "QuotaMaxBytes mismatch", map[string]interface{}{
+					"expected": expectedQuota,
+					"actual":   pool.QuotaMaxBytes,
+					"attempt":  attemptCount,
+				})
+				propertiesMatch = false
+			}
+		}
+
+		if !expected.CompressionMode.IsNull() && !expected.CompressionMode.IsUnknown() {
+			expectedMode := expected.CompressionMode.ValueString()
+			if pool.Options.CompressionMode != expectedMode {
+				tflog.Debug(ctx, "CompressionMode mismatch", map[string]interface{}{
+					"expected": expectedMode,
+					"actual":   pool.Options.CompressionMode,
+					"attempt":  attemptCount,
+				})
+				propertiesMatch = false
+			}
+		}
+
+		if !expected.CompressionAlgorithm.IsNull() && !expected.CompressionAlgorithm.IsUnknown() {
+			expectedAlgo := expected.CompressionAlgorithm.ValueString()
+			if pool.Options.CompressionAlgorithm != expectedAlgo {
+				tflog.Debug(ctx, "CompressionAlgorithm mismatch", map[string]interface{}{
+					"expected": expectedAlgo,
+					"actual":   pool.Options.CompressionAlgorithm,
+					"attempt":  attemptCount,
+				})
+				propertiesMatch = false
+			}
+		}
+
+		if !expected.ApplicationMetadata.IsNull() && !expected.ApplicationMetadata.IsUnknown() {
+			var expectedApps []string
+			diags := expected.ApplicationMetadata.ElementsAs(ctx, &expectedApps, false)
+			if !diags.HasError() {
+				if len(expectedApps) != len(pool.ApplicationMetadata) {
+					tflog.Debug(ctx, "ApplicationMetadata length mismatch", map[string]interface{}{
+						"expected_count": len(expectedApps),
+						"actual_count":   len(pool.ApplicationMetadata),
+						"expected_apps":  expectedApps,
+						"actual_apps":    pool.ApplicationMetadata,
+						"attempt":        attemptCount,
+					})
+					propertiesMatch = false
+				} else {
+					for _, app := range expectedApps {
+						found := false
+						for _, poolApp := range pool.ApplicationMetadata {
+							if app == poolApp {
+								found = true
+								break
+							}
+						}
+						if !found {
+							tflog.Debug(ctx, "ApplicationMetadata missing expected app", map[string]interface{}{
+								"missing_app":   app,
+								"expected_apps": expectedApps,
+								"actual_apps":   pool.ApplicationMetadata,
+								"attempt":       attemptCount,
+							})
+							propertiesMatch = false
+							break
+						}
+					}
+				}
+			}
+		}
+
+		if propertiesMatch {
+			tflog.Debug(ctx, "All properties matched, returning pool", map[string]interface{}{
+				"pool_name": poolName,
+				"attempt":   attemptCount,
+			})
+			return pool, nil
 		}
 
 		select {
-		case <-time.After(stabilityCheckDelay):
 		case <-ctx.Done():
-			return ctx.Err()
-		}
-
-		pool2, err2 := r.client.GetPool(ctx, poolName)
-		if err2 != nil {
-			return fmt.Errorf("unable to read pool for stability check: %w", err2)
-		}
-
-		if areApplicationsEqual(pool1.ApplicationMetadata, pool2.ApplicationMetadata) {
-			return nil
-		}
-
-		if i < maxStabilityRetries-1 {
-			select {
-			case <-time.After(stabilityCheckDelay):
-				continue
-			case <-ctx.Done():
-				return ctx.Err()
-			}
+			tflog.Warn(ctx, "Polling loop ending due to context timeout", map[string]interface{}{
+				"pool_name": poolName,
+				"attempts":  attemptCount,
+			})
+			return r.client.GetPool(context.Background(), poolName)
+		case <-ticker.C:
 		}
 	}
-
-	return nil
 }
 
-func areApplicationsEqual(apps1, apps2 []string) bool {
-	if len(apps1) != len(apps2) {
-		return false
-	}
-
-	set1 := make(map[string]bool, len(apps1))
-	for _, app := range apps1 {
-		set1[app] = true
-	}
-
-	for _, app := range apps2 {
-		if !set1[app] {
-			return false
-		}
-	}
-
-	return true
-}
-
-func (r *PoolResource) waitForPoolPropertiesAfterCreate(ctx context.Context, poolName string, data *PoolResourceModel) (*CephAPIPool, error) {
-	expectedSize := 0
-	if !data.Size.IsNull() && !data.Size.IsUnknown() {
-		expectedSize = int(data.Size.ValueInt64())
-	}
-
-	expectedCompressionMode := ""
-	if !data.CompressionMode.IsNull() && !data.CompressionMode.IsUnknown() {
-		expectedCompressionMode = data.CompressionMode.ValueString()
-	}
-
-	expectedCompressionAlgorithm := ""
-	if !data.CompressionAlgorithm.IsNull() && !data.CompressionAlgorithm.IsUnknown() {
-		expectedCompressionAlgorithm = data.CompressionAlgorithm.ValueString()
-	}
-
-	var expectedApplications []string
-	if !data.ApplicationMetadata.IsNull() && !data.ApplicationMetadata.IsUnknown() {
-		data.ApplicationMetadata.ElementsAs(ctx, &expectedApplications, false)
-	}
-
-	expectedQuotaMaxObjects := int64(-1)
-	if !data.QuotaMaxObjects.IsNull() && !data.QuotaMaxObjects.IsUnknown() {
-		expectedQuotaMaxObjects = data.QuotaMaxObjects.ValueInt64()
-	}
-
-	expectedQuotaMaxBytes := int64(-1)
-	if !data.QuotaMaxBytes.IsNull() && !data.QuotaMaxBytes.IsUnknown() {
-		expectedQuotaMaxBytes = data.QuotaMaxBytes.ValueInt64()
-	}
-
-	var pool *CephAPIPool
-	var err error
-
-	for i := range maxPoolReadRetries {
-		pool, err = r.client.GetPool(ctx, poolName)
-		if err != nil {
-			if strings.Contains(err.Error(), "404") && i < maxPoolReadRetries-1 {
-				select {
-				case <-time.After(poolReadRetryDelay):
-					continue
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				}
-			}
-			return nil, err
-		}
-
-		sizeMatches := (expectedSize == 0) || (pool.Size == expectedSize)
-		compressionModeMatches := (expectedCompressionMode == "") || (pool.Options.CompressionMode == expectedCompressionMode)
-		compressionAlgorithmMatches := (expectedCompressionAlgorithm == "") || (pool.Options.CompressionAlgorithm == expectedCompressionAlgorithm)
-
-		applicationMatches := true
-		if len(expectedApplications) > 0 {
-			expectedSet := make(map[string]bool)
-			for _, app := range expectedApplications {
-				expectedSet[app] = true
-			}
-			actualSet := make(map[string]bool)
-			for _, app := range pool.ApplicationMetadata {
-				actualSet[app] = true
-			}
-			if len(expectedSet) != len(actualSet) {
-				applicationMatches = false
-			} else {
-				for app := range expectedSet {
-					if !actualSet[app] {
-						applicationMatches = false
-						break
-					}
-				}
-			}
-		}
-
-		quotaMaxObjectsMatches := (expectedQuotaMaxObjects == -1) || (int64(pool.QuotaMaxObjects) == expectedQuotaMaxObjects)
-		quotaMaxBytesMatches := (expectedQuotaMaxBytes == -1) || (int64(pool.QuotaMaxBytes) == expectedQuotaMaxBytes)
-
-		if sizeMatches && compressionModeMatches && compressionAlgorithmMatches && applicationMatches && quotaMaxObjectsMatches && quotaMaxBytesMatches {
-			return pool, nil
-		}
-
-		if i < maxPoolReadRetries-1 {
-			select {
-			case <-time.After(poolReadRetryDelay):
-				continue
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-		}
-	}
-
-	var mismatches []string
-	if pool != nil {
-		if expectedSize != 0 && pool.Size != expectedSize {
-			mismatches = append(mismatches, fmt.Sprintf("size (expected %d, got %d)", expectedSize, pool.Size))
-		}
-		if expectedCompressionMode != "" && pool.Options.CompressionMode != expectedCompressionMode {
-			mismatches = append(mismatches, fmt.Sprintf("compression_mode (expected %q, got %q)", expectedCompressionMode, pool.Options.CompressionMode))
-		}
-		if expectedCompressionAlgorithm != "" && pool.Options.CompressionAlgorithm != expectedCompressionAlgorithm {
-			mismatches = append(mismatches, fmt.Sprintf("compression_algorithm (expected %q, got %q)", expectedCompressionAlgorithm, pool.Options.CompressionAlgorithm))
-		}
-		if len(expectedApplications) > 0 {
-			expectedSet := make(map[string]bool)
-			for _, app := range expectedApplications {
-				expectedSet[app] = true
-			}
-			actualSet := make(map[string]bool)
-			for _, app := range pool.ApplicationMetadata {
-				actualSet[app] = true
-			}
-			if len(expectedSet) != len(actualSet) || !func() bool {
-				for app := range expectedSet {
-					if !actualSet[app] {
-						return false
-					}
-				}
-				return true
-			}() {
-				mismatches = append(mismatches, fmt.Sprintf("application_metadata (expected %v, got %v)", expectedApplications, pool.ApplicationMetadata))
-			}
-		}
-		if expectedQuotaMaxObjects != -1 && int64(pool.QuotaMaxObjects) != expectedQuotaMaxObjects {
-			mismatches = append(mismatches, fmt.Sprintf("quota_max_objects (expected %d, got %d)", expectedQuotaMaxObjects, pool.QuotaMaxObjects))
-		}
-		if expectedQuotaMaxBytes != -1 && int64(pool.QuotaMaxBytes) != expectedQuotaMaxBytes {
-			mismatches = append(mismatches, fmt.Sprintf("quota_max_bytes (expected %d, got %d)", expectedQuotaMaxBytes, pool.QuotaMaxBytes))
-		}
-	}
-
-	return pool, fmt.Errorf("properties did not converge after %d retries: %s",
-		maxPoolReadRetries, strings.Join(mismatches, ", "))
-}
-
-func (r *PoolResource) waitForPoolPropertiesAfterUpdate(ctx context.Context, poolName string, data *PoolResourceModel) (*CephAPIPool, error) {
-	expectedPgAutoscaleMode := ""
-	if !data.PgAutoscaleMode.IsNull() && !data.PgAutoscaleMode.IsUnknown() {
-		expectedPgAutoscaleMode = data.PgAutoscaleMode.ValueString()
-	}
-
-	expectedCompressionMode := ""
-	if !data.CompressionMode.IsNull() && !data.CompressionMode.IsUnknown() {
-		expectedCompressionMode = data.CompressionMode.ValueString()
-	}
-
-	expectedCompressionAlgorithm := ""
-	if !data.CompressionAlgorithm.IsNull() && !data.CompressionAlgorithm.IsUnknown() {
-		expectedCompressionAlgorithm = data.CompressionAlgorithm.ValueString()
-	}
-
-	expectedPgNum := 0
-	if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() {
-		expectedPgNum = int(data.PgNum.ValueInt64())
-	}
-
-	expectedPgpNum := 0
-	if !data.PgpNum.IsNull() && !data.PgpNum.IsUnknown() {
-		expectedPgpNum = int(data.PgpNum.ValueInt64())
-	}
-
-	expectedQuotaMaxObjects := int64(-1)
-	if !data.QuotaMaxObjects.IsNull() && !data.QuotaMaxObjects.IsUnknown() {
-		expectedQuotaMaxObjects = data.QuotaMaxObjects.ValueInt64()
-	}
-
-	expectedQuotaMaxBytes := int64(-1)
-	if !data.QuotaMaxBytes.IsNull() && !data.QuotaMaxBytes.IsUnknown() {
-		expectedQuotaMaxBytes = data.QuotaMaxBytes.ValueInt64()
-	}
-
-	expectedSize := 0
-	if !data.Size.IsNull() && !data.Size.IsUnknown() {
-		expectedSize = int(data.Size.ValueInt64())
-	}
-
-	expectedMinSize := 0
-	if !data.MinSize.IsNull() && !data.MinSize.IsUnknown() {
-		expectedMinSize = int(data.MinSize.ValueInt64())
-	}
-
-	var expectedApplications []string
-	if !data.ApplicationMetadata.IsNull() && !data.ApplicationMetadata.IsUnknown() {
-		data.ApplicationMetadata.ElementsAs(ctx, &expectedApplications, false)
-	}
-
-	var pool *CephAPIPool
-	var err error
-
-	for i := range maxPoolReadRetries {
-		pool, err = r.client.GetPool(ctx, poolName)
-		if err != nil {
-			if strings.Contains(err.Error(), "404") && i < maxPoolReadRetries-1 {
-				select {
-				case <-time.After(poolReadRetryDelay):
-					continue
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				}
-			}
-			return nil, err
-		}
-
-		pgAutoscaleModeMatches := (expectedPgAutoscaleMode == "") || (pool.PGAutoscaleMode == expectedPgAutoscaleMode)
-		compressionModeMatches := (expectedCompressionMode == "") || (pool.Options.CompressionMode == expectedCompressionMode)
-		compressionAlgorithmMatches := (expectedCompressionAlgorithm == "") || (pool.Options.CompressionAlgorithm == expectedCompressionAlgorithm)
-		pgNumMatches := (expectedPgNum == 0) || (pool.PGNum == expectedPgNum)
-		pgpNumMatches := (expectedPgpNum == 0) || (pool.PGPlacementNum == expectedPgpNum)
-		quotaMaxObjectsMatches := (expectedQuotaMaxObjects == -1) || (int64(pool.QuotaMaxObjects) == expectedQuotaMaxObjects)
-		quotaMaxBytesMatches := (expectedQuotaMaxBytes == -1) || (int64(pool.QuotaMaxBytes) == expectedQuotaMaxBytes)
-		sizeMatches := (expectedSize == 0) || (pool.Size == expectedSize)
-		minSizeMatches := (expectedMinSize == 0) || (pool.MinSize == expectedMinSize)
-
-		applicationMatches := true
-		if len(expectedApplications) > 0 {
-			expectedSet := make(map[string]bool)
-			for _, app := range expectedApplications {
-				expectedSet[app] = true
-			}
-			actualSet := make(map[string]bool)
-			for _, app := range pool.ApplicationMetadata {
-				actualSet[app] = true
-			}
-			if len(expectedSet) != len(actualSet) {
-				applicationMatches = false
-			} else {
-				for app := range expectedSet {
-					if !actualSet[app] {
-						applicationMatches = false
-						break
-					}
-				}
-			}
-		}
-
-		if pgAutoscaleModeMatches && compressionModeMatches && compressionAlgorithmMatches && pgNumMatches && pgpNumMatches && quotaMaxObjectsMatches && quotaMaxBytesMatches && sizeMatches && minSizeMatches && applicationMatches {
-			return pool, nil
-		}
-
-		if i < maxPoolReadRetries-1 {
-			select {
-			case <-time.After(poolReadRetryDelay):
-				continue
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-		}
-	}
-
-	var mismatches []string
-	if pool != nil {
-		if expectedPgAutoscaleMode != "" && pool.PGAutoscaleMode != expectedPgAutoscaleMode {
-			mismatches = append(mismatches, fmt.Sprintf("pg_autoscale_mode (expected %q, got %q)", expectedPgAutoscaleMode, pool.PGAutoscaleMode))
-		}
-		if expectedCompressionMode != "" && pool.Options.CompressionMode != expectedCompressionMode {
-			mismatches = append(mismatches, fmt.Sprintf("compression_mode (expected %q, got %q)", expectedCompressionMode, pool.Options.CompressionMode))
-		}
-		if expectedCompressionAlgorithm != "" && pool.Options.CompressionAlgorithm != expectedCompressionAlgorithm {
-			mismatches = append(mismatches, fmt.Sprintf("compression_algorithm (expected %q, got %q)", expectedCompressionAlgorithm, pool.Options.CompressionAlgorithm))
-		}
-		if expectedPgNum != 0 && pool.PGNum != expectedPgNum {
-			mismatches = append(mismatches, fmt.Sprintf("pg_num (expected %d, got %d)", expectedPgNum, pool.PGNum))
-		}
-		if expectedPgpNum != 0 && pool.PGPlacementNum != expectedPgpNum {
-			mismatches = append(mismatches, fmt.Sprintf("pgp_num (expected %d, got %d)", expectedPgpNum, pool.PGPlacementNum))
-		}
-		if expectedQuotaMaxObjects != -1 && int64(pool.QuotaMaxObjects) != expectedQuotaMaxObjects {
-			mismatches = append(mismatches, fmt.Sprintf("quota_max_objects (expected %d, got %d)", expectedQuotaMaxObjects, pool.QuotaMaxObjects))
-		}
-		if expectedQuotaMaxBytes != -1 && int64(pool.QuotaMaxBytes) != expectedQuotaMaxBytes {
-			mismatches = append(mismatches, fmt.Sprintf("quota_max_bytes (expected %d, got %d)", expectedQuotaMaxBytes, pool.QuotaMaxBytes))
-		}
-		if expectedSize != 0 && pool.Size != expectedSize {
-			mismatches = append(mismatches, fmt.Sprintf("size (expected %d, got %d)", expectedSize, pool.Size))
-		}
-		if expectedMinSize != 0 && pool.MinSize != expectedMinSize {
-			mismatches = append(mismatches, fmt.Sprintf("min_size (expected %d, got %d)", expectedMinSize, pool.MinSize))
-		}
-		if len(expectedApplications) > 0 {
-			expectedSet := make(map[string]bool)
-			for _, app := range expectedApplications {
-				expectedSet[app] = true
-			}
-			actualSet := make(map[string]bool)
-			for _, app := range pool.ApplicationMetadata {
-				actualSet[app] = true
-			}
-			mismatch := len(expectedSet) != len(actualSet)
-			if !mismatch {
-				for app := range expectedSet {
-					if !actualSet[app] {
-						mismatch = true
-						break
-					}
-				}
-			}
-			if mismatch {
-				mismatches = append(mismatches, fmt.Sprintf("application_metadata (expected %v, got %v)", expectedApplications, pool.ApplicationMetadata))
-			}
-		}
-	}
-
-	return pool, fmt.Errorf("properties did not converge after %d retries: %s",
-		maxPoolReadRetries, strings.Join(mismatches, ", "))
-}
-
-func (r *PoolResource) updateModelFromAPI(ctx context.Context, data *PoolResourceModel, pool *CephAPIPool, diagnostics *diag.Diagnostics) {
-	data.PoolID = types.Int64Value(int64(pool.PoolID))
+func mapPoolToModel(ctx context.Context, pool *CephAPIPool, data *PoolResourceModel, diagnostics *diag.Diagnostics) {
+	data.Name = types.StringValue(pool.PoolName)
 	data.PoolType = types.StringValue(pool.Type)
+	data.PoolID = types.Int64Value(int64(pool.PoolID))
 	data.Size = types.Int64Value(int64(pool.Size))
 	data.MinSize = types.Int64Value(int64(pool.MinSize))
-
-	autoscaleMode := pool.PGAutoscaleMode
-
-	if autoscaleMode == "off" || autoscaleMode == "warn" || autoscaleMode == "" {
-		data.PgNum = types.Int64Value(int64(pool.PGNum))
-		data.PgpNum = types.Int64Value(int64(pool.PGPlacementNum))
-	} else {
-		if data.PgNum.IsNull() || data.PgNum.IsUnknown() {
-			data.PgNum = types.Int64Value(int64(pool.PGNum))
-		}
-		if data.PgpNum.IsNull() || data.PgpNum.IsUnknown() {
-			data.PgpNum = types.Int64Value(int64(pool.PGPlacementNum))
-		}
-	}
-
+	data.PgNum = types.Int64Value(int64(pool.PGNum))
+	data.PgpNum = types.Int64Value(int64(pool.PGPlacementNum))
 	data.CrushRule = types.StringValue(pool.CrushRule)
-	data.PrimaryAffinity = types.Float64Value(pool.PrimaryAffinity)
-
-	appMeta, diags := types.ListValueFrom(ctx, types.StringType, pool.ApplicationMetadata)
-	diagnostics.Append(diags...)
-	if diagnostics.HasError() {
-		return
-	}
-	data.ApplicationMetadata = appMeta
-
-	data.ErasureCodeProfile = types.StringValue(pool.ErasureCodeProfile)
 	data.PgAutoscaleMode = types.StringValue(pool.PGAutoscaleMode)
+	data.PrimaryAffinity = types.Float64Value(pool.PrimaryAffinity)
 	data.QuotaMaxObjects = types.Int64Value(int64(pool.QuotaMaxObjects))
 	data.QuotaMaxBytes = types.Int64Value(int64(pool.QuotaMaxBytes))
-	data.CompressionMode = types.StringValue(pool.Options.CompressionMode)
-	data.CompressionAlgorithm = types.StringValue(pool.Options.CompressionAlgorithm)
-	data.CompressionRequiredRatio = types.Float64Value(pool.Options.CompressionRequiredRatio)
-	data.CompressionMinBlobSize = types.Int64Value(int64(pool.Options.CompressionMinBlobSize))
-	data.CompressionMaxBlobSize = types.Int64Value(int64(pool.Options.CompressionMaxBlobSize))
-	data.Flags = types.Int64Value(int64(pool.Flags))
+
+	if pool.ErasureCodeProfile != "" {
+		data.ErasureCodeProfile = types.StringValue(pool.ErasureCodeProfile)
+	} else {
+		data.ErasureCodeProfile = types.StringNull()
+	}
+
+	if pool.Options.CompressionMode != "" {
+		data.CompressionMode = types.StringValue(pool.Options.CompressionMode)
+	} else {
+		data.CompressionMode = types.StringNull()
+	}
+
+	if pool.Options.CompressionAlgorithm != "" {
+		data.CompressionAlgorithm = types.StringValue(pool.Options.CompressionAlgorithm)
+	} else {
+		data.CompressionAlgorithm = types.StringNull()
+	}
+
+	if pool.Options.CompressionRequiredRatio > 0 {
+		data.CompressionRequiredRatio = types.Float64Value(pool.Options.CompressionRequiredRatio)
+	} else {
+		data.CompressionRequiredRatio = types.Float64Null()
+	}
+
+	if pool.Options.CompressionMinBlobSize > 0 {
+		data.CompressionMinBlobSize = types.Int64Value(int64(pool.Options.CompressionMinBlobSize))
+	} else {
+		data.CompressionMinBlobSize = types.Int64Null()
+	}
+
+	if pool.Options.CompressionMaxBlobSize > 0 {
+		data.CompressionMaxBlobSize = types.Int64Value(int64(pool.Options.CompressionMaxBlobSize))
+	} else {
+		data.CompressionMaxBlobSize = types.Int64Null()
+	}
+
+	if len(pool.ApplicationMetadata) > 0 {
+		apps, diags := types.ListValueFrom(ctx, types.StringType, pool.ApplicationMetadata)
+		diagnostics.Append(diags...)
+		data.ApplicationMetadata = apps
+	} else {
+		data.ApplicationMetadata = types.ListNull(types.StringType)
+	}
 }
