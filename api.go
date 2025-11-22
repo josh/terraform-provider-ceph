@@ -2097,21 +2097,25 @@ func (c *CephAPIClient) GetErasureCodeProfile(ctx context.Context, name string) 
 
 // https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-task
 
+type PoolTaskMetadata struct {
+	PoolName string `json:"pool_name"`
+}
+
 type CephAPITaskInfo struct {
-	Name     string         `json:"name"`
-	Metadata map[string]any `json:"metadata"`
+	Name     string           `json:"name"`
+	Metadata PoolTaskMetadata `json:"metadata"`
 }
 
 type CephAPITask struct {
-	Name      string         `json:"name"`
-	Metadata  map[string]any `json:"metadata"`
-	BeginTime string         `json:"begin_time"`
-	EndTime   string         `json:"end_time,omitempty"`
-	Duration  float64        `json:"duration,omitempty"`
-	Progress  int            `json:"progress"`
-	Success   bool           `json:"success"`
-	RetValue  any            `json:"ret_value"`
-	Exception any            `json:"exception"`
+	Name      string           `json:"name"`
+	Metadata  PoolTaskMetadata `json:"metadata"`
+	BeginTime string           `json:"begin_time"`
+	EndTime   string           `json:"end_time,omitempty"`
+	Duration  float64          `json:"duration,omitempty"`
+	Progress  int              `json:"progress"`
+	Success   bool             `json:"success"`
+	RetValue  any              `json:"ret_value"`
+	Exception any              `json:"exception"`
 }
 
 type CephAPITaskList struct {
