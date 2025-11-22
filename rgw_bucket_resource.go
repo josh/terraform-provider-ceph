@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -203,23 +204,7 @@ func (r *RGWBucketResource) Delete(ctx context.Context, req resource.DeleteReque
 }
 
 func (r *RGWBucketResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	bucketName := req.ID
-
-	bucket, err := r.client.RGWGetBucket(ctx, bucketName)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"API Request Error",
-			fmt.Sprintf("Unable to read RGW bucket during import: %s", err),
-		)
-		return
-	}
-
-	data := RGWBucketResourceModel{
-		Bucket: types.StringValue(bucketName),
-	}
-	updateModelFromAPIBucket(&data, bucket)
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resource.ImportStatePassthroughID(ctx, path.Root("bucket"), req, resp)
 }
 
 func updateModelFromAPIBucket(data *RGWBucketResourceModel, bucket CephAPIRGWBucket) {

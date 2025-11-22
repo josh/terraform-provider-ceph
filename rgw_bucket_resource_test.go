@@ -129,7 +129,7 @@ func TestAccCephRGWBucketResourceImport_nonExistent(t *testing.T) {
 				ResourceName:  "ceph_rgw_bucket.nonexistent",
 				ImportState:   true,
 				ImportStateId: testBucket,
-				ExpectError:   regexp.MustCompile(`(?i)unable to read rgw bucket during import`),
+				ExpectError:   regexp.MustCompile(`(?i)unable to read rgw bucket`),
 			},
 		},
 	})

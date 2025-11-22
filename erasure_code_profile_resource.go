@@ -6,6 +6,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -325,23 +326,7 @@ func (r *ErasureCodeProfileResource) Delete(ctx context.Context, req resource.De
 }
 
 func (r *ErasureCodeProfileResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	profileName := req.ID
-
-	profile, err := r.client.GetErasureCodeProfile(ctx, profileName)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"API Request Error",
-			fmt.Sprintf("Unable to read erasure code profile '%s' during import: %s", profileName, err),
-		)
-		return
-	}
-
-	var data ErasureCodeProfileResourceModel
-	data.Name = types.StringValue(profileName)
-
-	r.updateModelFromAPI(&data, profile)
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
 }
 
 func (r *ErasureCodeProfileResource) updateModelFromAPI(data *ErasureCodeProfileResourceModel, profile *CephAPIErasureCodeProfile) {
