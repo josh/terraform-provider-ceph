@@ -62,9 +62,7 @@ func (c *CephAPIClient) Configure(ctx context.Context, endpoints []*url.URL, use
 	})
 
 	if c.client == nil {
-		c.client = &http.Client{
-			Timeout: 10 * time.Second,
-		}
+		c.client = &http.Client{}
 	}
 
 	if token != "" {
