@@ -2170,3 +2170,84 @@ func (c *CephAPIClient) GetTasks(ctx context.Context, nameFilter string) (*CephA
 
 	return &taskList, nil
 }
+
+func (c *CephAPIClient) WaitForTask(ctx context.Context, taskInfo *CephAPITaskInfo) error {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("task '%s' did not complete within timeout: %w", taskInfo.Name, ctx.Err())
+		case <-ticker.C:
+			tasks, err := c.GetTasks(ctx, taskInfo.Name)
+			if err != nil {
+				return fmt.Errorf("unable to poll task '%s': %w", taskInfo.Name, err)
+			}
+
+			for _, task := range tasks.ExecutingTasks {
+				tflog.Trace(ctx, "Executing task", map[string]interface{}{
+					"name":       task.Name,
+					"metadata":   task.Metadata,
+					"progress":   task.Progress,
+					"begin_time": task.BeginTime,
+				})
+			}
+
+			for _, task := range tasks.FinishedTasks {
+				tflog.Trace(ctx, "Finished task", map[string]interface{}{
+					"name":     task.Name,
+					"metadata": task.Metadata,
+					"success":  task.Success,
+					"duration": task.Duration,
+					"end_time": task.EndTime,
+				})
+			}
+
+			tflog.Debug(ctx, "Polling tasks", map[string]interface{}{
+				"executing_task_count": len(tasks.ExecutingTasks),
+				"finished_task_count":  len(tasks.FinishedTasks),
+				"target_task_name":     taskInfo.Name,
+				"target_pool_name":     taskInfo.Metadata.PoolName,
+			})
+
+			for _, task := range tasks.FinishedTasks {
+				if task.Name == taskInfo.Name && task.Metadata == taskInfo.Metadata {
+					if !task.Success {
+						tflog.Error(ctx, "Task failed", map[string]interface{}{
+							"task_name": taskInfo.Name,
+							"pool_name": taskInfo.Metadata.PoolName,
+							"exception": task.Exception,
+							"duration":  task.Duration,
+						})
+						return fmt.Errorf("task '%s' failed: %v", taskInfo.Name, task.Exception)
+					}
+
+					tflog.Debug(ctx, "Task completed successfully", map[string]interface{}{
+						"task_name": taskInfo.Name,
+						"pool_name": taskInfo.Metadata.PoolName,
+						"duration":  task.Duration,
+					})
+					return nil
+				}
+			}
+
+			var taskProgress *int
+			for _, task := range tasks.ExecutingTasks {
+				if task.Name == taskInfo.Name && task.Metadata == taskInfo.Metadata {
+					taskProgress = &task.Progress
+					break
+				}
+			}
+
+			logFields := map[string]interface{}{
+				"task_name": taskInfo.Name,
+				"pool_name": taskInfo.Metadata.PoolName,
+			}
+			if taskProgress != nil {
+				logFields["progress"] = *taskProgress
+			}
+			tflog.Debug(ctx, "Task still executing", logFields)
+		}
+	}
+}
