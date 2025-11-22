@@ -1501,10 +1501,10 @@ type CephAPIPoolCreateRequest struct {
 	CompressionMaxBlobSize   *int     `json:"compression_max_blob_size,omitempty"`
 }
 
-func (c *CephAPIClient) CreatePool(ctx context.Context, req CephAPIPoolCreateRequest) error {
+func (c *CephAPIClient) CreatePool(ctx context.Context, req CephAPIPoolCreateRequest) (*CephAPITaskInfo, error) {
 	jsonPayload, err := json.Marshal(req)
 	if err != nil {
-		return fmt.Errorf("unable to encode request payload: %w", err)
+		return nil, fmt.Errorf("unable to encode request payload: %w", err)
 	}
 
 	tflog.Trace(ctx, "Ceph API request body", map[string]any{
@@ -1514,7 +1514,7 @@ func (c *CephAPIClient) CreatePool(ctx context.Context, req CephAPIPoolCreateReq
 	url := c.endpoint.JoinPath("/api/pool").String()
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return fmt.Errorf("unable to create request: %w", err)
+		return nil, fmt.Errorf("unable to create request: %w", err)
 	}
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
@@ -1525,25 +1525,42 @@ func (c *CephAPIClient) CreatePool(ctx context.Context, req CephAPIPoolCreateReq
 	httpResp, err := c.client.Do(httpReq)
 	logRequest(httpResp, err)
 	if err != nil {
-		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
 
-	if httpResp.StatusCode != http.StatusCreated && httpResp.StatusCode != http.StatusAccepted {
-		body, _ := io.ReadAll(httpResp.Body)
-		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response body: %w", err)
 	}
 
-	return nil
+	if httpResp.StatusCode == http.StatusAccepted {
+		var taskInfo CephAPITaskInfo
+		err = json.Unmarshal(body, &taskInfo)
+		if err != nil {
+			return nil, fmt.Errorf("unable to decode task response: %w", err)
+		}
+		tflog.Debug(ctx, "Pool creation returned 202, task is running", map[string]any{
+			"task_name": taskInfo.Name,
+			"metadata":  taskInfo.Metadata,
+		})
+		return &taskInfo, nil
+	}
+
+	if httpResp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil, nil
 }
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-pool--pool_name>
 
-func (c *CephAPIClient) DeletePool(ctx context.Context, poolName string) error {
+func (c *CephAPIClient) DeletePool(ctx context.Context, poolName string) (*CephAPITaskInfo, error) {
 	url := c.endpoint.JoinPath("/api/pool", poolName).String()
 	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
-		return fmt.Errorf("unable to create request: %w", err)
+		return nil, fmt.Errorf("unable to create request: %w", err)
 	}
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
@@ -1554,16 +1571,33 @@ func (c *CephAPIClient) DeletePool(ctx context.Context, poolName string) error {
 	httpResp, err := c.client.Do(httpReq)
 	logRequest(httpResp, err)
 	if err != nil {
-		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
 
-	if httpResp.StatusCode != http.StatusAccepted && httpResp.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(httpResp.Body)
-		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response body: %w", err)
 	}
 
-	return nil
+	if httpResp.StatusCode == http.StatusAccepted {
+		var taskInfo CephAPITaskInfo
+		err = json.Unmarshal(body, &taskInfo)
+		if err != nil {
+			return nil, fmt.Errorf("unable to decode task response: %w", err)
+		}
+		tflog.Debug(ctx, "Pool deletion returned 202, task is running", map[string]any{
+			"task_name": taskInfo.Name,
+			"metadata":  taskInfo.Metadata,
+		})
+		return &taskInfo, nil
+	}
+
+	if httpResp.StatusCode != http.StatusNoContent {
+		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil, nil
 }
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-pool--pool_name>
@@ -1633,10 +1667,10 @@ type CephAPIPoolUpdateRequest struct {
 	Flags                    []string `json:"flags,omitempty"`
 }
 
-func (c *CephAPIClient) UpdatePool(ctx context.Context, poolName string, req CephAPIPoolUpdateRequest) error {
+func (c *CephAPIClient) UpdatePool(ctx context.Context, poolName string, req CephAPIPoolUpdateRequest) (*CephAPITaskInfo, error) {
 	jsonPayload, err := json.Marshal(req)
 	if err != nil {
-		return fmt.Errorf("unable to encode request payload: %w", err)
+		return nil, fmt.Errorf("unable to encode request payload: %w", err)
 	}
 
 	tflog.Trace(ctx, "Ceph API request body", map[string]any{
@@ -1646,7 +1680,7 @@ func (c *CephAPIClient) UpdatePool(ctx context.Context, poolName string, req Cep
 	url := c.endpoint.JoinPath("/api/pool", poolName).String()
 	httpReq, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
-		return fmt.Errorf("unable to create request: %w", err)
+		return nil, fmt.Errorf("unable to create request: %w", err)
 	}
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
@@ -1657,16 +1691,33 @@ func (c *CephAPIClient) UpdatePool(ctx context.Context, poolName string, req Cep
 	httpResp, err := c.client.Do(httpReq)
 	logRequest(httpResp, err)
 	if err != nil {
-		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
 
-	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusAccepted {
-		body, _ := io.ReadAll(httpResp.Body)
-		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response body: %w", err)
 	}
 
-	return nil
+	if httpResp.StatusCode == http.StatusAccepted {
+		var taskInfo CephAPITaskInfo
+		err = json.Unmarshal(body, &taskInfo)
+		if err != nil {
+			return nil, fmt.Errorf("unable to decode task response: %w", err)
+		}
+		tflog.Debug(ctx, "Pool update returned 202, task is running", map[string]any{
+			"task_name": taskInfo.Name,
+			"metadata":  taskInfo.Metadata,
+		})
+		return &taskInfo, nil
+	}
+
+	if httpResp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil, nil
 }
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-pool--pool_name-configuration>
@@ -2044,4 +2095,76 @@ func (c *CephAPIClient) GetErasureCodeProfile(ctx context.Context, name string) 
 	}
 
 	return &profile, nil
+}
+
+// https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-task
+
+type CephAPITaskInfo struct {
+	Name     string         `json:"name"`
+	Metadata map[string]any `json:"metadata"`
+}
+
+type CephAPITask struct {
+	Name      string         `json:"name"`
+	Metadata  map[string]any `json:"metadata"`
+	BeginTime string         `json:"begin_time"`
+	EndTime   string         `json:"end_time,omitempty"`
+	Duration  float64        `json:"duration,omitempty"`
+	Progress  int            `json:"progress"`
+	Success   bool           `json:"success"`
+	RetValue  any            `json:"ret_value"`
+	Exception any            `json:"exception"`
+}
+
+type CephAPITaskList struct {
+	ExecutingTasks []CephAPITask `json:"executing_tasks"`
+	FinishedTasks  []CephAPITask `json:"finished_tasks"`
+}
+
+func (c *CephAPIClient) GetTasks(ctx context.Context, nameFilter string) (*CephAPITaskList, error) {
+	endpoint := c.endpoint.JoinPath("/api/task")
+	if nameFilter != "" {
+		query := url.Values{}
+		query.Add("name", nameFilter)
+		endpoint.RawQuery = query.Encode()
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", endpoint.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	logRequest := logAPIRequest(ctx, httpReq)
+	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
+	if err != nil {
+		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response body: %w", err)
+	}
+
+	if httpResp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	tflog.Trace(ctx, "Ceph API response body", map[string]any{
+		"response_body": string(body),
+		"status_code":   httpResp.StatusCode,
+	})
+
+	var taskList CephAPITaskList
+	err = json.Unmarshal(body, &taskList)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
+	}
+
+	return &taskList, nil
 }
