@@ -59,6 +59,14 @@ To capture coverage, for example:
 scripts/run-container-tests.sh -cover -coverprofile=coverage.out ./...
 ```
 
+For detailed debugging of API interactions, enable TRACE-level logging:
+
+```sh
+TF_LOG=TRACE TF_ACC=1 go test -v -run TestAccCephPoolResource
+```
+
+This will output raw JSON request and response bodies for every Ceph API call, which can be helpful for diagnosing unexpected behavior or API changes.
+
 ## Building
 
 Build the project with:
