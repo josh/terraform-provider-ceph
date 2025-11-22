@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -263,23 +264,7 @@ func (r *RGWUserResource) Delete(ctx context.Context, req resource.DeleteRequest
 }
 
 func (r *RGWUserResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	userID := req.ID
-
-	user, err := r.client.RGWGetUser(ctx, userID)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"API Request Error",
-			fmt.Sprintf("Unable to read RGW user during import: %s", err),
-		)
-		return
-	}
-
-	data := RGWUserResourceModel{
-		UserID: types.StringValue(userID),
-	}
-	updateModelFromAPIUser(&data, user)
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resource.ImportStatePassthroughID(ctx, path.Root("user_id"), req, resp)
 }
 
 func updateModelFromAPIUser(data *RGWUserResourceModel, user CephAPIRGWUser) {

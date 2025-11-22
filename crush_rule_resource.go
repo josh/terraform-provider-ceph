@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
@@ -292,26 +293,7 @@ func (r *CrushRuleResource) Delete(ctx context.Context, req resource.DeleteReque
 }
 
 func (r *CrushRuleResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	ruleName := req.ID
-
-	rule, err := r.client.GetCrushRule(ctx, ruleName)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"API Request Error",
-			fmt.Sprintf("Unable to read CRUSH rule '%s' during import: %s", ruleName, err),
-		)
-		return
-	}
-
-	var data CrushRuleResourceModel
-	data.Name = types.StringValue(ruleName)
-
-	if diags := r.updateModelFromAPI(&data, rule); diags.HasError() {
-		resp.Diagnostics.Append(diags...)
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
 }
 
 func (r *CrushRuleResource) updateModelFromAPI(data *CrushRuleResourceModel, rule *CephAPICrushRule) diag.Diagnostics {

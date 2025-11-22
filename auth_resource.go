@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -204,16 +205,7 @@ func (r *AuthResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 }
 
 func (r *AuthResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	data := AuthResourceModel{
-		Entity: types.StringValue(req.ID),
-	}
-
-	updateAuthModelFromCephExport(ctx, r.client, req.ID, &data, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
-
-	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+	resource.ImportStatePassthroughID(ctx, path.Root("entity"), req, resp)
 }
 
 func updateAuthModelFromCephExport(ctx context.Context, client *CephAPIClient, entity string, data *AuthResourceModel, diagnostics *diag.Diagnostics) {

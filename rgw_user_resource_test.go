@@ -351,7 +351,7 @@ func TestAccCephRGWUserResourceImport_nonExistent(t *testing.T) {
 				ResourceName:  "ceph_rgw_user.nonexistent",
 				ImportState:   true,
 				ImportStateId: testUID,
-				ExpectError:   regexp.MustCompile(`(?i)unable to read rgw user during import`),
+				ExpectError:   regexp.MustCompile(`(?i)unable to read rgw user`),
 			},
 		},
 	})
