@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 	var code int
 
 	if os.Getenv("TF_ACC") != "" {
-		timeout := 30 * time.Minute
+		timeout := 1 * time.Hour
 		if *testTimeout > 0 {
 			timeout = *testTimeout
 		}

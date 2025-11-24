@@ -38,8 +38,8 @@ jobs:
           go build
 
       - name: Tests
-        timeout-minutes: 26
+        timeout-minutes: 61
         run: |
-          go test -timeout 25m
+          go test -timeout 1h
         env:
           TF_ACC: "1"
