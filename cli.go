@@ -896,3 +896,34 @@ func (c *CephCLI) ConfigDump(ctx context.Context) ([]ConfigDumpEntry, error) {
 
 	return entries, nil
 }
+
+type ProgressEvent struct {
+	ID             string      `json:"id"`
+	Message        string      `json:"message"`
+	Refs           interface{} `json:"refs"`
+	Progress       float64     `json:"progress"`
+	StartedAt      float64     `json:"started_at"`
+	FinishedAt     *float64    `json:"finished_at,omitempty"`
+	Failed         bool        `json:"failed,omitempty"`
+	FailureMessage string      `json:"failure_message,omitempty"`
+}
+
+type ProgressJSON struct {
+	Events    []ProgressEvent `json:"events"`
+	Completed []ProgressEvent `json:"completed"`
+}
+
+func (c *CephCLI) ProgressJSON(ctx context.Context) (*ProgressJSON, error) {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "progress", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get progress: %w", err)
+	}
+
+	var progress ProgressJSON
+	if err := json.Unmarshal(output, &progress); err != nil {
+		return nil, fmt.Errorf("failed to parse progress JSON: %w", err)
+	}
+
+	return &progress, nil
+}

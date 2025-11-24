@@ -19,7 +19,7 @@ func TestAccCephPoolDataSource(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			testAccPreCheckCephHealth(t)
+			testAccPreCheckWaitForTasks(t)
 
 			if err := cephTestClusterCLI.PoolCreate(t.Context(), poolName, 8, ""); err != nil {
 				t.Fatalf("Failed to create pool: %v", err)
@@ -88,7 +88,7 @@ func TestAccCephPoolDataSource_erasureCoded(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			testAccPreCheckCephHealth(t)
+			testAccPreCheckWaitForTasks(t)
 
 			if err := cephTestClusterCLI.PoolCreate(t.Context(), poolName, 8, "erasure"); err != nil {
 				t.Fatalf("Failed to create erasure coded pool: %v", err)
@@ -146,7 +146,7 @@ func TestAccCephPoolDataSource_withApplication(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			testAccPreCheckCephHealth(t)
+			testAccPreCheckWaitForTasks(t)
 
 			if err := cephTestClusterCLI.PoolCreate(t.Context(), poolName, 8, ""); err != nil {
 				t.Fatalf("Failed to create pool: %v", err)
@@ -209,7 +209,7 @@ func TestAccCephPoolDataSource_compression(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			testAccPreCheckCephHealth(t)
+			testAccPreCheckWaitForTasks(t)
 
 			if err := cephTestClusterCLI.PoolCreate(t.Context(), poolName, 8, ""); err != nil {
 				t.Fatalf("Failed to create pool: %v", err)
@@ -285,7 +285,7 @@ func TestAccCephPoolDataSource_configurationChanges(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			testAccPreCheckCephHealth(t)
+			testAccPreCheckWaitForTasks(t)
 
 			if err := cephTestClusterCLI.PoolCreate(t.Context(), poolName, 8, ""); err != nil {
 				t.Fatalf("Failed to create pool: %v", err)
@@ -374,7 +374,7 @@ func TestAccCephPoolDataSource_customPGCount(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			testAccPreCheckCephHealth(t)
+			testAccPreCheckWaitForTasks(t)
 
 			if err := cephTestClusterCLI.PoolCreate(t.Context(), poolName, 32, ""); err != nil {
 				t.Fatalf("Failed to create pool: %v", err)
@@ -424,7 +424,7 @@ func TestAccCephPoolDataSource_quota(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			testAccPreCheckCephHealth(t)
+			testAccPreCheckWaitForTasks(t)
 
 			if err := cephTestClusterCLI.PoolCreate(t.Context(), poolName, 8, ""); err != nil {
 				t.Fatalf("Failed to create pool: %v", err)
@@ -491,7 +491,7 @@ func TestAccCephPoolDataSource_autoscaler(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			testAccPreCheckCephHealth(t)
+			testAccPreCheckWaitForTasks(t)
 
 			if err := cephTestClusterCLI.PoolCreate(t.Context(), poolName, 8, ""); err != nil {
 				t.Fatalf("Failed to create pool: %v", err)

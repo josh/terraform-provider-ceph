@@ -622,6 +622,88 @@ func testAccPreCheckCephHealth(t *testing.T) {
 	}
 }
 
+func testAccPreCheckWaitForTasks(t *testing.T) {
+	t.Helper()
+
+	if err := cephTestClusterCLI.CheckHealth(t.Context()); err != nil {
+		t.Fatalf("Ceph cluster health check failed: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	previousCount := -1
+
+	for {
+		select {
+		case <-ticker.C:
+			progress, err := cephTestClusterCLI.ProgressJSON(ctx)
+			if err != nil {
+				t.Fatalf("Failed to query task progress: %v", err)
+			}
+			currentCount := len(progress.Events)
+			if currentCount == 0 {
+				return
+			}
+			if currentCount != previousCount {
+				t.Logf("Waiting for %d task(s) to complete...", currentCount)
+				previousCount = currentCount
+			}
+		case <-ctx.Done():
+			progress, progressErr := cephTestClusterCLI.ProgressJSON(t.Context())
+			if progressErr == nil && len(progress.Events) > 0 {
+				t.Logf("Warning: %d tasks still executing:", len(progress.Events))
+				for _, event := range progress.Events {
+					t.Logf("  - %s: %.0f%%", event.Message, event.Progress*100)
+				}
+			}
+			t.Fatalf("Preflight check failed: timeout waiting for tasks to complete: %v", ctx.Err())
+		}
+	}
+}
+
+func testAccPostCheckWaitForTasks(t *testing.T) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	previousCount := -1
+
+	for {
+		select {
+		case <-ticker.C:
+			progress, err := cephTestClusterCLI.ProgressJSON(ctx)
+			if err != nil {
+				t.Fatalf("Failed to query task progress: %v", err)
+			}
+			currentCount := len(progress.Events)
+			if currentCount == 0 {
+				return
+			}
+			if currentCount != previousCount {
+				t.Logf("Post-check: waiting for %d task(s) to complete...", currentCount)
+				previousCount = currentCount
+			}
+		case <-ctx.Done():
+			progress, progressErr := cephTestClusterCLI.ProgressJSON(t.Context())
+			if progressErr == nil && len(progress.Events) > 0 {
+				t.Logf("Warning: %d tasks still executing after cleanup:", len(progress.Events))
+				for _, event := range progress.Events {
+					t.Logf("  - %s: %.0f%%", event.Message, event.Progress*100)
+				}
+			}
+			t.Fatalf("Post-check failed: timeout waiting for tasks to complete: %v", ctx.Err())
+		}
+	}
+}
+
 func testCleanup(t *testing.T, fn func(context.Context)) {
 	t.Helper()
 	t.Cleanup(func() {
