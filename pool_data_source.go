@@ -26,7 +26,6 @@ type PoolDataSourceModel struct {
 	MinSize                  types.Int64   `tfsdk:"min_size"`
 	PGNum                    types.Int64   `tfsdk:"pg_num"`
 	CrushRule                types.String  `tfsdk:"crush_rule"`
-	PrimaryAffinity          types.Float64 `tfsdk:"primary_affinity"`
 	ApplicationMetadata      types.List    `tfsdk:"application_metadata"`
 	Flags                    types.Int64   `tfsdk:"flags"`
 	ErasureCodeProfile       types.String  `tfsdk:"erasure_code_profile"`
@@ -70,10 +69,6 @@ func (d *PoolDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 			},
 			"crush_rule": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The CRUSH rule for the pool.",
-				Computed:            true,
-			},
-			"primary_affinity": dataSourceSchema.Float64Attribute{
-				MarkdownDescription: "The primary affinity of the pool.",
 				Computed:            true,
 			},
 			"application_metadata": dataSourceSchema.ListAttribute{
@@ -166,7 +161,6 @@ func (d *PoolDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	data.MinSize = types.Int64Value(int64(pool.MinSize))
 	data.PGNum = types.Int64Value(int64(pool.PGNum))
 	data.CrushRule = types.StringValue(pool.CrushRule)
-	data.PrimaryAffinity = types.Float64Value(pool.PrimaryAffinity)
 	data.ErasureCodeProfile = types.StringValue(pool.ErasureCodeProfile)
 	data.AutoscaleMode = types.StringValue(pool.PGAutoscaleMode)
 	data.QuotaMaxObjects = types.Int64Value(int64(pool.QuotaMaxObjects))
