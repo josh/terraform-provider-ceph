@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install --yes \
     unzip \
     wget
 
-ARG GO_VERSION=1.24.9
+ARG GO_VERSION=1.25.4
 RUN curl --fail --silent --show-error --location https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz | \
     tar --extract --gzip --directory /usr/local && \
     ln --symbolic /usr/local/go/bin/go /usr/local/bin/go && \
