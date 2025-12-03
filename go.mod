@@ -1,6 +1,6 @@
 module github.com/josh/terraform-provider-ceph
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/hashicorp/terraform-plugin-framework v1.16.1
