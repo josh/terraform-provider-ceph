@@ -713,16 +713,6 @@ func testCleanup(t *testing.T, fn func(context.Context)) {
 	})
 }
 
-type TestWriter struct {
-	t *testing.T
-}
-
-func (tw *TestWriter) Write(p []byte) (n int, err error) {
-	tw.t.Helper()
-	tw.t.Log(strings.TrimSpace(string(p)))
-	return len(p), nil
-}
-
 type LogDemux struct {
 	mu   sync.Mutex
 	outs sync.Map
@@ -760,7 +750,7 @@ func (log *LogDemux) Attach(writer io.Writer) func() {
 }
 
 func (log *LogDemux) AttachTestFunction(t *testing.T) func() {
-	w := &TestWriter{t: t}
+	w := t.Output()
 	log.outs.Store(w, struct{}{})
 	return func() {
 		log.outs.Delete(w)
