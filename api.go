@@ -1396,6 +1396,8 @@ func (c *CephAPIClient) MgrGetModuleOptions(ctx context.Context, moduleName stri
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-pool>
 
+var ErrPoolNotFound = errors.New("pool not found")
+
 type CephAPIPoolOptions struct {
 	CompressionMode          string  `json:"compression_mode"`
 	CompressionAlgorithm     string  `json:"compression_algorithm"`
@@ -1619,6 +1621,10 @@ func (c *CephAPIClient) GetPool(ctx context.Context, poolName string) (*CephAPIP
 		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode == http.StatusNotFound {
+		return nil, ErrPoolNotFound
+	}
 
 	if httpResp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(httpResp.Body)
