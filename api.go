@@ -1288,65 +1288,6 @@ func (c *CephAPIClient) MgrSetModuleConfig(ctx context.Context, moduleName strin
 	return nil
 }
 
-// <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-mgr-module-module_name-disable>
-
-func (c *CephAPIClient) MgrDisableModule(ctx context.Context, moduleName string) error {
-	url := c.endpoint.JoinPath("/api/mgr/module", moduleName, "disable").String()
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, nil)
-	if err != nil {
-		return fmt.Errorf("unable to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
-
-	logRequest := logAPIRequest(ctx, httpReq)
-	httpResp, err := c.client.Do(httpReq)
-	logRequest(httpResp, err)
-	if err != nil {
-		return fmt.Errorf("unable to make request to Ceph API: %w", err)
-	}
-	defer httpResp.Body.Close() //nolint:errcheck
-
-	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusCreated && httpResp.StatusCode != http.StatusAccepted {
-		body, _ := io.ReadAll(httpResp.Body)
-		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
-	}
-
-	return nil
-}
-
-// <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-mgr-module-module_name-enable>
-
-func (c *CephAPIClient) MgrEnableModule(ctx context.Context, moduleName string) error {
-	url := c.endpoint.JoinPath("/api/mgr/module", moduleName, "enable").String()
-
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, nil)
-	if err != nil {
-		return fmt.Errorf("unable to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
-
-	logRequest := logAPIRequest(ctx, httpReq)
-	httpResp, err := c.client.Do(httpReq)
-	logRequest(httpResp, err)
-	if err != nil {
-		return fmt.Errorf("unable to make request to Ceph API: %w", err)
-	}
-	defer httpResp.Body.Close() //nolint:errcheck
-
-	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusCreated && httpResp.StatusCode != http.StatusAccepted {
-		body, _ := io.ReadAll(httpResp.Body)
-		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
-	}
-
-	return nil
-}
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-mgr-module-module_name-options>
 
@@ -1404,10 +1345,6 @@ type CephAPIPoolOptions struct {
 	CompressionRequiredRatio float64 `json:"compression_required_ratio"`
 	CompressionMinBlobSize   int     `json:"compression_min_blob_size"`
 	CompressionMaxBlobSize   int     `json:"compression_max_blob_size"`
-	QuotaMaxObjects          int     `json:"quota_max_objects"`
-	QuotaMaxBytes            int     `json:"quota_max_bytes"`
-	PGNumMin                 int     `json:"pg_num_min"`
-	PGNumMax                 int     `json:"pg_num_max"`
 }
 
 type CephAPIPool struct {
@@ -1419,63 +1356,13 @@ type CephAPIPool struct {
 	PGNum               int                `json:"pg_num"`
 	PGPlacementNum      int                `json:"pg_placement_num"`
 	CrushRule           string             `json:"crush_rule"`
-	CrashReplayInterval int                `json:"crash_replay_interval"`
-	PrimaryAffinity     float64            `json:"primary_affinity"`
-	Application         string             `json:"application"`
 	ApplicationMetadata []string           `json:"application_metadata"`
 	Flags               int                `json:"flags"`
 	ErasureCodeProfile  string             `json:"erasure_code_profile"`
 	PGAutoscaleMode     string             `json:"pg_autoscale_mode"`
 	QuotaMaxObjects     int                `json:"quota_max_objects"`
 	QuotaMaxBytes       int                `json:"quota_max_bytes"`
-	TargetSizeRatioRel  float64            `json:"target_size_ratio_rel"`
-	MinPGNum            int                `json:"min_pg_num"`
-	PGAutoscalerProfile string             `json:"pg_autoscaler_profile"`
 	Options             CephAPIPoolOptions `json:"options"`
-}
-
-func (c *CephAPIClient) ListPools(ctx context.Context) ([]CephAPIPool, error) {
-	url := c.endpoint.JoinPath("/api/pool").String()
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
-
-	logRequest := logAPIRequest(ctx, httpReq)
-	httpResp, err := c.client.Do(httpReq)
-	logRequest(httpResp, err)
-	if err != nil {
-		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
-	}
-	defer httpResp.Body.Close() //nolint:errcheck
-
-	if httpResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(httpResp.Body)
-		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read response body: %w", err)
-	}
-
-	tflog.Trace(ctx, "Ceph API response body", map[string]any{
-		"response_body": string(body),
-		"status_code":   httpResp.StatusCode,
-	})
-
-	var pools []CephAPIPool
-	err = json.Unmarshal(body, &pools)
-	if err != nil {
-		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
-	}
-
-	return pools, nil
 }
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-pool>
@@ -1724,59 +1611,6 @@ func (c *CephAPIClient) UpdatePool(ctx context.Context, poolName string, req Cep
 	return nil, nil
 }
 
-// <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-pool--pool_name-configuration>
-
-type CephAPIPoolConfigItem struct {
-	Name  string `json:"name"`
-	Value any    `json:"value"`
-}
-
-type CephAPIPoolConfiguration []CephAPIPoolConfigItem
-
-func (c *CephAPIClient) GetPoolConfiguration(ctx context.Context, poolName string) (CephAPIPoolConfiguration, error) {
-	url := c.endpoint.JoinPath("/api/pool", poolName, "configuration").String()
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
-
-	logRequest := logAPIRequest(ctx, httpReq)
-	httpResp, err := c.client.Do(httpReq)
-	logRequest(httpResp, err)
-	if err != nil {
-		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
-	}
-	defer httpResp.Body.Close() //nolint:errcheck
-
-	if httpResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(httpResp.Body)
-		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read response body: %w", err)
-	}
-
-	tflog.Trace(ctx, "Ceph API response body", map[string]any{
-		"response_body": string(body),
-		"status_code":   httpResp.StatusCode,
-	})
-
-	var config CephAPIPoolConfiguration
-	err = json.Unmarshal(body, &config)
-	if err != nil {
-		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
-	}
-
-	return config, nil
-}
-
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-crush_rule>
 
 type CephAPICrushRuleStep struct {
@@ -1794,50 +1628,6 @@ type CephAPICrushRule struct {
 	MinSize  int                    `json:"min_size"`
 	MaxSize  int                    `json:"max_size"`
 	Steps    []CephAPICrushRuleStep `json:"steps"`
-}
-
-func (c *CephAPIClient) ListCrushRules(ctx context.Context) ([]CephAPICrushRule, error) {
-	url := c.endpoint.JoinPath("/api/crush_rule").String()
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v2.0+json")
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
-
-	logRequest := logAPIRequest(ctx, httpReq)
-	httpResp, err := c.client.Do(httpReq)
-	logRequest(httpResp, err)
-	if err != nil {
-		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
-	}
-	defer httpResp.Body.Close() //nolint:errcheck
-
-	if httpResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(httpResp.Body)
-		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read response body: %w", err)
-	}
-
-	tflog.Trace(ctx, "Ceph API response body", map[string]any{
-		"response_body": string(body),
-		"status_code":   httpResp.StatusCode,
-	})
-
-	var rules []CephAPICrushRule
-	err = json.Unmarshal(body, &rules)
-	if err != nil {
-		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
-	}
-
-	return rules, nil
 }
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-crush_rule>
