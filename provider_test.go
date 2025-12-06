@@ -191,6 +191,7 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 		},
 		"mon": {
 			"debug_mon":                 "0",
+			"mgr_initial_modules":       "dashboard",
 			"mon_allow_pool_delete":     "true",
 			"mon_cluster_log_to_file":   "false",
 			"mon_cluster_log_to_stderr": "true",
@@ -547,14 +548,7 @@ func waitForCephRgw(ctx context.Context) error {
 }
 
 func enableCephDashboard(ctx context.Context, confPath string, out io.Writer) (string, error) {
-	cmd := exec.CommandContext(ctx, "ceph", "--conf", confPath, "mgr", "module", "enable", "dashboard")
-	cmd.Stdout = out
-	cmd.Stderr = out
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("failed to enable dashboard module: %w", err)
-	}
-
-	cmd = exec.CommandContext(ctx, "ceph", "--conf", confPath, "config", "set", "mgr", "mgr/dashboard/ssl", "false")
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", confPath, "config", "set", "mgr", "mgr/dashboard/ssl", "false")
 	cmd.Stdout = out
 	cmd.Stderr = out
 	if err := cmd.Run(); err != nil {
