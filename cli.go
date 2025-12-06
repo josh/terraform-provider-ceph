@@ -898,19 +898,12 @@ func (c *CephCLI) ConfigDump(ctx context.Context) ([]ConfigDumpEntry, error) {
 }
 
 type ProgressEvent struct {
-	ID             string      `json:"id"`
-	Message        string      `json:"message"`
-	Refs           interface{} `json:"refs"`
-	Progress       float64     `json:"progress"`
-	StartedAt      float64     `json:"started_at"`
-	FinishedAt     *float64    `json:"finished_at,omitempty"`
-	Failed         bool        `json:"failed,omitempty"`
-	FailureMessage string      `json:"failure_message,omitempty"`
+	Message  string  `json:"message"`
+	Progress float64 `json:"progress"`
 }
 
 type ProgressJSON struct {
-	Events    []ProgressEvent `json:"events"`
-	Completed []ProgressEvent `json:"completed"`
+	Events []ProgressEvent `json:"events"`
 }
 
 func (c *CephCLI) ProgressJSON(ctx context.Context) (*ProgressJSON, error) {
