@@ -5,11 +5,23 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-24.04
+  test:
+    runs-on: ubuntu-22.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        ceph-release:
+          - squid
+          # - tentacle
 
     steps:
       - uses: actions/checkout@v6
+
+      - name: Add Ceph repository
+        run: |
+          curl -fsSL https://download.ceph.com/keys/release.asc | sudo gpg --dearmor -o /usr/share/keyrings/ceph-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/ceph-archive-keyring.gpg] https://download.ceph.com/debian-${{ matrix.ceph-release }}/ jammy main" | sudo tee /etc/apt/sources.list.d/ceph.list
 
       - name: Install dependencies
         run: |
@@ -19,6 +31,9 @@ jobs:
             ceph-mgr-dashboard \
             python3-setuptools \
             radosgw
+
+      - name: Print Ceph version
+        run: ceph --version
 
       - uses: hashicorp/setup-terraform@v3.1.2
         with:
