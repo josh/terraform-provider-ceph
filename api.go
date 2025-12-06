@@ -1288,7 +1288,6 @@ func (c *CephAPIClient) MgrSetModuleConfig(ctx context.Context, moduleName strin
 	return nil
 }
 
-
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-mgr-module-module_name-options>
 
 func (c *CephAPIClient) MgrGetModuleOptions(ctx context.Context, moduleName string) (map[string]CephAPIMgrModuleOption, error) {
