@@ -168,6 +168,7 @@ func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource
 		newCrushRuleResource,
 		newErasureCodeProfileResource,
 		newMgrModuleConfigResource,
+		newPoolResource,
 		newRGWBucketResource,
 		newRGWS3KeyResource,
 		newRGWUserResource,
