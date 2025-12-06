@@ -206,159 +206,6 @@ func (r *PoolResource) Configure(ctx context.Context, req resource.ConfigureRequ
 	r.client = client
 }
 
-func (r *PoolResource) buildCreateRequest(ctx context.Context, data *PoolResourceModel) CephAPIPoolCreateRequest {
-	poolType := data.PoolType.ValueString()
-	req := CephAPIPoolCreateRequest{
-		Pool:     data.Name.ValueString(),
-		PoolType: &poolType,
-	}
-
-	if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() {
-		v := int(data.PgNum.ValueInt64())
-		req.PgNum = &v
-	}
-
-	if !data.PgpNum.IsNull() && !data.PgpNum.IsUnknown() {
-		v := int(data.PgpNum.ValueInt64())
-		req.PgpNum = &v
-	}
-
-	if !data.CrushRule.IsNull() && !data.CrushRule.IsUnknown() {
-		v := data.CrushRule.ValueString()
-		req.CrushRule = &v
-	}
-
-	if !data.ErasureCodeProfile.IsNull() && !data.ErasureCodeProfile.IsUnknown() {
-		v := data.ErasureCodeProfile.ValueString()
-		req.ErasureCodeProfile = &v
-	}
-
-	if !data.MinSize.IsNull() && !data.MinSize.IsUnknown() {
-		v := int(data.MinSize.ValueInt64())
-		req.MinSize = &v
-	}
-
-	if !data.Size.IsNull() && !data.Size.IsUnknown() {
-		v := int(data.Size.ValueInt64())
-		req.Size = &v
-	}
-
-	if !data.PgAutoscaleMode.IsNull() && !data.PgAutoscaleMode.IsUnknown() {
-		v := data.PgAutoscaleMode.ValueString()
-		req.PgAutoscaleMode = &v
-	}
-
-	if !data.QuotaMaxObjects.IsNull() && !data.QuotaMaxObjects.IsUnknown() {
-		v := int(data.QuotaMaxObjects.ValueInt64())
-		req.QuotaMaxObjects = &v
-	}
-
-	if !data.QuotaMaxBytes.IsNull() && !data.QuotaMaxBytes.IsUnknown() {
-		v := int(data.QuotaMaxBytes.ValueInt64())
-		req.QuotaMaxBytes = &v
-	}
-
-	if !data.CompressionMode.IsNull() && !data.CompressionMode.IsUnknown() {
-		v := data.CompressionMode.ValueString()
-		req.CompressionMode = &v
-	}
-
-	if !data.CompressionAlgorithm.IsNull() && !data.CompressionAlgorithm.IsUnknown() {
-		v := data.CompressionAlgorithm.ValueString()
-		req.CompressionAlgorithm = &v
-	}
-
-	if !data.CompressionRequiredRatio.IsNull() && !data.CompressionRequiredRatio.IsUnknown() {
-		v := data.CompressionRequiredRatio.ValueFloat64()
-		req.CompressionRequiredRatio = &v
-	}
-
-	if !data.CompressionMinBlobSize.IsNull() && !data.CompressionMinBlobSize.IsUnknown() {
-		v := int(data.CompressionMinBlobSize.ValueInt64())
-		req.CompressionMinBlobSize = &v
-	}
-
-	if !data.CompressionMaxBlobSize.IsNull() && !data.CompressionMaxBlobSize.IsUnknown() {
-		v := int(data.CompressionMaxBlobSize.ValueInt64())
-		req.CompressionMaxBlobSize = &v
-	}
-
-	if !data.ApplicationMetadata.IsNull() && !data.ApplicationMetadata.IsUnknown() {
-		var apps []string
-		data.ApplicationMetadata.ElementsAs(ctx, &apps, false)
-		req.ApplicationMetadata = apps
-	}
-
-	return req
-}
-
-func (r *PoolResource) buildUpdateRequest(ctx context.Context, data *PoolResourceModel) CephAPIPoolUpdateRequest {
-	req := CephAPIPoolUpdateRequest{}
-
-	if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() {
-		v := int(data.PgNum.ValueInt64())
-		req.PgNum = &v
-	}
-
-	if !data.PgpNum.IsNull() && !data.PgpNum.IsUnknown() {
-		v := int(data.PgpNum.ValueInt64())
-		req.PgpNum = &v
-	}
-
-	if !data.MinSize.IsNull() && !data.MinSize.IsUnknown() {
-		v := int(data.MinSize.ValueInt64())
-		req.MinSize = &v
-	}
-
-	if !data.PgAutoscaleMode.IsNull() && !data.PgAutoscaleMode.IsUnknown() {
-		v := data.PgAutoscaleMode.ValueString()
-		req.PgAutoscaleMode = &v
-	}
-
-	if !data.QuotaMaxObjects.IsNull() && !data.QuotaMaxObjects.IsUnknown() {
-		v := int(data.QuotaMaxObjects.ValueInt64())
-		req.QuotaMaxObjects = &v
-	}
-
-	if !data.QuotaMaxBytes.IsNull() && !data.QuotaMaxBytes.IsUnknown() {
-		v := int(data.QuotaMaxBytes.ValueInt64())
-		req.QuotaMaxBytes = &v
-	}
-
-	if !data.CompressionMode.IsNull() && !data.CompressionMode.IsUnknown() {
-		v := data.CompressionMode.ValueString()
-		req.CompressionMode = &v
-	}
-
-	if !data.CompressionAlgorithm.IsNull() && !data.CompressionAlgorithm.IsUnknown() {
-		v := data.CompressionAlgorithm.ValueString()
-		req.CompressionAlgorithm = &v
-	}
-
-	if !data.CompressionRequiredRatio.IsNull() && !data.CompressionRequiredRatio.IsUnknown() {
-		v := data.CompressionRequiredRatio.ValueFloat64()
-		req.CompressionRequiredRatio = &v
-	}
-
-	if !data.CompressionMinBlobSize.IsNull() && !data.CompressionMinBlobSize.IsUnknown() {
-		v := int(data.CompressionMinBlobSize.ValueInt64())
-		req.CompressionMinBlobSize = &v
-	}
-
-	if !data.CompressionMaxBlobSize.IsNull() && !data.CompressionMaxBlobSize.IsUnknown() {
-		v := int(data.CompressionMaxBlobSize.ValueInt64())
-		req.CompressionMaxBlobSize = &v
-	}
-
-	if !data.ApplicationMetadata.IsNull() && !data.ApplicationMetadata.IsUnknown() {
-		var apps []string
-		data.ApplicationMetadata.ElementsAs(ctx, &apps, false)
-		req.ApplicationMetadata = apps
-	}
-
-	return req
-}
-
 func (r *PoolResource) updateModelFromAPI(ctx context.Context, data *PoolResourceModel, pool *CephAPIPool) diag.Diagnostics {
 	var diags diag.Diagnostics
 
@@ -478,7 +325,87 @@ func (r *PoolResource) Create(ctx context.Context, req resource.CreateRequest, r
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	createReq := r.buildCreateRequest(ctx, &data)
+	poolType := data.PoolType.ValueString()
+	createReq := CephAPIPoolCreateRequest{
+		Pool:     data.Name.ValueString(),
+		PoolType: &poolType,
+	}
+
+	if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() {
+		v := int(data.PgNum.ValueInt64())
+		createReq.PgNum = &v
+	}
+
+	if !data.PgpNum.IsNull() && !data.PgpNum.IsUnknown() {
+		v := int(data.PgpNum.ValueInt64())
+		createReq.PgpNum = &v
+	}
+
+	if !data.CrushRule.IsNull() && !data.CrushRule.IsUnknown() {
+		v := data.CrushRule.ValueString()
+		createReq.CrushRule = &v
+	}
+
+	if !data.ErasureCodeProfile.IsNull() && !data.ErasureCodeProfile.IsUnknown() {
+		v := data.ErasureCodeProfile.ValueString()
+		createReq.ErasureCodeProfile = &v
+	}
+
+	if !data.MinSize.IsNull() && !data.MinSize.IsUnknown() {
+		v := int(data.MinSize.ValueInt64())
+		createReq.MinSize = &v
+	}
+
+	if !data.Size.IsNull() && !data.Size.IsUnknown() {
+		v := int(data.Size.ValueInt64())
+		createReq.Size = &v
+	}
+
+	if !data.PgAutoscaleMode.IsNull() && !data.PgAutoscaleMode.IsUnknown() {
+		v := data.PgAutoscaleMode.ValueString()
+		createReq.PgAutoscaleMode = &v
+	}
+
+	if !data.QuotaMaxObjects.IsNull() && !data.QuotaMaxObjects.IsUnknown() {
+		v := int(data.QuotaMaxObjects.ValueInt64())
+		createReq.QuotaMaxObjects = &v
+	}
+
+	if !data.QuotaMaxBytes.IsNull() && !data.QuotaMaxBytes.IsUnknown() {
+		v := int(data.QuotaMaxBytes.ValueInt64())
+		createReq.QuotaMaxBytes = &v
+	}
+
+	if !data.CompressionMode.IsNull() && !data.CompressionMode.IsUnknown() {
+		v := data.CompressionMode.ValueString()
+		createReq.CompressionMode = &v
+	}
+
+	if !data.CompressionAlgorithm.IsNull() && !data.CompressionAlgorithm.IsUnknown() {
+		v := data.CompressionAlgorithm.ValueString()
+		createReq.CompressionAlgorithm = &v
+	}
+
+	if !data.CompressionRequiredRatio.IsNull() && !data.CompressionRequiredRatio.IsUnknown() {
+		v := data.CompressionRequiredRatio.ValueFloat64()
+		createReq.CompressionRequiredRatio = &v
+	}
+
+	if !data.CompressionMinBlobSize.IsNull() && !data.CompressionMinBlobSize.IsUnknown() {
+		v := int(data.CompressionMinBlobSize.ValueInt64())
+		createReq.CompressionMinBlobSize = &v
+	}
+
+	if !data.CompressionMaxBlobSize.IsNull() && !data.CompressionMaxBlobSize.IsUnknown() {
+		v := int(data.CompressionMaxBlobSize.ValueInt64())
+		createReq.CompressionMaxBlobSize = &v
+	}
+
+	if !data.ApplicationMetadata.IsNull() && !data.ApplicationMetadata.IsUnknown() {
+		var apps []string
+		data.ApplicationMetadata.ElementsAs(ctx, &apps, false)
+		createReq.ApplicationMetadata = apps
+	}
 
 	tflog.Debug(ctx, "Creating pool", map[string]interface{}{
 		"name":      data.Name.ValueString(),
@@ -588,7 +515,68 @@ func (r *PoolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	originalPoolName := state.Name.ValueString()
 	newPoolName := data.Name.ValueString()
 
-	updateReq := r.buildUpdateRequest(ctx, &data)
+	updateReq := CephAPIPoolUpdateRequest{}
+
+	if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() {
+		v := int(data.PgNum.ValueInt64())
+		updateReq.PgNum = &v
+	}
+
+	if !data.PgpNum.IsNull() && !data.PgpNum.IsUnknown() {
+		v := int(data.PgpNum.ValueInt64())
+		updateReq.PgpNum = &v
+	}
+
+	if !data.MinSize.IsNull() && !data.MinSize.IsUnknown() {
+		v := int(data.MinSize.ValueInt64())
+		updateReq.MinSize = &v
+	}
+
+	if !data.PgAutoscaleMode.IsNull() && !data.PgAutoscaleMode.IsUnknown() {
+		v := data.PgAutoscaleMode.ValueString()
+		updateReq.PgAutoscaleMode = &v
+	}
+
+	if !data.QuotaMaxObjects.IsNull() && !data.QuotaMaxObjects.IsUnknown() {
+		v := int(data.QuotaMaxObjects.ValueInt64())
+		updateReq.QuotaMaxObjects = &v
+	}
+
+	if !data.QuotaMaxBytes.IsNull() && !data.QuotaMaxBytes.IsUnknown() {
+		v := int(data.QuotaMaxBytes.ValueInt64())
+		updateReq.QuotaMaxBytes = &v
+	}
+
+	if !data.CompressionMode.IsNull() && !data.CompressionMode.IsUnknown() {
+		v := data.CompressionMode.ValueString()
+		updateReq.CompressionMode = &v
+	}
+
+	if !data.CompressionAlgorithm.IsNull() && !data.CompressionAlgorithm.IsUnknown() {
+		v := data.CompressionAlgorithm.ValueString()
+		updateReq.CompressionAlgorithm = &v
+	}
+
+	if !data.CompressionRequiredRatio.IsNull() && !data.CompressionRequiredRatio.IsUnknown() {
+		v := data.CompressionRequiredRatio.ValueFloat64()
+		updateReq.CompressionRequiredRatio = &v
+	}
+
+	if !data.CompressionMinBlobSize.IsNull() && !data.CompressionMinBlobSize.IsUnknown() {
+		v := int(data.CompressionMinBlobSize.ValueInt64())
+		updateReq.CompressionMinBlobSize = &v
+	}
+
+	if !data.CompressionMaxBlobSize.IsNull() && !data.CompressionMaxBlobSize.IsUnknown() {
+		v := int(data.CompressionMaxBlobSize.ValueInt64())
+		updateReq.CompressionMaxBlobSize = &v
+	}
+
+	if !data.ApplicationMetadata.IsNull() && !data.ApplicationMetadata.IsUnknown() {
+		var apps []string
+		data.ApplicationMetadata.ElementsAs(ctx, &apps, false)
+		updateReq.ApplicationMetadata = apps
+	}
 
 	if originalPoolName != newPoolName {
 		updateReq.Pool = &newPoolName
