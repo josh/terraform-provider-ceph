@@ -4,6 +4,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+CEPH_RELEASE="${CEPH_RELEASE:-squid}"
+
 detect_container_runtime() {
 	if command -v podman >/dev/null 2>&1; then
 		echo "podman"
@@ -32,5 +34,5 @@ if $CONTAINER_RUNTIME volume inspect terraform-provider-ceph-go-cache >/dev/null
 fi
 
 set -o xtrace
-$CONTAINER_RUNTIME build --file .devcontainer/Dockerfile --tag terraform-provider-ceph:latest .
-$CONTAINER_RUNTIME run --rm --name terraform-provider-ceph --env TF_ACC=1 --volume "$PWD:/workspace:z" "${GO_CACHE_ARGS[@]}" terraform-provider-ceph:latest go test "$@"
+$CONTAINER_RUNTIME build --file .devcontainer/Dockerfile --build-arg "CEPH_RELEASE=${CEPH_RELEASE}" --tag "terraform-provider-ceph:${CEPH_RELEASE}" .
+$CONTAINER_RUNTIME run --rm --name terraform-provider-ceph --env TF_ACC=1 --volume "$PWD:/workspace:z" "${GO_CACHE_ARGS[@]}" "terraform-provider-ceph:${CEPH_RELEASE}" go test "$@"
