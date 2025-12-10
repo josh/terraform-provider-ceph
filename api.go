@@ -559,6 +559,86 @@ func (c *CephAPIClient) RGWGetBucket(ctx context.Context, bucketName string) (Ce
 	return bucket, nil
 }
 
+func (c *CephAPIClient) RGWGetBucketWithRetry(ctx context.Context, bucketName string) (CephAPIRGWBucket, error) {
+	var retryDelays = [...]time.Duration{
+		500 * time.Millisecond,
+		1 * time.Second,
+		5 * time.Second,
+	}
+	url := c.endpoint.JoinPath("/api/rgw/bucket", bucketName).String()
+
+	for attempt := 0; attempt < len(retryDelays); attempt++ {
+		if ctx.Err() != nil {
+			return CephAPIRGWBucket{}, ctx.Err()
+		}
+
+		httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+		if err != nil {
+			return CephAPIRGWBucket{}, fmt.Errorf("unable to create request: %w", err)
+		}
+
+		httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+		httpReq.Header.Set("Content-Type", "application/json")
+		httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+		logRequest := logAPIRequest(ctx, httpReq)
+		httpResp, err := c.client.Do(httpReq)
+		logRequest(httpResp, err)
+
+		if err != nil {
+			return CephAPIRGWBucket{}, fmt.Errorf("unable to make request to Ceph API: %w", err)
+		}
+
+		if httpResp.StatusCode == http.StatusOK {
+			body, err := io.ReadAll(httpResp.Body)
+			httpResp.Body.Close() //nolint:errcheck
+			if err != nil {
+				return CephAPIRGWBucket{}, fmt.Errorf("unable to read response body: %w", err)
+			}
+
+			tflog.Trace(ctx, "Ceph API response body", map[string]any{
+				"response_body": string(body),
+				"status_code":   httpResp.StatusCode,
+			})
+
+			var bucket CephAPIRGWBucket
+			err = json.Unmarshal(body, &bucket)
+			if err != nil {
+				return CephAPIRGWBucket{}, fmt.Errorf("unable to decode JSON response: %w", err)
+			}
+
+			return bucket, nil
+		}
+
+		isRetryable := httpResp.StatusCode == 500
+
+		if isRetryable && attempt < len(retryDelays)-1 {
+			httpResp.Body.Close() //nolint:errcheck
+
+			backoff := retryDelays[attempt]
+
+			tflog.Debug(ctx, "Retrying RGW bucket GET due to server error", map[string]any{
+				"bucket":     bucketName,
+				"attempt":    attempt + 1,
+				"status":     httpResp.StatusCode,
+				"backoff_ms": backoff.Milliseconds(),
+			})
+
+			select {
+			case <-time.After(backoff):
+				continue
+			case <-ctx.Done():
+				return CephAPIRGWBucket{}, ctx.Err()
+			}
+		}
+
+		httpResp.Body.Close() //nolint:errcheck
+		return CephAPIRGWBucket{}, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
+	}
+
+	return CephAPIRGWBucket{}, fmt.Errorf("max retries exceeded")
+}
+
 type CephAPIRGWBucketCreateRequest struct {
 	Bucket    string  `json:"bucket"`
 	UID       string  `json:"uid"`
