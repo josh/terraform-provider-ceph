@@ -138,7 +138,7 @@ func (r *RGWBucketResource) Create(ctx context.Context, req resource.CreateReque
 	}
 
 	bucketName := data.Bucket.ValueString()
-	bucket, err := r.client.RGWGetBucket(ctx, bucketName)
+	bucket, err := r.client.RGWGetBucketWithRetry(ctx, bucketName)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
@@ -162,7 +162,7 @@ func (r *RGWBucketResource) Read(ctx context.Context, req resource.ReadRequest, 
 	}
 
 	bucketName := data.Bucket.ValueString()
-	bucket, err := r.client.RGWGetBucket(ctx, bucketName)
+	bucket, err := r.client.RGWGetBucketWithRetry(ctx, bucketName)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",

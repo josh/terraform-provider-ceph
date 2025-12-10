@@ -103,7 +103,7 @@ func (d *RGWBucketDataSource) Read(ctx context.Context, req datasource.ReadReque
 	}
 
 	bucketName := data.Bucket.ValueString()
-	bucket, err := d.client.RGWGetBucket(ctx, bucketName)
+	bucket, err := d.client.RGWGetBucketWithRetry(ctx, bucketName)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
