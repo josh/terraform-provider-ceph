@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
@@ -287,6 +288,10 @@ func (r *ErasureCodeProfileResource) Read(ctx context.Context, req resource.Read
 
 	profile, err := r.client.GetErasureCodeProfile(ctx, data.Name.ValueString())
 	if err != nil {
+		if errors.Is(err, ErrAPINotFound) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"API Request Error",
 			fmt.Sprintf("Unable to read erasure code profile '%s': %s", data.Name.ValueString(), err),
@@ -317,6 +322,9 @@ func (r *ErasureCodeProfileResource) Delete(ctx context.Context, req resource.De
 
 	err := r.client.DeleteErasureCodeProfile(ctx, data.Name.ValueString())
 	if err != nil {
+		if errors.Is(err, ErrAPINotFound) {
+			return
+		}
 		resp.Diagnostics.AddError(
 			"API Request Error",
 			fmt.Sprintf("Unable to delete erasure code profile '%s': %s. Note that erasure code profiles cannot be deleted if they are in use by any pools.", data.Name.ValueString(), err),
