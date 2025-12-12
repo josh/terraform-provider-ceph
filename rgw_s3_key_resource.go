@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -289,7 +290,7 @@ func (r *RGWS3KeyResource) Delete(ctx context.Context, req resource.DeleteReques
 
 	user, err := r.client.RGWGetUser(ctx, parentUID)
 	if err != nil {
-		if strings.Contains(err.Error(), "status 404") || strings.Contains(err.Error(), "status 500") {
+		if errors.Is(err, ErrAPINotFound) {
 			return
 		}
 		resp.Diagnostics.AddWarning(
