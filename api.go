@@ -9,12 +9,63 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
 var ErrAPINotFound = errors.New("ceph API returned status 404: resource not found")
+
+type CephDashboardError struct {
+	Detail    string  `json:"detail"`
+	Code      *string `json:"code"`
+	Component *string `json:"component"`
+	Status    *int    `json:"status"`
+}
+
+func ParseCephDashboardError(body []byte) (*CephDashboardError, error) {
+	var dashboardErr CephDashboardError
+	if err := json.Unmarshal(body, &dashboardErr); err != nil {
+		return nil, err
+	}
+	return &dashboardErr, nil
+}
+
+type RGWErrorResponse struct {
+	Code      string `json:"Code"`
+	RequestID string `json:"RequestId"`
+	HostID    string `json:"HostId"`
+}
+
+var pythonByteStringJoinReplacer = strings.NewReplacer(
+	"'\r\nb'", "",
+	"'\nb'", "",
+	"'\n", "'",
+	"\r", "",
+	"\n", "",
+)
+
+func (e *CephDashboardError) RGWError() (*RGWErrorResponse, bool) {
+	if e.Component == nil || *e.Component != "rgw" {
+		return nil, false
+	}
+
+	cleaned := pythonByteStringJoinReplacer.Replace(e.Detail)
+
+	jsonStart := strings.Index(cleaned, "{")
+	jsonEnd := strings.LastIndex(cleaned, "}")
+	if jsonStart == -1 || jsonEnd == -1 || jsonEnd <= jsonStart {
+		return nil, false
+	}
+
+	var rgwErr RGWErrorResponse
+	if err := json.Unmarshal([]byte(cleaned[jsonStart:jsonEnd+1]), &rgwErr); err != nil {
+		return nil, false
+	}
+
+	return &rgwErr, true
+}
 
 type CephAPIClient struct {
 	endpoint *url.URL
@@ -801,10 +852,6 @@ func (c *CephAPIClient) RGWGetUser(ctx context.Context, uid string) (*CephAPIRGW
 		return nil, ErrAPINotFound
 	}
 
-	if httpResp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
-	}
-
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read response body: %w", err)
@@ -814,6 +861,17 @@ func (c *CephAPIClient) RGWGetUser(ctx context.Context, uid string) (*CephAPIRGW
 		"response_body": string(body),
 		"status_code":   httpResp.StatusCode,
 	})
+
+	if httpResp.StatusCode != http.StatusOK {
+		if dashboardErr, err := ParseCephDashboardError(body); err == nil {
+			if rgwErr, ok := dashboardErr.RGWError(); ok {
+				if rgwErr.Code == "NoSuchUser" {
+					return nil, ErrAPINotFound
+				}
+			}
+		}
+		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
 
 	var user CephAPIRGWUser
 	err = json.Unmarshal(body, &user)

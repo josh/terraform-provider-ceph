@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -169,6 +170,10 @@ func (r *RGWUserResource) Read(ctx context.Context, req resource.ReadRequest, re
 	userID := data.UserID.ValueString()
 	user, err := r.client.RGWGetUser(ctx, userID)
 	if err != nil {
+		if errors.Is(err, ErrAPINotFound) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"API Request Error",
 			fmt.Sprintf("Unable to read RGW user: %s", err),
