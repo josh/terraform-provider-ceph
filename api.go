@@ -320,17 +320,26 @@ func (c *CephAPIClient) ClusterExportUser(ctx context.Context, entity string) (s
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
 
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return "", fmt.Errorf("unable to read response body: %w", err)
+	}
+
 	if httpResp.StatusCode == http.StatusNotFound {
 		return "", ErrAPINotFound
 	}
 
-	if httpResp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
+	if httpResp.StatusCode == http.StatusBadRequest {
+		if dashboardErr, parseErr := ParseCephDashboardError(body); parseErr == nil {
+			if strings.Contains(dashboardErr.Detail, "no key for auth") {
+				return "", ErrAPINotFound
+			}
+		}
+		return "", fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
 	}
 
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return "", fmt.Errorf("unable to read response body: %w", err)
+	if httpResp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
 	}
 
 	var keyringRaw string
@@ -551,6 +560,10 @@ func (c *CephAPIClient) ClusterDeleteUser(ctx context.Context, userEntities stri
 		return fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode == http.StatusNotFound {
+		return ErrAPINotFound
+	}
 
 	if httpResp.StatusCode != http.StatusAccepted && httpResp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(httpResp.Body)

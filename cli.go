@@ -91,6 +91,18 @@ func (c *CephCLI) AuthSetCaps(ctx context.Context, entity string, caps map[strin
 	return nil
 }
 
+func (c *CephCLI) AuthDel(ctx context.Context, entity string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "auth", "del", entity)
+	_, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return fmt.Errorf("ceph auth del failed: %s", string(exitErr.Stderr))
+		}
+		return fmt.Errorf("ceph auth del failed: %w", err)
+	}
+	return nil
+}
+
 func (c *CephCLI) ConfigSet(ctx context.Context, scope, key, value string) error {
 	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "config", "set", scope, key, value)
 	if err := cmd.Run(); err != nil {
