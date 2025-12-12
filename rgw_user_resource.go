@@ -267,7 +267,7 @@ func (r *RGWUserResource) ImportState(ctx context.Context, req resource.ImportSt
 	resource.ImportStatePassthroughID(ctx, path.Root("user_id"), req, resp)
 }
 
-func updateModelFromAPIUser(data *RGWUserResourceModel, user CephAPIRGWUser) {
+func updateModelFromAPIUser(data *RGWUserResourceModel, user *CephAPIRGWUser) {
 	data.UserID = types.StringValue(user.UserID)
 	data.DisplayName = types.StringValue(user.DisplayName)
 	switch {
