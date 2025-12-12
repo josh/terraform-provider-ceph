@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
@@ -351,7 +352,7 @@ func TestAccCephRGWUserResourceImport_nonExistent(t *testing.T) {
 				ResourceName:  "ceph_rgw_user.nonexistent",
 				ImportState:   true,
 				ImportStateId: testUID,
-				ExpectError:   regexp.MustCompile(`(?i)unable to read rgw user`),
+				ExpectError:   regexp.MustCompile(`(?i)cannot import non-existent remote object`),
 			},
 		},
 	})
@@ -990,6 +991,58 @@ func TestAccCephRGWUserResource_driftDetection(t *testing.T) {
 					checkCephRGWUserExists(t, testUID),
 					resource.TestCheckResourceAttr("ceph_rgw_user.test", "display_name", "Original Display Name"),
 					resource.TestCheckResourceAttr("ceph_rgw_user.test", "max_buckets", "100"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccCephRGWUserResource_OutOfBandDeletion(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-oob-delete")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Out of Band Delete Test"
+					}
+				`, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "user_id", testUID),
+				),
+			},
+			{
+				PreConfig: func() {
+					err := cephTestClusterCLI.RgwUserRemove(t.Context(), testUID, true)
+					if err != nil {
+						t.Fatalf("Failed to delete user out of band: %v", err)
+					}
+					t.Logf("Deleted user %s out of band", testUID)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Out of Band Delete Test"
+					}
+				`, testUID),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_rgw_user.test", plancheck.ResourceActionCreate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "user_id", testUID),
 				),
 			},
 		},
