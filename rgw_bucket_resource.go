@@ -207,7 +207,7 @@ func (r *RGWBucketResource) ImportState(ctx context.Context, req resource.Import
 	resource.ImportStatePassthroughID(ctx, path.Root("bucket"), req, resp)
 }
 
-func updateModelFromAPIBucket(data *RGWBucketResourceModel, bucket CephAPIRGWBucket) {
+func updateModelFromAPIBucket(data *RGWBucketResourceModel, bucket *CephAPIRGWBucket) {
 	data.Bucket = types.StringValue(bucket.Bucket)
 	data.Owner = types.StringValue(bucket.Owner)
 	data.Zonegroup = types.StringValue(bucket.Zonegroup)
