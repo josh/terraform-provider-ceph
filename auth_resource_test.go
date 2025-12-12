@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
@@ -285,7 +286,7 @@ func TestAccCephAuthResourceImport_nonExistent(t *testing.T) {
 				ResourceName:  "ceph_auth.nonexistent",
 				ImportState:   true,
 				ImportStateId: testEntity,
-				ExpectError:   regexp.MustCompile(`(?i)unable to export user from ceph api`),
+				ExpectError:   regexp.MustCompile(`(?i)cannot import non-existent remote object`),
 			},
 		},
 	})
@@ -467,6 +468,67 @@ func TestAccCephAuthResource_capsDriftDetection(t *testing.T) {
 						"mon": "allow r",
 						"osd": "allow rw pool=original",
 					}),
+				),
+			},
+		},
+	})
+}
+
+func TestAccCephAuthResource_OutOfBandDeletion(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testEntity := acctest.RandomWithPrefix("client.test-auth-oob")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephAuthDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_auth" "test" {
+					  entity = %q
+					  caps = {
+					    mon = "allow r"
+					    osd = "allow rw pool=test"
+					  }
+					}
+				`, testEntity),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephAuthExists(t, testEntity),
+					resource.TestCheckResourceAttr("ceph_auth.test", "entity", testEntity),
+				),
+			},
+			{
+				PreConfig: func() {
+					err := cephTestClusterCLI.AuthDel(t.Context(), testEntity)
+					if err != nil {
+						t.Fatalf("Failed to delete auth entity out of band: %v", err)
+					}
+					t.Logf("Deleted auth entity %s out of band", testEntity)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_auth" "test" {
+					  entity = %q
+					  caps = {
+					    mon = "allow r"
+					    osd = "allow rw pool=test"
+					  }
+					}
+				`, testEntity),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_auth.test", plancheck.ResourceActionCreate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephAuthExists(t, testEntity),
+					resource.TestCheckResourceAttr("ceph_auth.test", "entity", testEntity),
 				),
 			},
 		},

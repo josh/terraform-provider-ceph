@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -143,7 +144,20 @@ func (r *AuthResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	}
 
 	entity := data.Entity.ValueString()
-	updateAuthModelFromCephExport(ctx, r.client, entity, &data, &resp.Diagnostics)
+	keyringRaw, err := r.client.ClusterExportUser(ctx, entity)
+	if err != nil {
+		if errors.Is(err, ErrAPINotFound) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError(
+			"API Request Error",
+			fmt.Sprintf("Unable to export user from Ceph API: %s", err),
+		)
+		return
+	}
+
+	updateAuthModelFromKeyring(ctx, keyringRaw, &data, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -196,6 +210,9 @@ func (r *AuthResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	entity := data.Entity.ValueString()
 	err := r.client.ClusterDeleteUser(ctx, entity)
 	if err != nil {
+		if errors.Is(err, ErrAPINotFound) {
+			return
+		}
 		resp.Diagnostics.AddError(
 			"API Request Error",
 			fmt.Sprintf("Unable to delete user from Ceph API: %s", err),
@@ -218,6 +235,10 @@ func updateAuthModelFromCephExport(ctx context.Context, client *CephAPIClient, e
 		return
 	}
 
+	updateAuthModelFromKeyring(ctx, keyringRaw, data, diagnostics)
+}
+
+func updateAuthModelFromKeyring(ctx context.Context, keyringRaw string, data *AuthResourceModel, diagnostics *diag.Diagnostics) {
 	keyringUsers, err := parseCephKeyring(keyringRaw)
 	if err != nil {
 		diagnostics.AddError(
@@ -228,7 +249,7 @@ func updateAuthModelFromCephExport(ctx context.Context, client *CephAPIClient, e
 	} else if len(keyringUsers) == 0 {
 		diagnostics.AddError(
 			"Empty keyring data",
-			fmt.Sprintf("Ceph export returned no users for entity %s", entity),
+			"Ceph export returned no users",
 		)
 		return
 	} else if len(keyringUsers) > 1 {
