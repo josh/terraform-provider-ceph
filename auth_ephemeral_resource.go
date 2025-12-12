@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
@@ -149,7 +150,7 @@ func (r *AuthEphemeralResource) Close(ctx context.Context, req ephemeral.CloseRe
 	}
 
 	err := r.client.ClusterDeleteUser(ctx, entity)
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrAPINotFound) {
 		resp.Diagnostics.AddError(
 			"API Request Error",
 			fmt.Sprintf("Unable to delete user from Ceph API: %s", err),
