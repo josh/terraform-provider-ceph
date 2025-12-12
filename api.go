@@ -597,10 +597,6 @@ func (c *CephAPIClient) RGWGetBucket(ctx context.Context, bucketName string) (*C
 		return nil, ErrAPINotFound
 	}
 
-	if httpResp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
-	}
-
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read response body: %w", err)
@@ -610,6 +606,17 @@ func (c *CephAPIClient) RGWGetBucket(ctx context.Context, bucketName string) (*C
 		"response_body": string(body),
 		"status_code":   httpResp.StatusCode,
 	})
+
+	if httpResp.StatusCode != http.StatusOK {
+		if dashboardErr, err := ParseCephDashboardError(body); err == nil {
+			if rgwErr, ok := dashboardErr.RGWError(); ok {
+				if rgwErr.Code == "NoSuchBucket" {
+					return nil, ErrAPINotFound
+				}
+			}
+		}
+		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
 
 	var bucket CephAPIRGWBucket
 	err = json.Unmarshal(body, &bucket)
@@ -676,11 +683,23 @@ func (c *CephAPIClient) RGWGetBucketWithRetry(ctx context.Context, bucketName st
 			return nil, ErrAPINotFound
 		}
 
+		body, err := io.ReadAll(httpResp.Body)
+		httpResp.Body.Close() //nolint:errcheck
+		if err != nil {
+			return nil, fmt.Errorf("unable to read response body: %w", err)
+		}
+
+		if dashboardErr, err := ParseCephDashboardError(body); err == nil {
+			if rgwErr, ok := dashboardErr.RGWError(); ok {
+				if rgwErr.Code == "NoSuchBucket" {
+					return nil, ErrAPINotFound
+				}
+			}
+		}
+
 		isRetryable := httpResp.StatusCode == 500
 
 		if isRetryable && attempt < len(retryDelays)-1 {
-			httpResp.Body.Close() //nolint:errcheck
-
 			backoff := retryDelays[attempt]
 
 			tflog.Debug(ctx, "Retrying RGW bucket GET due to server error", map[string]any{
@@ -698,8 +717,7 @@ func (c *CephAPIClient) RGWGetBucketWithRetry(ctx context.Context, bucketName st
 			}
 		}
 
-		httpResp.Body.Close() //nolint:errcheck
-		return nil, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
+		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
 	}
 
 	return nil, fmt.Errorf("max retries exceeded")
@@ -784,8 +802,19 @@ func (c *CephAPIClient) RGWDeleteBucket(ctx context.Context, bucketName string) 
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
 
+	if httpResp.StatusCode == http.StatusNotFound {
+		return ErrAPINotFound
+	}
+
 	if httpResp.StatusCode != http.StatusNoContent && httpResp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(httpResp.Body)
+		if dashboardErr, err := ParseCephDashboardError(body); err == nil {
+			if rgwErr, ok := dashboardErr.RGWError(); ok {
+				if rgwErr.Code == "NoSuchBucket" {
+					return ErrAPINotFound
+				}
+			}
+		}
 		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
 	}
 

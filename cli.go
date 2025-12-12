@@ -839,6 +839,21 @@ func (c *CephCLI) RgwBucketInfo(ctx context.Context, bucket string) (*RgwBucketI
 	return &bucketInfo, nil
 }
 
+func (c *CephCLI) RgwBucketRemove(ctx context.Context, bucket string, purgeObjects bool) error {
+	args := []string{"--conf", c.confPath, "bucket", "rm", "--bucket=" + bucket}
+	if purgeObjects {
+		args = append(args, "--purge-objects")
+	}
+
+	cmd := exec.CommandContext(ctx, "radosgw-admin", args...)
+	_, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to remove rgw bucket %s: %w", bucket, err)
+	}
+
+	return nil
+}
+
 type CephHealthStatus struct {
 	Mgrmap CephHealthStatusMgrmap `json:"mgrmap"`
 	Monmap CephHealthStatusMonmap `json:"monmap"`
