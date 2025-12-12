@@ -951,6 +951,23 @@ func TestAccCephConfigResource_differentSections(t *testing.T) {
 	})
 }
 
+func checkCephConfigExists(t *testing.T, section, name string) resource.TestCheckFunc {
+	t.Helper()
+	return func(s *terraform.State) error {
+		value, err := cephTestClusterCLI.ConfigGetFromDump(t.Context(), section, name)
+		if err != nil {
+			return fmt.Errorf("failed to get config %s/%s: %w", section, name, err)
+		}
+
+		if value == "" {
+			return fmt.Errorf("config %s/%s not found", section, name)
+		}
+
+		t.Logf("Verified config %s/%s exists with value: %s", section, name, value)
+		return nil
+	}
+}
+
 func TestAccCephConfigResource_OutOfBandDeletion(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
@@ -977,6 +994,7 @@ func TestAccCephConfigResource_OutOfBandDeletion(t *testing.T) {
 					}
 				`, section, configName, testValue),
 				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephConfigExists(t, section, configName),
 					resource.TestCheckResourceAttr("ceph_config.test", "section", section),
 					resource.TestCheckResourceAttr("ceph_config.test", "config."+configName, fmt.Sprintf("%d", testValue)),
 				),
@@ -1004,6 +1022,7 @@ func TestAccCephConfigResource_OutOfBandDeletion(t *testing.T) {
 					},
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephConfigExists(t, section, configName),
 					resource.TestCheckResourceAttr("ceph_config.test", "section", section),
 					resource.TestCheckResourceAttr("ceph_config.test", "config."+configName, fmt.Sprintf("%d", testValue)),
 				),

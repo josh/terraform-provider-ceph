@@ -179,6 +179,9 @@ func TestAccCephRGWBucketResource_OutOfBandDeletion(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		CheckDestroy:             testAccCheckCephRGWBucketDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),

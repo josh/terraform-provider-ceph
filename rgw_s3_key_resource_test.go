@@ -564,6 +564,25 @@ func testAccCheckCephRGWS3KeyDestroy(t *testing.T) resource.TestCheckFunc {
 	}
 }
 
+func checkCephRGWS3KeyExists(t *testing.T, uid, accessKey string) resource.TestCheckFunc {
+	t.Helper()
+	return func(s *terraform.State) error {
+		user, err := cephTestClusterCLI.RgwUserInfo(t.Context(), uid)
+		if err != nil {
+			return fmt.Errorf("failed to get RGW user %s: %w", uid, err)
+		}
+
+		for _, key := range user.Keys {
+			if key.AccessKey == accessKey {
+				t.Logf("Verified S3 key %s exists for user %s", accessKey, uid)
+				return nil
+			}
+		}
+
+		return fmt.Errorf("S3 key %s not found for user %s", accessKey, uid)
+	}
+}
+
 func TestAccCephRGWS3KeyResource_OutOfBandDeletion(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
@@ -590,6 +609,7 @@ func TestAccCephRGWS3KeyResource_OutOfBandDeletion(t *testing.T) {
 					}
 				`, testUID, customAccessKey, customSecretKey),
 				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWS3KeyExists(t, testUID, customAccessKey),
 					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "user_id", testUID),
 					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "access_key", customAccessKey),
 				),
@@ -616,6 +636,7 @@ func TestAccCephRGWS3KeyResource_OutOfBandDeletion(t *testing.T) {
 					},
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWS3KeyExists(t, testUID, customAccessKey),
 					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "user_id", testUID),
 					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "access_key", customAccessKey),
 				),
