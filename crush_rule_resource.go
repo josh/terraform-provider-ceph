@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -251,6 +252,10 @@ func (r *CrushRuleResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 	rule, err := r.client.GetCrushRule(ctx, data.Name.ValueString())
 	if err != nil {
+		if errors.Is(err, ErrAPINotFound) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"API Request Error",
 			fmt.Sprintf("Unable to read CRUSH rule '%s': %s", data.Name.ValueString(), err),
@@ -284,6 +289,9 @@ func (r *CrushRuleResource) Delete(ctx context.Context, req resource.DeleteReque
 
 	err := r.client.DeleteCrushRule(ctx, data.Name.ValueString())
 	if err != nil {
+		if errors.Is(err, ErrAPINotFound) {
+			return
+		}
 		resp.Diagnostics.AddError(
 			"API Request Error",
 			fmt.Sprintf("Unable to delete CRUSH rule '%s': %s. Note that CRUSH rules cannot be deleted if they are in use by any pools.", data.Name.ValueString(), err),
