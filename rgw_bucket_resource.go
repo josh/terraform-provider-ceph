@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -164,6 +165,10 @@ func (r *RGWBucketResource) Read(ctx context.Context, req resource.ReadRequest, 
 	bucketName := data.Bucket.ValueString()
 	bucket, err := r.client.RGWGetBucketWithRetry(ctx, bucketName)
 	if err != nil {
+		if errors.Is(err, ErrAPINotFound) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"API Request Error",
 			fmt.Sprintf("Unable to read RGW bucket: %s", err),
@@ -195,6 +200,9 @@ func (r *RGWBucketResource) Delete(ctx context.Context, req resource.DeleteReque
 	bucketName := data.Bucket.ValueString()
 	err := r.client.RGWDeleteBucket(ctx, bucketName)
 	if err != nil {
+		if errors.Is(err, ErrAPINotFound) {
+			return
+		}
 		resp.Diagnostics.AddError(
 			"API Request Error",
 			fmt.Sprintf("Unable to delete RGW bucket: %s", err),

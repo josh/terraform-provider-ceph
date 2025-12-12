@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 )
 
@@ -129,7 +130,7 @@ func TestAccCephRGWBucketResourceImport_nonExistent(t *testing.T) {
 				ResourceName:  "ceph_rgw_bucket.nonexistent",
 				ImportState:   true,
 				ImportStateId: testBucket,
-				ExpectError:   regexp.MustCompile(`(?i)unable to read rgw bucket`),
+				ExpectError:   regexp.MustCompile(`(?i)cannot import non-existent remote object`),
 			},
 		},
 	})
@@ -166,4 +167,77 @@ func checkCephRGWBucketExists(t *testing.T, bucketName string) resource.TestChec
 		t.Logf("Verified RGW bucket %s exists with owner: %s", bucketName, bucket.Owner)
 		return nil
 	}
+}
+
+func TestAccCephRGWBucketResource_OutOfBandDeletion(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-bucket-oob-owner")
+	testBucket := acctest.RandomWithPrefix("test-bucket-oob")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWBucketDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Bucket OOB Delete Test User"
+					}
+
+					resource "ceph_rgw_s3_key" "test" {
+					  user_id = ceph_rgw_user.test.user_id
+					}
+
+					resource "ceph_rgw_bucket" "test" {
+					  bucket = %q
+					  owner  = ceph_rgw_user.test.user_id
+					  depends_on = [ceph_rgw_s3_key.test]
+					}
+				`, testUID, testBucket),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWBucketExists(t, testBucket),
+					resource.TestCheckResourceAttr("ceph_rgw_bucket.test", "bucket", testBucket),
+				),
+			},
+			{
+				PreConfig: func() {
+					err := cephTestClusterCLI.RgwBucketRemove(t.Context(), testBucket, true)
+					if err != nil {
+						t.Fatalf("Failed to delete bucket out of band: %v", err)
+					}
+					t.Logf("Deleted bucket %s out of band", testBucket)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Bucket OOB Delete Test User"
+					}
+
+					resource "ceph_rgw_s3_key" "test" {
+					  user_id = ceph_rgw_user.test.user_id
+					}
+
+					resource "ceph_rgw_bucket" "test" {
+					  bucket = %q
+					  owner  = ceph_rgw_user.test.user_id
+					  depends_on = [ceph_rgw_s3_key.test]
+					}
+				`, testUID, testBucket),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_rgw_bucket.test", plancheck.ResourceActionCreate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWBucketExists(t, testBucket),
+					resource.TestCheckResourceAttr("ceph_rgw_bucket.test", "bucket", testBucket),
+				),
+			},
+		},
+	})
 }
