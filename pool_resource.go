@@ -467,7 +467,7 @@ func (r *PoolResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	pool, err := r.client.GetPool(ctx, poolName)
 	if err != nil {
-		if errors.Is(err, ErrPoolNotFound) {
+		if errors.Is(err, ErrAPINotFound) {
 			tflog.Debug(ctx, "Pool not found, removing from state", map[string]interface{}{
 				"pool_name": poolName,
 			})
