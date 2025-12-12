@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -269,6 +270,9 @@ func (r *ConfigResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	for name := range configs {
 		err := r.client.ClusterDeleteConf(ctx, name, section)
 		if err != nil {
+			if errors.Is(err, ErrAPINotFound) {
+				continue
+			}
 			resp.Diagnostics.AddWarning(
 				"API Request Warning",
 				fmt.Sprintf("Unable to delete cluster configuration %s/%s: %s. Continuing with remaining deletions.", section, name, err),

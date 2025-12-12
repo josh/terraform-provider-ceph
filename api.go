@@ -1372,6 +1372,10 @@ func (c *CephAPIClient) ClusterDeleteConf(ctx context.Context, name string, sect
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
 
+	if httpResp.StatusCode == http.StatusNotFound {
+		return ErrAPINotFound
+	}
+
 	if httpResp.StatusCode != http.StatusAccepted && httpResp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(httpResp.Body)
 		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))

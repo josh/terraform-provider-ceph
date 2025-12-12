@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
@@ -944,6 +945,67 @@ func TestAccCephConfigResource_differentSections(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("ceph_config.global", "config.mon_osd_down_out_interval", fmt.Sprintf("%d", globalValue)),
 					resource.TestCheckResourceAttr("ceph_config.mon", "config.mon_max_pg_per_osd", fmt.Sprintf("%d", monValue)),
+				),
+			},
+		},
+	})
+}
+
+func TestAccCephConfigResource_OutOfBandDeletion(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testValue := acctest.RandIntRange(100, 999)
+	configName := "mon_max_pg_per_osd"
+	section := "global"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "test" {
+						section = %q
+						config = {
+							%q = "%d"
+						}
+					}
+				`, section, configName, testValue),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_config.test", "section", section),
+					resource.TestCheckResourceAttr("ceph_config.test", "config."+configName, fmt.Sprintf("%d", testValue)),
+				),
+			},
+			{
+				PreConfig: func() {
+					err := cephTestClusterCLI.ConfigRemove(t.Context(), section, configName)
+					if err != nil {
+						t.Fatalf("Failed to delete config out of band: %v", err)
+					}
+					t.Logf("Deleted config %s/%s out of band", section, configName)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "test" {
+						section = %q
+						config = {
+							%q = "%d"
+						}
+					}
+				`, section, configName, testValue),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_config.test", plancheck.ResourceActionCreate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_config.test", "section", section),
+					resource.TestCheckResourceAttr("ceph_config.test", "config."+configName, fmt.Sprintf("%d", testValue)),
 				),
 			},
 		},
