@@ -14,6 +14,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
+var ErrAPINotFound = errors.New("ceph API returned status 404: resource not found")
+
 type CephAPIClient struct {
 	endpoint *url.URL
 	token    string
@@ -266,6 +268,10 @@ func (c *CephAPIClient) ClusterExportUser(ctx context.Context, entity string) (s
 		return "", fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode == http.StatusNotFound {
+		return "", ErrAPINotFound
+	}
 
 	if httpResp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
@@ -536,6 +542,10 @@ func (c *CephAPIClient) RGWGetBucket(ctx context.Context, bucketName string) (Ce
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
 
+	if httpResp.StatusCode == http.StatusNotFound {
+		return CephAPIRGWBucket{}, ErrAPINotFound
+	}
+
 	if httpResp.StatusCode != http.StatusOK {
 		return CephAPIRGWBucket{}, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
 	}
@@ -608,6 +618,11 @@ func (c *CephAPIClient) RGWGetBucketWithRetry(ctx context.Context, bucketName st
 			}
 
 			return bucket, nil
+		}
+
+		if httpResp.StatusCode == http.StatusNotFound {
+			httpResp.Body.Close() //nolint:errcheck
+			return CephAPIRGWBucket{}, ErrAPINotFound
 		}
 
 		isRetryable := httpResp.StatusCode == 500
@@ -781,6 +796,10 @@ func (c *CephAPIClient) RGWGetUser(ctx context.Context, uid string) (CephAPIRGWU
 		return CephAPIRGWUser{}, fmt.Errorf("unable to make request to Ceph API: %w", err)
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode == http.StatusNotFound {
+		return CephAPIRGWUser{}, ErrAPINotFound
+	}
 
 	if httpResp.StatusCode != http.StatusOK {
 		return CephAPIRGWUser{}, fmt.Errorf("ceph API returned status %d", httpResp.StatusCode)
@@ -1164,6 +1183,10 @@ func (c *CephAPIClient) ClusterGetConf(ctx context.Context, name string) (CephAP
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
 
+	if httpResp.StatusCode == http.StatusNotFound {
+		return CephAPIClusterConf{}, ErrAPINotFound
+	}
+
 	if httpResp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(httpResp.Body)
 		return CephAPIClusterConf{}, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
@@ -1298,6 +1321,10 @@ func (c *CephAPIClient) MgrGetModuleConfig(ctx context.Context, moduleName strin
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
 
+	if httpResp.StatusCode == http.StatusNotFound {
+		return nil, ErrAPINotFound
+	}
+
 	if httpResp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(httpResp.Body)
 		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
@@ -1390,6 +1417,10 @@ func (c *CephAPIClient) MgrGetModuleOptions(ctx context.Context, moduleName stri
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
 
+	if httpResp.StatusCode == http.StatusNotFound {
+		return nil, ErrAPINotFound
+	}
+
 	if httpResp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(httpResp.Body)
 		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
@@ -1415,8 +1446,6 @@ func (c *CephAPIClient) MgrGetModuleOptions(ctx context.Context, moduleName stri
 }
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-pool>
-
-var ErrPoolNotFound = errors.New("pool not found")
 
 type CephAPIPoolOptions struct {
 	CompressionMode          string  `json:"compression_mode"`
@@ -1589,7 +1618,7 @@ func (c *CephAPIClient) GetPool(ctx context.Context, poolName string) (*CephAPIP
 	defer httpResp.Body.Close() //nolint:errcheck
 
 	if httpResp.StatusCode == http.StatusNotFound {
-		return nil, ErrPoolNotFound
+		return nil, ErrAPINotFound
 	}
 
 	if httpResp.StatusCode != http.StatusOK {
@@ -1807,6 +1836,10 @@ func (c *CephAPIClient) GetCrushRule(ctx context.Context, name string) (*CephAPI
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
 
+	if httpResp.StatusCode == http.StatusNotFound {
+		return nil, ErrAPINotFound
+	}
+
 	if httpResp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(httpResp.Body)
 		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
@@ -1946,6 +1979,10 @@ func (c *CephAPIClient) GetErasureCodeProfile(ctx context.Context, name string) 
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
 
+	if httpResp.StatusCode == http.StatusNotFound {
+		return nil, ErrAPINotFound
+	}
+
 	if httpResp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(httpResp.Body)
 		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
@@ -2026,6 +2063,10 @@ func (c *CephAPIClient) GetTasks(ctx context.Context, nameFilter string) (*CephA
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read response body: %w", err)
+	}
+
+	if httpResp.StatusCode == http.StatusNotFound {
+		return nil, ErrAPINotFound
 	}
 
 	if httpResp.StatusCode != http.StatusOK {
