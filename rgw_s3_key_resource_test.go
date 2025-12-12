@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
@@ -561,4 +562,64 @@ func testAccCheckCephRGWS3KeyDestroy(t *testing.T) resource.TestCheckFunc {
 		}
 		return nil
 	}
+}
+
+func TestAccCephRGWS3KeyResource_OutOfBandDeletion(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-s3-key-oob")
+	customAccessKey := acctest.RandString(20)
+	customSecretKey := acctest.RandString(40)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWS3KeyDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			createTestRGWUserWithoutKeys(t, testUID, "OOB Deletion Test User")
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_s3_key" "test" {
+					  user_id    = %q
+					  access_key = %q
+					  secret_key = %q
+					}
+				`, testUID, customAccessKey, customSecretKey),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "user_id", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "access_key", customAccessKey),
+				),
+			},
+			{
+				PreConfig: func() {
+					err := cephTestClusterCLI.RgwKeyRemove(t.Context(), testUID, customAccessKey)
+					if err != nil {
+						t.Fatalf("Failed to delete S3 key out of band: %v", err)
+					}
+					t.Logf("Deleted S3 key %s for user %s out of band", customAccessKey, testUID)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_s3_key" "test" {
+					  user_id    = %q
+					  access_key = %q
+					  secret_key = %q
+					}
+				`, testUID, customAccessKey, customSecretKey),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_rgw_s3_key.test", plancheck.ResourceActionCreate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "user_id", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_s3_key.test", "access_key", customAccessKey),
+				),
+			},
+		},
+	})
 }
