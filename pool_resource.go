@@ -653,6 +653,9 @@ func (r *PoolResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 
 	taskInfo, err := r.client.DeletePool(ctx, poolName)
 	if err != nil {
+		if errors.Is(err, ErrAPINotFound) {
+			return
+		}
 		resp.Diagnostics.AddError(
 			"API Request Error",
 			fmt.Sprintf("Unable to delete pool '%s': %s", data.Name.ValueString(), err),
