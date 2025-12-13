@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -164,6 +165,10 @@ func (r *MgrModuleConfigResource) Read(ctx context.Context, req resource.ReadReq
 
 	readConfigs, err := r.client.MgrGetModuleConfig(ctx, moduleName)
 	if err != nil {
+		if errors.Is(err, ErrAPINotFound) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"API Request Error",
 			fmt.Sprintf("Unable to read MGR module config for '%s': %s", moduleName, err),
@@ -291,6 +296,9 @@ func (r *MgrModuleConfigResource) Delete(ctx context.Context, req resource.Delet
 
 		err := r.client.ClusterDeleteConf(ctx, configName, "mgr")
 		if err != nil {
+			if errors.Is(err, ErrAPINotFound) {
+				continue
+			}
 			resp.Diagnostics.AddError(
 				"API Request Error",
 				fmt.Sprintf("Unable to delete MGR module config '%s': %s", configName, err),
