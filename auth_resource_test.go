@@ -534,3 +534,46 @@ func TestAccCephAuthResource_OutOfBandDeletion(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephAuthResource_OutOfBandDeletionDestroy(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testEntity := acctest.RandomWithPrefix("client.test-auth-oob-destroy")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephAuthDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_auth" "test" {
+					  entity = %q
+					  caps = {
+					    mon = "allow r"
+					    osd = "allow rw pool=test"
+					  }
+					}
+				`, testEntity),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephAuthExists(t, testEntity),
+				),
+			},
+			{
+				PreConfig: func() {
+					err := cephTestClusterCLI.AuthDel(t.Context(), testEntity)
+					if err != nil {
+						t.Fatalf("Failed to delete auth entity out of band: %v", err)
+					}
+					t.Logf("Deleted auth entity %s out of band", testEntity)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          testAccProviderConfigBlock,
+			},
+		},
+	})
+}

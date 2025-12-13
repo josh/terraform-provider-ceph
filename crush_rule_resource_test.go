@@ -413,3 +413,44 @@ func TestAccCephCrushRuleResource_OutOfBandDeletion(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephCrushRuleResource_OutOfBandDeletionDestroy(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	ruleName := fmt.Sprintf("test-crush-rule-oob-destroy-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephCrushRuleDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_crush_rule" "test" {
+					  name           = %q
+					  pool_type      = "replicated"
+					  failure_domain = "osd"
+					}
+				`, ruleName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephCrushRuleExists(t, ruleName),
+				),
+			},
+			{
+				PreConfig: func() {
+					err := cephTestClusterCLI.CrushRuleRemove(t.Context(), ruleName)
+					if err != nil {
+						t.Fatalf("Failed to delete CRUSH rule out of band: %v", err)
+					}
+					t.Logf("Deleted CRUSH rule %s out of band", ruleName)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          testAccProviderConfigBlock,
+			},
+		},
+	})
+}
