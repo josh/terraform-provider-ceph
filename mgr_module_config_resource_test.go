@@ -7,6 +7,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
@@ -586,6 +587,80 @@ func TestAccCephMgrModuleConfigResource_importLargeInteger(t *testing.T) {
 					func(s *terraform.State) error {
 						return assertCephMgrModuleConfigValue(t.Context(), "dashboard", "jwt_token_ttl", "31556952")
 					},
+				),
+			},
+		},
+	})
+}
+
+func checkCephMgrModuleConfigExists(t *testing.T, module, option string) resource.TestCheckFunc {
+	t.Helper()
+	return func(s *terraform.State) error {
+		value, err := getCephMgrModuleConfigValue(t.Context(), module, option)
+		if err != nil {
+			return fmt.Errorf("config mgr/%s/%s does not exist: %w", module, option, err)
+		}
+		if value == "" {
+			return fmt.Errorf("config mgr/%s/%s has empty value", module, option)
+		}
+		t.Logf("Verified config mgr/%s/%s exists with value: %s", module, option, value)
+		return nil
+	}
+}
+
+func TestAccCephMgrModuleConfigResource_OutOfBandDeletion(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephMgrModuleConfigDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_mgr_module_config" "test" {
+						module_name = "dashboard"
+						configs = {
+							standby_behaviour = "error"
+						}
+					}
+				`,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephMgrModuleConfigExists(t, "dashboard", "standby_behaviour"),
+					resource.TestCheckResourceAttr("ceph_mgr_module_config.test", "module_name", "dashboard"),
+					resource.TestCheckResourceAttr("ceph_mgr_module_config.test", "configs.standby_behaviour", "error"),
+				),
+			},
+			{
+				PreConfig: func() {
+					err := removeCephMgrModuleConfigValue(t.Context(), "dashboard", "standby_behaviour")
+					if err != nil {
+						t.Fatalf("Failed to delete config out of band: %v", err)
+					}
+					t.Logf("Deleted config mgr/dashboard/standby_behaviour out of band")
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_mgr_module_config" "test" {
+						module_name = "dashboard"
+						configs = {
+							standby_behaviour = "error"
+						}
+					}
+				`,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_mgr_module_config.test", plancheck.ResourceActionNoop),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephMgrModuleConfigExists(t, "dashboard", "standby_behaviour"),
+					resource.TestCheckResourceAttr("ceph_mgr_module_config.test", "module_name", "dashboard"),
+					resource.TestCheckResourceAttr("ceph_mgr_module_config.test", "configs.standby_behaviour", "error"),
 				),
 			},
 		},
