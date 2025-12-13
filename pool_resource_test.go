@@ -2063,3 +2063,53 @@ func TestAccCephPoolResource_OutOfBandDeletion(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephPoolResource_OutOfBandDeletionDestroy(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-oob-destroy")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+		},
+		CheckDestroy: testAccCheckCephPoolDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_pool" "test" {
+						name              = %q
+						pool_type         = "replicated"
+						size              = 2
+						min_size          = 1
+						pg_num            = 32
+						pg_autoscale_mode = "off"
+
+						timeouts = {
+						  create = "1m"
+						  update = "5m"
+						  delete = "1m"
+						}
+					}
+				`, poolName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephPoolExists(t, poolName),
+				),
+			},
+			{
+				PreConfig: func() {
+					err := cephTestClusterCLI.PoolDelete(t.Context(), poolName)
+					if err != nil {
+						t.Fatalf("Failed to delete pool out of band: %v", err)
+					}
+					t.Logf("Deleted pool %s out of band", poolName)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          testAccProviderConfigBlock,
+			},
+		},
+	})
+}

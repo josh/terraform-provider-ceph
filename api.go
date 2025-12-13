@@ -1674,6 +1674,14 @@ func (c *CephAPIClient) DeletePool(ctx context.Context, poolName string) (*CephA
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
 
+	if httpResp.StatusCode == http.StatusNotFound {
+		return nil, ErrAPINotFound
+	}
+
+	if httpResp.StatusCode == http.StatusNoContent {
+		return nil, nil
+	}
+
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read response body: %w", err)
@@ -1692,11 +1700,7 @@ func (c *CephAPIClient) DeletePool(ctx context.Context, poolName string) (*CephA
 		return &taskInfo, nil
 	}
 
-	if httpResp.StatusCode != http.StatusNoContent {
-		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
-	}
-
-	return nil, nil
+	return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
 }
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-pool--pool_name>
