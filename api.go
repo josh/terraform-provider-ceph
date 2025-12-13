@@ -1071,8 +1071,19 @@ func (c *CephAPIClient) RGWDeleteUser(ctx context.Context, uid string) error {
 	}
 	defer httpResp.Body.Close() //nolint:errcheck
 
+	if httpResp.StatusCode == http.StatusNotFound {
+		return ErrAPINotFound
+	}
+
 	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusAccepted && httpResp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(httpResp.Body)
+		if dashboardErr, err := ParseCephDashboardError(body); err == nil {
+			if rgwErr, ok := dashboardErr.RGWError(); ok {
+				if rgwErr.Code == "NoSuchUser" {
+					return ErrAPINotFound
+				}
+			}
+		}
 		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
 	}
 

@@ -1051,3 +1051,42 @@ func TestAccCephRGWUserResource_OutOfBandDeletion(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephRGWUserResource_OutOfBandDeletionDestroy(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-oob-destroy")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Out of Band Delete Destroy Test"
+					}
+				`, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+				),
+			},
+			{
+				PreConfig: func() {
+					err := cephTestClusterCLI.RgwUserRemove(t.Context(), testUID, true)
+					if err != nil {
+						t.Fatalf("Failed to delete user out of band: %v", err)
+					}
+					t.Logf("Deleted user %s out of band", testUID)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          testAccProviderConfigBlock,
+			},
+		},
+	})
+}

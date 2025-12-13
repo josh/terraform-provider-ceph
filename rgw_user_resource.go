@@ -260,6 +260,9 @@ func (r *RGWUserResource) Delete(ctx context.Context, req resource.DeleteRequest
 	userID := data.UserID.ValueString()
 	err := r.client.RGWDeleteUser(ctx, userID)
 	if err != nil {
+		if errors.Is(err, ErrAPINotFound) {
+			return
+		}
 		resp.Diagnostics.AddError(
 			"API Request Error",
 			fmt.Sprintf("Unable to delete RGW user: %s", err),
