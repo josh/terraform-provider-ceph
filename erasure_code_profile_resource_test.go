@@ -449,3 +449,45 @@ func TestAccCephErasureCodeProfileResource_OutOfBandDeletion(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephErasureCodeProfileResource_OutOfBandDeletionDestroy(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	profileName := fmt.Sprintf("test-profile-oob-destroy-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephErasureCodeProfileDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_erasure_code_profile" "test" {
+					  name                 = %q
+					  k                    = 2
+					  m                    = 1
+					  crush_failure_domain = "osd"
+					}
+				`, profileName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephErasureCodeProfileExists(t, profileName),
+				),
+			},
+			{
+				PreConfig: func() {
+					err := cephTestClusterCLI.ErasureCodeProfileRemove(t.Context(), profileName)
+					if err != nil {
+						t.Fatalf("Failed to delete erasure code profile out of band: %v", err)
+					}
+					t.Logf("Deleted erasure code profile %s out of band", profileName)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          testAccProviderConfigBlock,
+			},
+		},
+	})
+}

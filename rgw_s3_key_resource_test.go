@@ -644,3 +644,47 @@ func TestAccCephRGWS3KeyResource_OutOfBandDeletion(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephRGWS3KeyResource_OutOfBandDeletionDestroy(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-s3-key-oob-destroy")
+	customAccessKey := acctest.RandString(20)
+	customSecretKey := acctest.RandString(40)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWS3KeyDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+			createTestRGWUserWithoutKeys(t, testUID, "OOB Deletion Destroy Test User")
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_s3_key" "test" {
+					  user_id    = %q
+					  access_key = %q
+					  secret_key = %q
+					}
+				`, testUID, customAccessKey, customSecretKey),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWS3KeyExists(t, testUID, customAccessKey),
+				),
+			},
+			{
+				PreConfig: func() {
+					err := cephTestClusterCLI.RgwKeyRemove(t.Context(), testUID, customAccessKey)
+					if err != nil {
+						t.Fatalf("Failed to delete S3 key out of band: %v", err)
+					}
+					t.Logf("Deleted S3 key %s for user %s out of band", customAccessKey, testUID)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          testAccProviderConfigBlock,
+			},
+		},
+	})
+}

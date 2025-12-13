@@ -244,3 +244,54 @@ func TestAccCephRGWBucketResource_OutOfBandDeletion(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephRGWBucketResource_OutOfBandDeletionDestroy(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-bucket-oob-destroy-owner")
+	testBucket := acctest.RandomWithPrefix("test-bucket-oob-destroy")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWBucketDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Bucket OOB Destroy Test User"
+					}
+
+					resource "ceph_rgw_s3_key" "test" {
+					  user_id = ceph_rgw_user.test.user_id
+					}
+
+					resource "ceph_rgw_bucket" "test" {
+					  bucket = %q
+					  owner  = ceph_rgw_user.test.user_id
+					  depends_on = [ceph_rgw_s3_key.test]
+					}
+				`, testUID, testBucket),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWBucketExists(t, testBucket),
+				),
+			},
+			{
+				PreConfig: func() {
+					err := cephTestClusterCLI.RgwBucketRemove(t.Context(), testBucket, true)
+					if err != nil {
+						t.Fatalf("Failed to delete bucket out of band: %v", err)
+					}
+					t.Logf("Deleted bucket %s out of band", testBucket)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          testAccProviderConfigBlock,
+			},
+		},
+	})
+}

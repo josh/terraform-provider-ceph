@@ -1031,6 +1031,50 @@ func TestAccCephConfigResource_OutOfBandDeletion(t *testing.T) {
 	})
 }
 
+func TestAccCephConfigResource_OutOfBandDeletionDestroy(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testValue := acctest.RandIntRange(100, 999)
+	configName := "mon_max_pg_per_osd"
+	section := "global"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_config" "test" {
+						section = %q
+						config = {
+							%q = "%d"
+						}
+					}
+				`, section, configName, testValue),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephConfigExists(t, section, configName),
+				),
+			},
+			{
+				PreConfig: func() {
+					err := cephTestClusterCLI.ConfigRemove(t.Context(), section, configName)
+					if err != nil {
+						t.Fatalf("Failed to delete config out of band: %v", err)
+					}
+					t.Logf("Deleted config %s/%s out of band", section, configName)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          testAccProviderConfigBlock,
+			},
+		},
+	})
+}
+
 func testAccCheckCephConfigDestroy(t *testing.T) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		ctx := t.Context()
