@@ -343,7 +343,7 @@ func (r *PoolResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	if !data.CrushRule.IsNull() && !data.CrushRule.IsUnknown() {
 		v := data.CrushRule.ValueString()
-		createReq.CrushRule = &v
+		createReq.RuleName = &v
 	}
 
 	if !data.ErasureCodeProfile.IsNull() && !data.ErasureCodeProfile.IsUnknown() {
