@@ -668,6 +668,38 @@ func testAccPreCheckWaitForTasks(t *testing.T) {
 	}
 }
 
+func testAccPreCheckWaitForPGsActiveClean(t *testing.T) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	var lastInfo *PGStateInfo
+	for {
+		info, err := cephTestClusterCLI.PGStateInfo(ctx)
+		if err == nil {
+			lastInfo = info
+			if info.Total > 0 && info.ActiveClean == info.Total {
+				return
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			if lastInfo != nil {
+				t.Fatalf("Timeout waiting for PGs: %d/%d active+clean, unhealthy states: %v: %v",
+					lastInfo.ActiveClean, lastInfo.Total, lastInfo.ByState, ctx.Err())
+			}
+			t.Fatalf("Timeout waiting for PGs: %v", ctx.Err())
+		case <-ticker.C:
+			continue
+		}
+	}
+}
+
 func testAccPostCheckWaitForTasks(t *testing.T) {
 	t.Helper()
 
