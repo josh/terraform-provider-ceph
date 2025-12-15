@@ -33,7 +33,7 @@ var (
 	cephTestClusterCLI *CephCLI
 	testTimeout        = flag.Duration("timeout", 0, "test timeout")
 	cephDaemonLogs     *LogDemux
-	testNumOsds        = 5
+	testNumOsds        = 7
 )
 
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
