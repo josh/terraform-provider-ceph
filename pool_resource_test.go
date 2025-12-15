@@ -795,6 +795,69 @@ func TestAccCephPoolResource_InvalidPgAutoscaleMode(t *testing.T) {
 	})
 }
 
+func TestAccCephPoolResource_Autoscale(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-autoscale-no-pgnum")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: func(s *terraform.State) error {
+			if err := testAccCheckCephPoolDestroy(t)(s); err != nil {
+				return err
+			}
+			testAccPreCheckWaitForTasks(t)
+			return nil
+		},
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_pool" "test" {
+					  name              = %q
+					  pool_type         = "replicated"
+					  size              = 2
+					  pg_autoscale_mode = "on"
+
+					  timeouts = {
+					    create = "1m"
+					    update = "5m"
+					    delete = "1m"
+					  }
+					}
+				`, poolName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(poolName),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("pg_autoscale_mode"),
+						knownvalue.StringExact("on"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("pg_num"),
+						knownvalue.Null(),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephPoolExists(t, poolName),
+					checkCephPoolPgAutoscaleMode(t, poolName, "on"),
+					resource.TestCheckResourceAttr("ceph_pool.test", "pg_autoscale_mode", "on"),
+					resource.TestCheckNoResourceAttr("ceph_pool.test", "pg_num"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccCephPoolResource_ErasurePool(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()

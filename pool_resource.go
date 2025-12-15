@@ -225,7 +225,7 @@ func (r *PoolResource) updateModelFromAPI(ctx context.Context, data *PoolResourc
 		data.MinSize = types.Int64Null()
 	}
 
-	if pool.PGNum > 0 {
+	if pool.PGAutoscaleMode != "on" && pool.PGNum > 0 {
 		data.PgNum = types.Int64Value(int64(pool.PGNum))
 	} else {
 		data.PgNum = types.Int64Null()
@@ -334,6 +334,9 @@ func (r *PoolResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() {
 		v := int(data.PgNum.ValueInt64())
 		createReq.PgNum = &v
+	} else if !data.PgAutoscaleMode.IsNull() && !data.PgAutoscaleMode.IsUnknown() && data.PgAutoscaleMode.ValueString() == "on" {
+		defaultPgNum := 1
+		createReq.PgNum = &defaultPgNum
 	}
 
 	if !data.PgpNum.IsNull() && !data.PgpNum.IsUnknown() {
