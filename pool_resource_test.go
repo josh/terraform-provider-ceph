@@ -333,6 +333,25 @@ func checkCephPoolPgNum(t *testing.T, poolName string, expectedPgNum int64) reso
 	}
 }
 
+func checkPoolCrushRuleMatches(t *testing.T, poolName, expectedCrushRule string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		ctx := t.Context()
+
+		actualRule, err := cephTestClusterCLI.PoolGet(ctx, poolName, "crush_rule")
+		if err != nil {
+			return fmt.Errorf("failed to get pool crush_rule: %w", err)
+		}
+
+		if actualRule != expectedCrushRule {
+			return fmt.Errorf("pool crush_rule mismatch: expected %q, got %q",
+				expectedCrushRule, actualRule)
+		}
+
+		t.Logf("Pool %q correctly using crush rule %q", poolName, actualRule)
+		return nil
+	}
+}
+
 func testAccCheckCephPoolDestroy(t *testing.T) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		ctx := t.Context()
@@ -2109,6 +2128,67 @@ func TestAccCephPoolResource_OutOfBandDeletionDestroy(t *testing.T) {
 				},
 				ConfigVariables: testAccProviderConfig(),
 				Config:          testAccProviderConfigBlock,
+			},
+		},
+	})
+}
+
+func TestAccCephPoolResource_ErasureWithCustomCrushRule(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-ec-crush")
+	profileName := acctest.RandomWithPrefix("test-profile-ec")
+	crushRuleName := acctest.RandomWithPrefix("test-crush-rule-ec")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_erasure_code_profile" "test" {
+					  name = %q
+					  k    = 3
+					  m    = 2
+					}
+
+					resource "ceph_crush_rule" "test" {
+					  name       = %q
+					  pool_type  = "erasure"
+					  profile    = ceph_erasure_code_profile.test.name
+					  failure_domain = "osd"
+					}
+
+					resource "ceph_pool" "test" {
+					  name                 = %q
+					  pool_type            = "erasure"
+					  erasure_code_profile = ceph_erasure_code_profile.test.name
+					  crush_rule           = ceph_crush_rule.test.name
+					  pg_num               = 32
+					  pg_autoscale_mode    = "off"
+
+					  timeouts = {
+					    create = "1m"
+					    update = "5m"
+					    delete = "1m"
+					  }
+					}
+				`, profileName, crushRuleName, poolName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephPoolExists(t, poolName),
+					checkCephPoolErasureProperties(t, poolName, profileName),
+					checkPoolCrushRuleMatches(t, poolName, crushRuleName),
+					resource.TestCheckResourceAttr("ceph_pool.test", "name", poolName),
+					resource.TestCheckResourceAttr("ceph_pool.test", "pool_type", "erasure"),
+					resource.TestCheckResourceAttr("ceph_pool.test", "erasure_code_profile", profileName),
+					resource.TestCheckResourceAttr("ceph_pool.test", "crush_rule", crushRuleName),
+					resource.TestCheckResourceAttr("ceph_crush_rule.test", "name", crushRuleName),
+				),
 			},
 		},
 	})

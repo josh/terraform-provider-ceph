@@ -1595,7 +1595,7 @@ type CephAPIPoolCreateRequest struct {
 	PoolType                 *string  `json:"pool_type,omitempty"`
 	PgNum                    *int     `json:"pg_num,omitempty"`
 	PgpNum                   *int     `json:"pgp_num,omitempty"`
-	CrushRule                *string  `json:"crush_rule,omitempty"`
+	RuleName                 *string  `json:"rule_name,omitempty"`
 	ErasureCodeProfile       *string  `json:"erasure_code_profile,omitempty"`
 	ApplicationMetadata      []string `json:"application_metadata,omitempty"`
 	Flags                    []string `json:"flags,omitempty"`
