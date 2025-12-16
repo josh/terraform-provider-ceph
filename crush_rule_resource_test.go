@@ -60,11 +60,6 @@ func TestAccCephCrushRuleResource_replicated(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"ceph_crush_rule.test",
-						tfjsonpath.New("type"),
-						knownvalue.Int64Exact(1),
-					),
-					statecheck.ExpectKnownValue(
-						"ceph_crush_rule.test",
 						tfjsonpath.New("steps").AtSliceIndex(0).AtMapKey("op"),
 						knownvalue.StringExact("take"),
 					),
@@ -95,7 +90,6 @@ func TestAccCephCrushRuleResource_replicated(t *testing.T) {
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "pool_type", "replicated"),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "failure_domain", "host"),
 					resource.TestCheckResourceAttrSet("ceph_crush_rule.test", "rule_id"),
-					resource.TestCheckResourceAttr("ceph_crush_rule.test", "type", "1"),
 				),
 			},
 			{
@@ -170,11 +164,6 @@ func TestAccCephCrushRuleResource_erasure(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"ceph_crush_rule.test",
-						tfjsonpath.New("type"),
-						knownvalue.Int64Exact(3),
-					),
-					statecheck.ExpectKnownValue(
-						"ceph_crush_rule.test",
 						tfjsonpath.New("steps").AtSliceIndex(0).AtMapKey("op"),
 						knownvalue.StringExact("set_chooseleaf_tries"),
 					),
@@ -223,7 +212,6 @@ func TestAccCephCrushRuleResource_erasure(t *testing.T) {
 					checkCephCrushRuleExists(t, ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "name", ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "pool_type", "erasure"),
-					resource.TestCheckResourceAttr("ceph_crush_rule.test", "type", "3"),
 				),
 			},
 			{
@@ -482,7 +470,6 @@ func TestAccCephCrushRuleResource_ReplacementOnPoolTypeChange(t *testing.T) {
 					checkCephCrushRuleExists(t, ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "name", ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "pool_type", "replicated"),
-					resource.TestCheckResourceAttr("ceph_crush_rule.test", "type", "1"),
 				),
 			},
 			{
@@ -511,7 +498,6 @@ func TestAccCephCrushRuleResource_ReplacementOnPoolTypeChange(t *testing.T) {
 					checkCephCrushRuleExists(t, ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "name", ruleName),
 					resource.TestCheckResourceAttr("ceph_crush_rule.test", "pool_type", "erasure"),
-					resource.TestCheckResourceAttr("ceph_crush_rule.test", "type", "3"),
 				),
 			},
 			{

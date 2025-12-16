@@ -41,7 +41,6 @@ type CrushRuleResourceModel struct {
 	Root          types.String `tfsdk:"root"`
 	RuleID        types.Int64  `tfsdk:"rule_id"`
 	Ruleset       types.Int64  `tfsdk:"ruleset"`
-	Type          types.Int64  `tfsdk:"type"`
 	MinSize       types.Int64  `tfsdk:"min_size"`
 	MaxSize       types.Int64  `tfsdk:"max_size"`
 	Steps         types.List   `tfsdk:"steps"`
@@ -113,13 +112,6 @@ func (r *CrushRuleResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 			"ruleset": resourceSchema.Int64Attribute{
 				MarkdownDescription: "The ruleset number (computed by Ceph).",
-				Computed:            true,
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.UseStateForUnknown(),
-				},
-			},
-			"type": resourceSchema.Int64Attribute{
-				MarkdownDescription: "The type code of the rule: 1 for replicated, 3 for erasure coded (computed by Ceph).",
 				Computed:            true,
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
@@ -309,9 +301,17 @@ func (r *CrushRuleResource) updateModelFromAPI(data *CrushRuleResourceModel, rul
 
 	data.RuleID = types.Int64Value(int64(rule.RuleID))
 	data.Ruleset = types.Int64Value(int64(rule.Ruleset))
-	data.Type = types.Int64Value(int64(rule.Type))
 	data.MinSize = types.Int64Value(int64(rule.MinSize))
 	data.MaxSize = types.Int64Value(int64(rule.MaxSize))
+
+	switch rule.Type {
+	case 1:
+		data.PoolType = types.StringValue("replicated")
+	case 3:
+		data.PoolType = types.StringValue("erasure")
+	default:
+		data.PoolType = types.StringUnknown()
+	}
 
 	stepsObjects := make([]attr.Value, 0, len(rule.Steps))
 	for _, step := range rule.Steps {
