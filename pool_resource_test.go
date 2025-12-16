@@ -26,6 +26,7 @@ func TestAccCephPoolResource(t *testing.T) {
 		CheckDestroy:             testAccCheckCephPoolDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -1720,6 +1721,7 @@ func TestAccCephPoolResource_SizeRequiresReplace(t *testing.T) {
 		CheckDestroy:             testAccCheckCephPoolDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -1804,6 +1806,7 @@ func TestAccCephPoolResource_CrushRuleRequiresReplace(t *testing.T) {
 		CheckDestroy:             testAccCheckCephPoolDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -1905,6 +1908,7 @@ func TestAccCephPoolResource_ErasurePoolLifecycle(t *testing.T) {
 		CheckDestroy:             testAccCheckCephPoolDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -2002,6 +2006,7 @@ func TestAccCephPoolResource_DriftDetection(t *testing.T) {
 		CheckDestroy:             testAccCheckCephPoolDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -2082,6 +2087,7 @@ func TestAccCephPoolResource_OutOfBandDeletion(t *testing.T) {
 		CheckDestroy:             testAccCheckCephPoolDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -2156,6 +2162,7 @@ func TestAccCephPoolResource_OutOfBandDeletionDestroy(t *testing.T) {
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
 		},
 		CheckDestroy: testAccCheckCephPoolDestroy(t),
 		Steps: []resource.TestStep{
@@ -2211,6 +2218,7 @@ func TestAccCephPoolResource_ErasureWithCustomCrushRule(t *testing.T) {
 		CheckDestroy:             testAccCheckCephPoolDestroy(t),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
 		},
 		Steps: []resource.TestStep{
 			{

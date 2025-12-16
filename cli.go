@@ -924,6 +924,21 @@ func (c *CephCLI) ConfigDump(ctx context.Context) ([]ConfigDumpEntry, error) {
 	return entries, nil
 }
 
+type PGStateCount struct {
+	Name string `json:"name"`
+	Num  int    `json:"num"`
+}
+
+type PGSummary struct {
+	NumPGByState []PGStateCount `json:"num_pg_by_state"`
+	NumPGs       int            `json:"num_pgs"`
+}
+
+type PGStat struct {
+	PGReady   bool      `json:"pg_ready"`
+	PGSummary PGSummary `json:"pg_summary"`
+}
+
 type ProgressEvent struct {
 	Message  string  `json:"message"`
 	Progress float64 `json:"progress"`
@@ -947,3 +962,49 @@ func (c *CephCLI) ProgressJSON(ctx context.Context) (*ProgressJSON, error) {
 
 	return &progress, nil
 }
+
+func (c *CephCLI) PGStat(ctx context.Context) (*PGStat, error) {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "pg", "stat", "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pg stat: %w", err)
+	}
+
+	var stat PGStat
+	if err := json.Unmarshal(output, &stat); err != nil {
+		return nil, fmt.Errorf("failed to parse pg stat: %w", err)
+	}
+
+	return &stat, nil
+}
+
+type PGStateInfo struct {
+	Total       int
+	ActiveClean int
+	Unhealthy   int
+	ByState     map[string]int
+}
+
+func (c *CephCLI) PGStateInfo(ctx context.Context) (*PGStateInfo, error) {
+	stat, err := c.PGStat(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	info := &PGStateInfo{
+		Total:   stat.PGSummary.NumPGs,
+		ByState: make(map[string]int),
+	}
+
+	for _, s := range stat.PGSummary.NumPGByState {
+		info.ByState[s.Name] = s.Num
+		if s.Name == "active+clean" {
+			info.ActiveClean = s.Num
+		} else {
+			info.Unhealthy += s.Num
+		}
+	}
+
+	return info, nil
+}
+
