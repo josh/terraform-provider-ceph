@@ -454,3 +454,92 @@ func TestAccCephCrushRuleResource_OutOfBandDeletionDestroy(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephCrushRuleResource_ReplacementOnPoolTypeChange(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	ruleName := fmt.Sprintf("test-replacement-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	profileName := fmt.Sprintf("test-profile-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephCrushRuleDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_crush_rule" "test" {
+						name           = %q
+						pool_type      = "replicated"
+						failure_domain = "host"
+					}
+				`, ruleName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephCrushRuleExists(t, ruleName),
+					resource.TestCheckResourceAttr("ceph_crush_rule.test", "name", ruleName),
+					resource.TestCheckResourceAttr("ceph_crush_rule.test", "pool_type", "replicated"),
+					resource.TestCheckResourceAttr("ceph_crush_rule.test", "type", "1"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					# Create erasure code profile first
+					resource "ceph_erasure_code_profile" "test" {
+						name = %q
+						k    = 2
+						m    = 1
+					}
+
+					resource "ceph_crush_rule" "test" {
+						name           = %q
+						pool_type      = "erasure"
+						failure_domain = "osd"
+						profile        = ceph_erasure_code_profile.test.name
+					}
+				`, profileName, ruleName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_crush_rule.test", plancheck.ResourceActionDestroyBeforeCreate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephCrushRuleExists(t, ruleName),
+					resource.TestCheckResourceAttr("ceph_crush_rule.test", "name", ruleName),
+					resource.TestCheckResourceAttr("ceph_crush_rule.test", "pool_type", "erasure"),
+					resource.TestCheckResourceAttr("ceph_crush_rule.test", "type", "3"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_erasure_code_profile" "test" {
+						name = %q
+						k    = 2
+						m    = 1
+					}
+
+					resource "ceph_crush_rule" "test" {
+						name           = %q
+						pool_type      = "erasure"
+						failure_domain = "rack"
+						profile        = ceph_erasure_code_profile.test.name
+					}
+				`, profileName, ruleName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_crush_rule.test", plancheck.ResourceActionDestroyBeforeCreate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephCrushRuleExists(t, ruleName),
+					resource.TestCheckResourceAttr("ceph_crush_rule.test", "failure_domain", "rack"),
+				),
+			},
+		},
+	})
+}
