@@ -2197,8 +2197,6 @@ func TestAccCephPoolResource_OutOfBandDeletionDestroy(t *testing.T) {
 }
 
 func TestAccCephPoolResource_ErasureWithCustomCrushRule(t *testing.T) {
-	t.Skip("Flaky in CI, skipping for now")
-
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
@@ -2217,9 +2215,10 @@ func TestAccCephPoolResource_ErasureWithCustomCrushRule(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_erasure_code_profile" "test" {
-					  name = %q
-					  k    = 3
-					  m    = 2
+					  name                 = %q
+					  k                    = 3
+					  m                    = 2
+					  crush_failure_domain = "osd"
 					}
 
 					resource "ceph_crush_rule" "test" {
