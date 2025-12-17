@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"testing"
@@ -18,6 +17,7 @@ func TestAccCephPoolDataSource(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCleanupPool(t, poolName),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
 
@@ -28,12 +28,6 @@ func TestAccCephPoolDataSource(t *testing.T) {
 			if err := cephTestClusterCLI.PoolSet(t.Context(), poolName, "pg_autoscale_mode", "off"); err != nil {
 				t.Fatalf("Failed to disable autoscaler: %v", err)
 			}
-
-			testCleanup(t, func(ctx context.Context) {
-				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
-					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
-				}
-			})
 		},
 		Steps: []resource.TestStep{
 			{
@@ -87,6 +81,10 @@ func TestAccCephPoolDataSource_erasureCoded(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: resource.ComposeAggregateTestCheckFunc(
+			testAccCleanupPool(t, poolName),
+			testAccCleanupCrushRule(t, poolName),
+		),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
 
@@ -97,12 +95,6 @@ func TestAccCephPoolDataSource_erasureCoded(t *testing.T) {
 			if err := cephTestClusterCLI.PoolSet(t.Context(), poolName, "pg_autoscale_mode", "off"); err != nil {
 				t.Fatalf("Failed to disable autoscaler: %v", err)
 			}
-
-			testCleanup(t, func(ctx context.Context) {
-				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
-					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
-				}
-			})
 		},
 		Steps: []resource.TestStep{
 			{
@@ -145,6 +137,7 @@ func TestAccCephPoolDataSource_withApplication(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCleanupPool(t, poolName),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
 
@@ -159,12 +152,6 @@ func TestAccCephPoolDataSource_withApplication(t *testing.T) {
 			if err := cephTestClusterCLI.PoolApplicationEnable(t.Context(), poolName, "rbd"); err != nil {
 				t.Fatalf("Failed to enable application: %v", err)
 			}
-
-			testCleanup(t, func(ctx context.Context) {
-				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
-					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
-				}
-			})
 		},
 		Steps: []resource.TestStep{
 			{
@@ -208,6 +195,7 @@ func TestAccCephPoolDataSource_compression(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCleanupPool(t, poolName),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
 
@@ -230,12 +218,6 @@ func TestAccCephPoolDataSource_compression(t *testing.T) {
 			if err := cephTestClusterCLI.PoolSet(t.Context(), poolName, "compression_required_ratio", "0.875"); err != nil {
 				t.Fatalf("Failed to set compression required ratio: %v", err)
 			}
-
-			testCleanup(t, func(ctx context.Context) {
-				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
-					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
-				}
-			})
 		},
 		Steps: []resource.TestStep{
 			{
@@ -284,6 +266,7 @@ func TestAccCephPoolDataSource_configurationChanges(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCleanupPool(t, poolName),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
 
@@ -294,12 +277,6 @@ func TestAccCephPoolDataSource_configurationChanges(t *testing.T) {
 			if err := cephTestClusterCLI.PoolSet(t.Context(), poolName, "pg_autoscale_mode", "off"); err != nil {
 				t.Fatalf("Failed to disable autoscaler: %v", err)
 			}
-
-			testCleanup(t, func(ctx context.Context) {
-				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
-					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
-				}
-			})
 		},
 		Steps: []resource.TestStep{
 			{
@@ -373,6 +350,7 @@ func TestAccCephPoolDataSource_customPGCount(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCleanupPool(t, poolName),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
 
@@ -383,12 +361,6 @@ func TestAccCephPoolDataSource_customPGCount(t *testing.T) {
 			if err := cephTestClusterCLI.PoolSet(t.Context(), poolName, "pg_autoscale_mode", "off"); err != nil {
 				t.Fatalf("Failed to disable autoscaler: %v", err)
 			}
-
-			testCleanup(t, func(ctx context.Context) {
-				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
-					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
-				}
-			})
 		},
 		Steps: []resource.TestStep{
 			{
@@ -423,6 +395,7 @@ func TestAccCephPoolDataSource_quota(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCleanupPool(t, poolName),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
 
@@ -441,12 +414,6 @@ func TestAccCephPoolDataSource_quota(t *testing.T) {
 			if err := cephTestClusterCLI.PoolSetQuota(t.Context(), poolName, "max_bytes", 1073741824); err != nil {
 				t.Fatalf("Failed to set quota max bytes: %v", err)
 			}
-
-			testCleanup(t, func(ctx context.Context) {
-				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
-					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
-				}
-			})
 		},
 		Steps: []resource.TestStep{
 			{
@@ -490,6 +457,7 @@ func TestAccCephPoolDataSource_autoscaler(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCleanupPool(t, poolName),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
 
@@ -500,12 +468,6 @@ func TestAccCephPoolDataSource_autoscaler(t *testing.T) {
 			if err := cephTestClusterCLI.PoolSet(t.Context(), poolName, "pg_autoscale_mode", "on"); err != nil {
 				t.Fatalf("Failed to set autoscale mode: %v", err)
 			}
-
-			testCleanup(t, func(ctx context.Context) {
-				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
-					t.Errorf("Failed to cleanup pool %s: %v", poolName, err)
-				}
-			})
 		},
 		Steps: []resource.TestStep{
 			{

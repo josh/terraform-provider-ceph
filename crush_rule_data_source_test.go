@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -20,18 +19,13 @@ func TestAccCephCrushRuleDataSource_replicated(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCleanupCrushRule(t, ruleName),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
 			if err := cephTestClusterCLI.CrushRuleCreateReplicated(t.Context(), ruleName, "default", "host"); err != nil {
 				t.Fatalf("Failed to create replicated crush rule: %v", err)
 			}
-
-			testCleanup(t, func(ctx context.Context) {
-				if err := cephTestClusterCLI.CrushRuleRemove(ctx, ruleName); err != nil {
-					t.Errorf("Failed to cleanup crush rule %s: %v", ruleName, err)
-				}
-			})
 		},
 		Steps: []resource.TestStep{
 			{
@@ -96,18 +90,13 @@ func TestAccCephCrushRuleDataSource_simple(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCleanupCrushRule(t, ruleName),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
 			if err := cephTestClusterCLI.CrushRuleCreateSimple(t.Context(), ruleName, "default", "host"); err != nil {
 				t.Fatalf("Failed to create simple crush rule: %v", err)
 			}
-
-			testCleanup(t, func(ctx context.Context) {
-				if err := cephTestClusterCLI.CrushRuleRemove(ctx, ruleName); err != nil {
-					t.Errorf("Failed to cleanup crush rule %s: %v", ruleName, err)
-				}
-			})
 		},
 		Steps: []resource.TestStep{
 			{
@@ -173,6 +162,10 @@ func TestAccCephCrushRuleDataSource_erasure(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: resource.ComposeAggregateTestCheckFunc(
+			testAccCleanupCrushRule(t, ruleName),
+			testAccCleanupErasureCodeProfile(t, profileName),
+		),
 		PreCheck: func() {
 			testAccPreCheckCephHealth(t)
 
@@ -187,15 +180,6 @@ func TestAccCephCrushRuleDataSource_erasure(t *testing.T) {
 			if err := cephTestClusterCLI.CrushRuleCreateErasure(t.Context(), ruleName, profileName); err != nil {
 				t.Fatalf("Failed to create erasure crush rule: %v", err)
 			}
-
-			testCleanup(t, func(ctx context.Context) {
-				if err := cephTestClusterCLI.CrushRuleRemove(ctx, ruleName); err != nil {
-					t.Errorf("Failed to cleanup crush rule %s: %v", ruleName, err)
-				}
-				if err := cephTestClusterCLI.ErasureCodeProfileRemove(ctx, profileName); err != nil {
-					t.Errorf("Failed to cleanup erasure code profile %s: %v", profileName, err)
-				}
-			})
 		},
 		Steps: []resource.TestStep{
 			{

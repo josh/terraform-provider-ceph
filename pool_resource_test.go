@@ -380,6 +380,15 @@ func testAccCheckCephPoolDestroy(t *testing.T) resource.TestCheckFunc {
 	}
 }
 
+func testAccCleanupPool(t *testing.T, poolName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		if err := cephTestClusterCLI.PoolDelete(t.Context(), poolName); err != nil {
+			return fmt.Errorf("failed to cleanup pool %s: %w", poolName, err)
+		}
+		return nil
+	}
+}
+
 func TestAccCephPoolResource_InvalidPoolType(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -867,7 +876,10 @@ func TestAccCephPoolResource_ErasurePool(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		CheckDestroy: resource.ComposeAggregateTestCheckFunc(
+			testAccCheckCephPoolDestroy(t),
+			testAccCleanupCrushRule(t, poolName),
+		),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
 		},
@@ -973,7 +985,10 @@ func TestAccCephPoolResource_ErasureWithoutProfile(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		CheckDestroy: resource.ComposeAggregateTestCheckFunc(
+			testAccCheckCephPoolDestroy(t),
+			testAccCleanupCrushRule(t, poolName),
+		),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
 		},
@@ -1905,7 +1920,10 @@ func TestAccCephPoolResource_ErasurePoolLifecycle(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
-		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		CheckDestroy: resource.ComposeAggregateTestCheckFunc(
+			testAccCheckCephPoolDestroy(t),
+			testAccCleanupCrushRule(t, poolName),
+		),
 		PreCheck: func() {
 			testAccPreCheckWaitForTasks(t)
 			testAccPreCheckWaitForPGsActiveClean(t)

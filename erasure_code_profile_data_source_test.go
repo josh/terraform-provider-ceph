@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -20,6 +19,7 @@ func TestAccCephErasureCodeProfileDataSource_k2m1(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCleanupErasureCodeProfile(t, profileName),
 		PreCheck: func() {
 			if err := cephTestClusterCLI.ErasureCodeProfileSet(t.Context(), profileName, map[string]string{
 				"k":                    "2",
@@ -28,12 +28,6 @@ func TestAccCephErasureCodeProfileDataSource_k2m1(t *testing.T) {
 			}); err != nil {
 				t.Fatalf("Failed to create erasure code profile: %v", err)
 			}
-
-			testCleanup(t, func(ctx context.Context) {
-				if err := cephTestClusterCLI.ErasureCodeProfileRemove(ctx, profileName); err != nil {
-					t.Errorf("Failed to cleanup erasure code profile %s: %v", profileName, err)
-				}
-			})
 		},
 		Steps: []resource.TestStep{
 			{
@@ -83,6 +77,7 @@ func TestAccCephErasureCodeProfileDataSource_k3m2(t *testing.T) {
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCleanupErasureCodeProfile(t, profileName),
 		PreCheck: func() {
 			if err := cephTestClusterCLI.ErasureCodeProfileSet(t.Context(), profileName, map[string]string{
 				"k":                    "3",
@@ -91,12 +86,6 @@ func TestAccCephErasureCodeProfileDataSource_k3m2(t *testing.T) {
 			}); err != nil {
 				t.Fatalf("Failed to create erasure code profile: %v", err)
 			}
-
-			testCleanup(t, func(ctx context.Context) {
-				if err := cephTestClusterCLI.ErasureCodeProfileRemove(ctx, profileName); err != nil {
-					t.Errorf("Failed to cleanup erasure code profile %s: %v", profileName, err)
-				}
-			})
 		},
 		Steps: []resource.TestStep{
 			{

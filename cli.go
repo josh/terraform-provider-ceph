@@ -1007,4 +1007,3 @@ func (c *CephCLI) PGStateInfo(ctx context.Context) (*PGStateInfo, error) {
 
 	return info, nil
 }
-

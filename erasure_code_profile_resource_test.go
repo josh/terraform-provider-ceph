@@ -283,6 +283,15 @@ func testAccCheckCephErasureCodeProfileDestroy(t *testing.T) resource.TestCheckF
 	}
 }
 
+func testAccCleanupErasureCodeProfile(t *testing.T, profileName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		if err := cephTestClusterCLI.ErasureCodeProfileRemove(t.Context(), profileName); err != nil {
+			return fmt.Errorf("failed to cleanup erasure code profile %s: %w", profileName, err)
+		}
+		return nil
+	}
+}
+
 func TestAccCephErasureCodeProfileResource_invalidK(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
