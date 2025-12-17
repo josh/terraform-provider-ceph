@@ -345,6 +345,15 @@ func testAccCheckCephCrushRuleDestroy(t *testing.T) resource.TestCheckFunc {
 	}
 }
 
+func testAccCleanupCrushRule(t *testing.T, ruleName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		if err := cephTestClusterCLI.CrushRuleRemove(t.Context(), ruleName); err != nil {
+			return fmt.Errorf("failed to cleanup crush rule %s: %w", ruleName, err)
+		}
+		return nil
+	}
+}
+
 func TestAccCephCrushRuleResource_OutOfBandDeletion(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
