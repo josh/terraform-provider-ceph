@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	version string = "0.4.3"
+	version string = "0.4.4"
 )
 
 func main() {
@@ -17,7 +17,6 @@ func main() {
 	}
 
 	err := providerserver.Serve(context.Background(), providerFunc, opts)
-
 	if err != nil {
 		log.Fatal(err.Error())
 	}
