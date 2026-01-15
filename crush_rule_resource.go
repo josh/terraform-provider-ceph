@@ -185,6 +185,27 @@ func (r *CrushRuleResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
+	if data.PoolType.ValueString() == "erasure" && !data.Profile.IsNull() && !data.Profile.IsUnknown() {
+		profile, err := r.client.GetErasureCodeProfile(ctx, data.Profile.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddWarning(
+				"Unable to Validate Erasure Code Profile",
+				fmt.Sprintf("Could not read erasure code profile '%s' to validate failure_domain: %s", data.Profile.ValueString(), err),
+			)
+		} else if profile.CrushFailureDomain != data.FailureDomain.ValueString() {
+			resp.Diagnostics.AddError(
+				"Failure Domain Mismatch",
+				fmt.Sprintf(
+					"The crush rule's failure_domain (%q) must match the erasure code profile's crush_failure_domain (%q). "+
+						"Ceph ignores the crush rule's failure_domain for erasure pools, using the profile's setting instead.",
+					data.FailureDomain.ValueString(),
+					profile.CrushFailureDomain,
+				),
+			)
+			return
+		}
+	}
+
 	createReq := CephAPICrushRuleCreateRequest{
 		Name:          data.Name.ValueString(),
 		PoolType:      data.PoolType.ValueString(),
