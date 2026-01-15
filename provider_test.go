@@ -816,7 +816,7 @@ func TestAccProvider_missingAuthentication(t *testing.T) {
 					  entity = "client.admin"
 					}
 				`,
-				ExpectError: regexp.MustCompile(`(?i)either token or both username and password must be configured`),
+				ExpectError: regexp.MustCompile(`(?i)either token, jwt_secret, or both username and password must be configured`),
 			},
 		},
 	})
@@ -941,7 +941,7 @@ func TestAccProvider_tokenAuthentication(t *testing.T) {
 				t.Fatalf("Failed to parse test dashboard URL: %v", err)
 			}
 
-			if err := client.Configure(t.Context(), []*url.URL{endpoint}, "admin", "password", ""); err != nil {
+			if err := client.Configure(t.Context(), []*url.URL{endpoint}, "admin", "password", "", "", "", time.Hour); err != nil {
 				t.Fatalf("Failed to configure client: %v", err)
 			}
 
@@ -967,6 +967,108 @@ func TestAccProvider_tokenAuthentication(t *testing.T) {
 					provider "ceph" {
 					  endpoint = var.endpoint
 					  token    = var.token
+					}
+
+					data "ceph_auth" "test" {
+					  entity = "client.admin"
+					}
+				`,
+			},
+		},
+	})
+}
+
+func TestAccProvider_jwtSecretAuthentication(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			client := &CephAPIClient{}
+			endpoint, err := url.Parse(testDashboardURL)
+			if err != nil {
+				t.Fatalf("Failed to parse test dashboard URL: %v", err)
+			}
+			if err := client.Configure(t.Context(), []*url.URL{endpoint}, "admin", "password", "", "", "", time.Hour); err != nil {
+				t.Fatalf("Failed to configure client: %v", err)
+			}
+
+			jwtSecret, err := cephTestClusterCLI.ConfigKeyGet(t.Context(), "mgr/dashboard/jwt_secret")
+			if err != nil {
+				t.Fatalf("Failed to get JWT secret: %v", err)
+			}
+
+			t.Setenv("TF_VAR_endpoint", testDashboardURL)
+			t.Setenv("TF_VAR_jwt_secret", jwtSecret)
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: `
+					variable "endpoint" {
+					  type = string
+					}
+
+					variable "jwt_secret" {
+					  type      = string
+					  sensitive = true
+					}
+
+					provider "ceph" {
+					  endpoint   = var.endpoint
+					  jwt_secret = var.jwt_secret
+					}
+
+					data "ceph_auth" "test" {
+					  entity = "client.admin"
+					}
+				`,
+			},
+		},
+	})
+}
+
+func TestAccProvider_jwtSecretAuthenticationWithCustomUsername(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			client := &CephAPIClient{}
+			endpoint, err := url.Parse(testDashboardURL)
+			if err != nil {
+				t.Fatalf("Failed to parse test dashboard URL: %v", err)
+			}
+			if err := client.Configure(t.Context(), []*url.URL{endpoint}, "admin", "password", "", "", "", time.Hour); err != nil {
+				t.Fatalf("Failed to configure client: %v", err)
+			}
+
+			jwtSecret, err := cephTestClusterCLI.ConfigKeyGet(t.Context(), "mgr/dashboard/jwt_secret")
+			if err != nil {
+				t.Fatalf("Failed to get JWT secret: %v", err)
+			}
+
+			t.Setenv("TF_VAR_endpoint", testDashboardURL)
+			t.Setenv("TF_VAR_jwt_secret", jwtSecret)
+		},
+		Steps: []resource.TestStep{
+			{
+				Config: `
+					variable "endpoint" {
+					  type = string
+					}
+
+					variable "jwt_secret" {
+					  type      = string
+					  sensitive = true
+					}
+
+					provider "ceph" {
+					  endpoint         = var.endpoint
+					  jwt_secret       = var.jwt_secret
+					  jwt_username     = "admin"
+					  jwt_token_expiry = "30m"
 					}
 
 					data "ceph_auth" "test" {
