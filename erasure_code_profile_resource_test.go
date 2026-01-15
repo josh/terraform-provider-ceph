@@ -500,3 +500,66 @@ func TestAccCephErasureCodeProfileResource_OutOfBandDeletionDestroy(t *testing.T
 		},
 	})
 }
+
+func TestAccCephErasureCodeProfileResource_FailureDomainParams(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	profileName := acctest.RandomWithPrefix("test-ec-profile")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephErasureCodeProfileDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_erasure_code_profile" "test" {
+					  name                          = %q
+					  k                             = 2
+					  m                             = 1
+					  crush_failure_domain          = "osd"
+					  crush_num_failure_domains     = 3
+					  crush_osds_per_failure_domain = 1
+					}
+				`, profileName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_erasure_code_profile.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(profileName),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_erasure_code_profile.test",
+						tfjsonpath.New("k"),
+						knownvalue.Int64Exact(2),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_erasure_code_profile.test",
+						tfjsonpath.New("m"),
+						knownvalue.Int64Exact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_erasure_code_profile.test",
+						tfjsonpath.New("crush_num_failure_domains"),
+						knownvalue.Int64Exact(3),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_erasure_code_profile.test",
+						tfjsonpath.New("crush_osds_per_failure_domain"),
+						knownvalue.Int64Exact(1),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephErasureCodeProfileExists(t, profileName),
+					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "name", profileName),
+					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "crush_num_failure_domains", "3"),
+					resource.TestCheckResourceAttr("ceph_erasure_code_profile.test", "crush_osds_per_failure_domain", "1"),
+				),
+			},
+		},
+	})
+}

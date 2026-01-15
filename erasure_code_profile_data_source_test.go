@@ -126,3 +126,68 @@ func TestAccCephErasureCodeProfileDataSource_k3m2(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephErasureCodeProfileDataSource_FailureDomainParams(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	profileName := acctest.RandomWithPrefix("test-ec-profile")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCleanupErasureCodeProfile(t, profileName),
+		PreCheck: func() {
+			if err := cephTestClusterCLI.ErasureCodeProfileSet(t.Context(), profileName, map[string]string{
+				"k":                             "2",
+				"m":                             "1",
+				"crush-failure-domain":          "osd",
+				"crush-num-failure-domains":     "3",
+				"crush-osds-per-failure-domain": "1",
+			}); err != nil {
+				t.Fatalf("Failed to create erasure code profile: %v", err)
+			}
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					data "ceph_erasure_code_profile" "test" {
+						name = %q
+					}
+				`, profileName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"data.ceph_erasure_code_profile.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(profileName),
+					),
+					statecheck.ExpectKnownValue(
+						"data.ceph_erasure_code_profile.test",
+						tfjsonpath.New("k"),
+						knownvalue.Int64Exact(2),
+					),
+					statecheck.ExpectKnownValue(
+						"data.ceph_erasure_code_profile.test",
+						tfjsonpath.New("m"),
+						knownvalue.Int64Exact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"data.ceph_erasure_code_profile.test",
+						tfjsonpath.New("crush_failure_domain"),
+						knownvalue.StringExact("osd"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.ceph_erasure_code_profile.test",
+						tfjsonpath.New("crush_num_failure_domains"),
+						knownvalue.Int64Exact(3),
+					),
+					statecheck.ExpectKnownValue(
+						"data.ceph_erasure_code_profile.test",
+						tfjsonpath.New("crush_osds_per_failure_domain"),
+						knownvalue.Int64Exact(1),
+					),
+				},
+			},
+		},
+	})
+}

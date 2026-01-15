@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -20,15 +21,17 @@ type ErasureCodeProfileDataSource struct {
 }
 
 type ErasureCodeProfileDataSourceModel struct {
-	Name               types.String `tfsdk:"name"`
-	K                  types.Int64  `tfsdk:"k"`
-	M                  types.Int64  `tfsdk:"m"`
-	Plugin             types.String `tfsdk:"plugin"`
-	CrushFailureDomain types.String `tfsdk:"crush_failure_domain"`
-	Technique          types.String `tfsdk:"technique"`
-	CrushRoot          types.String `tfsdk:"crush_root"`
-	CrushDeviceClass   types.String `tfsdk:"crush_device_class"`
-	Directory          types.String `tfsdk:"directory"`
+	Name                      types.String `tfsdk:"name"`
+	K                         types.Int64  `tfsdk:"k"`
+	M                         types.Int64  `tfsdk:"m"`
+	Plugin                    types.String `tfsdk:"plugin"`
+	CrushFailureDomain        types.String `tfsdk:"crush_failure_domain"`
+	CrushNumFailureDomains    types.Int64  `tfsdk:"crush_num_failure_domains"`
+	CrushOSDsPerFailureDomain types.Int64  `tfsdk:"crush_osds_per_failure_domain"`
+	Technique                 types.String `tfsdk:"technique"`
+	CrushRoot                 types.String `tfsdk:"crush_root"`
+	CrushDeviceClass          types.String `tfsdk:"crush_device_class"`
+	Directory                 types.String `tfsdk:"directory"`
 }
 
 func (d *ErasureCodeProfileDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -57,6 +60,14 @@ func (d *ErasureCodeProfileDataSource) Schema(ctx context.Context, req datasourc
 			},
 			"crush_failure_domain": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The CRUSH failure domain for placement",
+				Computed:            true,
+			},
+			"crush_num_failure_domains": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "The number of failure domains across which the chunks are distributed",
+				Computed:            true,
+			},
+			"crush_osds_per_failure_domain": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "The number of OSDs used per failure domain",
 				Computed:            true,
 			},
 			"technique": dataSourceSchema.StringAttribute{
@@ -121,6 +132,24 @@ func (d *ErasureCodeProfileDataSource) Read(ctx context.Context, req datasource.
 	data.M = types.Int64Value(int64(profile.M))
 	data.Plugin = types.StringValue(profile.Plugin)
 	data.CrushFailureDomain = types.StringValue(profile.CrushFailureDomain)
+	if profile.CrushNumFailureDomains != "" {
+		if val, err := strconv.ParseInt(profile.CrushNumFailureDomains, 10, 64); err == nil {
+			data.CrushNumFailureDomains = types.Int64Value(val)
+		} else {
+			data.CrushNumFailureDomains = types.Int64Null()
+		}
+	} else {
+		data.CrushNumFailureDomains = types.Int64Null()
+	}
+	if profile.CrushOSDsPerFailureDomain != "" {
+		if val, err := strconv.ParseInt(profile.CrushOSDsPerFailureDomain, 10, 64); err == nil {
+			data.CrushOSDsPerFailureDomain = types.Int64Value(val)
+		} else {
+			data.CrushOSDsPerFailureDomain = types.Int64Null()
+		}
+	} else {
+		data.CrushOSDsPerFailureDomain = types.Int64Null()
+	}
 	if profile.Technique != "" {
 		data.Technique = types.StringValue(profile.Technique)
 	} else {

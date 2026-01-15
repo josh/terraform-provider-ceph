@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -32,15 +33,17 @@ type ErasureCodeProfileResource struct {
 }
 
 type ErasureCodeProfileResourceModel struct {
-	Name               types.String `tfsdk:"name"`
-	K                  types.Int64  `tfsdk:"k"`
-	M                  types.Int64  `tfsdk:"m"`
-	Plugin             types.String `tfsdk:"plugin"`
-	CrushFailureDomain types.String `tfsdk:"crush_failure_domain"`
-	Technique          types.String `tfsdk:"technique"`
-	CrushRoot          types.String `tfsdk:"crush_root"`
-	CrushDeviceClass   types.String `tfsdk:"crush_device_class"`
-	Directory          types.String `tfsdk:"directory"`
+	Name                      types.String `tfsdk:"name"`
+	K                         types.Int64  `tfsdk:"k"`
+	M                         types.Int64  `tfsdk:"m"`
+	Plugin                    types.String `tfsdk:"plugin"`
+	CrushFailureDomain        types.String `tfsdk:"crush_failure_domain"`
+	CrushNumFailureDomains    types.Int64  `tfsdk:"crush_num_failure_domains"`
+	CrushOSDsPerFailureDomain types.Int64  `tfsdk:"crush_osds_per_failure_domain"`
+	Technique                 types.String `tfsdk:"technique"`
+	CrushRoot                 types.String `tfsdk:"crush_root"`
+	CrushDeviceClass          types.String `tfsdk:"crush_device_class"`
+	Directory                 types.String `tfsdk:"directory"`
 }
 
 type erasureCodeKMValidator struct{}
@@ -150,6 +153,24 @@ func (r *ErasureCodeProfileResource) Schema(ctx context.Context, req resource.Sc
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"crush_num_failure_domains": resourceSchema.Int64Attribute{
+				MarkdownDescription: "The number of failure domains across which the chunks should be distributed. Used with 'crush_osds_per_failure_domain' for fine-grained placement control.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"crush_osds_per_failure_domain": resourceSchema.Int64Attribute{
+				MarkdownDescription: "The number of OSDs to use per failure domain. Used with 'crush_num_failure_domains' for fine-grained placement control.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
 			"technique": resourceSchema.StringAttribute{
 				MarkdownDescription: "The encoding technique used by the plugin (e.g., 'reed_sol_van' for jerasure). The available techniques depend on the plugin.",
 				Optional:            true,
@@ -237,6 +258,16 @@ func (r *ErasureCodeProfileResource) Create(ctx context.Context, req resource.Cr
 	if !data.CrushFailureDomain.IsNull() && !data.CrushFailureDomain.IsUnknown() {
 		val := data.CrushFailureDomain.ValueString()
 		createReq.CrushFailureDomain = &val
+	}
+
+	if !data.CrushNumFailureDomains.IsNull() && !data.CrushNumFailureDomains.IsUnknown() {
+		val := fmt.Sprintf("%d", data.CrushNumFailureDomains.ValueInt64())
+		createReq.CrushNumFailureDomains = &val
+	}
+
+	if !data.CrushOSDsPerFailureDomain.IsNull() && !data.CrushOSDsPerFailureDomain.IsUnknown() {
+		val := fmt.Sprintf("%d", data.CrushOSDsPerFailureDomain.ValueInt64())
+		createReq.CrushOSDsPerFailureDomain = &val
 	}
 
 	if !data.Technique.IsNull() && !data.Technique.IsUnknown() {
@@ -342,6 +373,24 @@ func (r *ErasureCodeProfileResource) updateModelFromAPI(data *ErasureCodeProfile
 	data.M = types.Int64Value(int64(profile.M))
 	data.Plugin = types.StringValue(profile.Plugin)
 	data.CrushFailureDomain = types.StringValue(profile.CrushFailureDomain)
+	if profile.CrushNumFailureDomains != "" {
+		if val, err := strconv.ParseInt(profile.CrushNumFailureDomains, 10, 64); err == nil {
+			data.CrushNumFailureDomains = types.Int64Value(val)
+		} else {
+			data.CrushNumFailureDomains = types.Int64Null()
+		}
+	} else {
+		data.CrushNumFailureDomains = types.Int64Null()
+	}
+	if profile.CrushOSDsPerFailureDomain != "" {
+		if val, err := strconv.ParseInt(profile.CrushOSDsPerFailureDomain, 10, 64); err == nil {
+			data.CrushOSDsPerFailureDomain = types.Int64Value(val)
+		} else {
+			data.CrushOSDsPerFailureDomain = types.Int64Null()
+		}
+	} else {
+		data.CrushOSDsPerFailureDomain = types.Int64Null()
+	}
 	if profile.Technique != "" {
 		data.Technique = types.StringValue(profile.Technique)
 	} else {
