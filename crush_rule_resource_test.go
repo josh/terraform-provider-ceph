@@ -484,11 +484,11 @@ func TestAccCephCrushRuleResource_ReplacementOnPoolTypeChange(t *testing.T) {
 			{
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
-					# Create erasure code profile first
 					resource "ceph_erasure_code_profile" "test" {
-						name = %q
-						k    = 2
-						m    = 1
+						name                 = %q
+						k                    = 2
+						m                    = 1
+						crush_failure_domain = "osd"
 					}
 
 					resource "ceph_crush_rule" "test" {
@@ -513,27 +513,59 @@ func TestAccCephCrushRuleResource_ReplacementOnPoolTypeChange(t *testing.T) {
 				ConfigVariables: testAccProviderConfig(),
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					resource "ceph_erasure_code_profile" "test" {
-						name = %q
-						k    = 2
-						m    = 1
+						name                 = %q
+						k                    = 2
+						m                    = 1
+						crush_failure_domain = "osd"
 					}
 
 					resource "ceph_crush_rule" "test" {
 						name           = %q
 						pool_type      = "erasure"
-						failure_domain = "rack"
+						failure_domain = "osd"
 						profile        = ceph_erasure_code_profile.test.name
 					}
 				`, profileName, ruleName),
-				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction("ceph_crush_rule.test", plancheck.ResourceActionDestroyBeforeCreate),
-					},
-				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					checkCephCrushRuleExists(t, ruleName),
-					resource.TestCheckResourceAttr("ceph_crush_rule.test", "failure_domain", "rack"),
+					resource.TestCheckResourceAttr("ceph_crush_rule.test", "failure_domain", "osd"),
 				),
+			},
+		},
+	})
+}
+
+func TestAccCephCrushRuleResource_FailureDomainMismatchWithProfile(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	profileName := acctest.RandomWithPrefix("test-ec-profile")
+	ruleName := acctest.RandomWithPrefix("test-crush-rule")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_erasure_code_profile" "test" {
+						name                 = %q
+						k                    = 2
+						m                    = 1
+						crush_failure_domain = "host"
+					}
+
+					resource "ceph_crush_rule" "test" {
+						name           = %q
+						pool_type      = "erasure"
+						failure_domain = "osd"
+						profile        = ceph_erasure_code_profile.test.name
+					}
+				`, profileName, ruleName),
+				ExpectError: regexp.MustCompile(`Failure Domain Mismatch`),
 			},
 		},
 	})
