@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
@@ -30,11 +31,14 @@ type CephProvider struct {
 }
 
 type CephProviderModel struct {
-	Endpoint  types.String `tfsdk:"endpoint"`
-	Endpoints types.List   `tfsdk:"endpoints"`
-	Token     types.String `tfsdk:"token"`
-	Username  types.String `tfsdk:"username"`
-	Password  types.String `tfsdk:"password"`
+	Endpoint       types.String `tfsdk:"endpoint"`
+	Endpoints      types.List   `tfsdk:"endpoints"`
+	Token          types.String `tfsdk:"token"`
+	Username       types.String `tfsdk:"username"`
+	Password       types.String `tfsdk:"password"`
+	JWTSecret      types.String `tfsdk:"jwt_secret"`
+	JWTUsername    types.String `tfsdk:"jwt_username"`
+	JWTTokenExpiry types.String `tfsdk:"jwt_token_expiry"`
 }
 
 func (p *CephProvider) Metadata(ctx context.Context, req provider.MetadataRequest, resp *provider.MetadataResponse) {
@@ -68,6 +72,19 @@ func (p *CephProvider) Schema(ctx context.Context, req provider.SchemaRequest, r
 				Optional:            true,
 				Sensitive:           true,
 			},
+			"jwt_secret": providerSchema.StringAttribute{
+				MarkdownDescription: "The JWT signing secret from Ceph dashboard (mgr/dashboard/jwt_secret)",
+				Optional:            true,
+				Sensitive:           true,
+			},
+			"jwt_username": providerSchema.StringAttribute{
+				MarkdownDescription: "The username claim for JWT token signing (default: admin)",
+				Optional:            true,
+			},
+			"jwt_token_expiry": providerSchema.StringAttribute{
+				MarkdownDescription: "The expiry duration for signed JWT tokens (default: 1h)",
+				Optional:            true,
+			},
 		},
 	}
 }
@@ -85,12 +102,33 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 	token := data.Token.ValueString()
 	username := data.Username.ValueString()
 	password := data.Password.ValueString()
+	jwtSecret := data.JWTSecret.ValueString()
+	jwtUsername := data.JWTUsername.ValueString()
+	jwtTokenExpiry := data.JWTTokenExpiry.ValueString()
 
-	// Either token or username/password must be provided
-	if token == "" && (username == "" || password == "") {
+	if jwtUsername == "" {
+		jwtUsername = "admin"
+	}
+
+	var jwtExpiry time.Duration
+	if jwtTokenExpiry == "" {
+		jwtExpiry = time.Hour
+	} else {
+		var err error
+		jwtExpiry, err = time.ParseDuration(jwtTokenExpiry)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Invalid Configuration",
+				fmt.Sprintf("Unable to parse jwt_token_expiry duration: %s", err),
+			)
+			return
+		}
+	}
+
+	if token == "" && jwtSecret == "" && (username == "" || password == "") {
 		resp.Diagnostics.AddError(
 			"Missing Configuration",
-			"Either token or both username and password must be configured",
+			"Either token, jwt_secret, or both username and password must be configured",
 		)
 		return
 	}
@@ -139,9 +177,8 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		parsedEndpoints = append(parsedEndpoints, parsedURL)
 	}
 
-	// Configure the Ceph API client with authentication
 	cephClient := &CephAPIClient{}
-	err := cephClient.Configure(ctx, parsedEndpoints, username, password, token)
+	err := cephClient.Configure(ctx, parsedEndpoints, username, password, token, jwtSecret, jwtUsername, jwtExpiry)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Authentication Error",

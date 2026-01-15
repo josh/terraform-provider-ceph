@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -103,7 +105,20 @@ func logAPIRequest(ctx context.Context, req *http.Request) func(*http.Response, 
 	}
 }
 
-func (c *CephAPIClient) Configure(ctx context.Context, endpoints []*url.URL, username, password, token string) error {
+func SignJWTToken(secret, username string, expiry time.Duration) (string, error) {
+	now := time.Now()
+	claims := jwt.MapClaims{
+		"iss":      "ceph-dashboard",
+		"jti":      uuid.New().String(),
+		"iat":      now.Unix(),
+		"exp":      now.Add(expiry).Unix(),
+		"username": username,
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(secret))
+}
+
+func (c *CephAPIClient) Configure(ctx context.Context, endpoints []*url.URL, username, password, token, jwtSecret, jwtUsername string, jwtExpiry time.Duration) error {
 	endpoint, err := queryEndpoints(ctx, endpoints)
 	if err != nil {
 		return fmt.Errorf("unable to query endpoints: %w", err)
@@ -127,6 +142,19 @@ func (c *CephAPIClient) Configure(ctx context.Context, endpoints []*url.URL, use
 		} else if !valid {
 			return fmt.Errorf("provided token is invalid or expired")
 		}
+	} else if jwtSecret != "" {
+		signedToken, err := SignJWTToken(jwtSecret, jwtUsername, jwtExpiry)
+		if err != nil {
+			return fmt.Errorf("failed to sign JWT token: %w", err)
+		}
+		c.token = signedToken
+
+		valid, err := c.AuthCheck(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to validate signed JWT token: %w", err)
+		} else if !valid {
+			return fmt.Errorf("signed JWT token is invalid - check jwt_secret and jwt_username")
+		}
 	} else if username != "" && password != "" {
 		authToken, err := c.Auth(ctx, username, password)
 		if err != nil {
@@ -135,7 +163,7 @@ func (c *CephAPIClient) Configure(ctx context.Context, endpoints []*url.URL, use
 
 		c.token = authToken
 	} else {
-		return fmt.Errorf("either token or username/password must be provided")
+		return fmt.Errorf("either token, jwt_secret, or username/password must be provided")
 	}
 
 	return nil

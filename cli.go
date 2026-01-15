@@ -137,6 +137,16 @@ func (c *CephCLI) ConfigGet(ctx context.Context, scope, key string) (string, err
 	return strings.TrimSpace(string(output)), nil
 }
 
+func (c *CephCLI) ConfigKeyGet(ctx context.Context, key string) (string, error) {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "config-key", "get", key)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get config-key %s: %w", key, err)
+	}
+
+	return strings.TrimSpace(string(output)), nil
+}
+
 func (c *CephCLI) ConfigGetFromDump(ctx context.Context, scope, key string) (string, error) {
 	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "config", "dump", "--format", "json")
 	output, err := cmd.Output()
