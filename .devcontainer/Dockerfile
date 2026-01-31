@@ -13,6 +13,10 @@ RUN apt-get update && apt-get install --yes \
     unzip \
     wget
 
+# FIXME: Disable ceph-mgr dashboard smb module
+# https://tracker.ceph.com/issues/74199
+RUN rm -f /usr/share/ceph/mgr/dashboard/controllers/smb.py
+
 ARG GO_VERSION=1.25.5
 RUN curl --fail --silent --show-error --location https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz | \
     tar --extract --gzip --directory /usr/local && \
