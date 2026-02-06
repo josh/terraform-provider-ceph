@@ -27,13 +27,14 @@ import (
 )
 
 var (
-	testDashboardURL   = "http://127.0.0.1:8080/"
-	testClusterWG      *sync.WaitGroup
-	testConfPath       string
-	cephTestClusterCLI *CephCLI
-	testTimeout        = flag.Duration("timeout", 0, "test timeout")
-	cephDaemonLogs     *LogDemux
-	testNumOsds        = 5
+	testDashboardURL     = "http://127.0.0.1:8080/"
+	testClusterWG        *sync.WaitGroup
+	testConfPath         string
+	testSharedCephFSName string
+	cephTestClusterCLI   *CephCLI
+	testTimeout          = flag.Duration("timeout", 0, "test timeout")
+	cephDaemonLogs       *LogDemux
+	testNumOsds          = 5
 )
 
 var testAccProtoV6ProviderFactories = map[string]func() (tfprotov6.ProviderServer, error){
@@ -83,6 +84,12 @@ func TestMain(m *testing.M) {
 		detachLogs()
 		testConfPath = confPath
 		cephTestClusterCLI = NewCephCLI(confPath)
+
+		testSharedCephFSName = "test-shared-cephfs"
+		if err := cephTestClusterCLI.CephFSVolumeCreate(ctx, testSharedCephFSName); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to create shared CephFS volume: %v\n", err)
+			os.Exit(1)
+		}
 
 		code = m.Run()
 
