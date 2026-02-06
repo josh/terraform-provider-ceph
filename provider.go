@@ -201,6 +201,7 @@ func (p *CephProvider) EphemeralResources(ctx context.Context) []func() ephemera
 func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		newAuthResource,
+		newCephFSResource,
 		newConfigResource,
 		newCrushRuleResource,
 		newErasureCodeProfileResource,
@@ -215,6 +216,7 @@ func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource
 func (p *CephProvider) DataSources(ctx context.Context) []func() datasource.DataSource {
 	return []func() datasource.DataSource{
 		newAuthDataSource,
+		newCephFSDataSource,
 		newConfigDataSource,
 		newConfigValueDataSource,
 		newCrushRuleDataSource,

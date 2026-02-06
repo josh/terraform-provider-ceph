@@ -1017,3 +1017,59 @@ func (c *CephCLI) PGStateInfo(ctx context.Context) (*PGStateInfo, error) {
 
 	return info, nil
 }
+
+type CephFSListEntry struct {
+	Name           string   `json:"name"`
+	MetadataPool   string   `json:"metadata_pool"`
+	MetadataPoolID int      `json:"metadata_pool_id"`
+	DataPools      []string `json:"data_pools"`
+	DataPoolIDs    []int    `json:"data_pool_ids"`
+}
+
+func (c *CephCLI) CephFSList(ctx context.Context) ([]CephFSListEntry, error) {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "ls", "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list CephFS filesystems: %w", err)
+	}
+
+	var filesystems []CephFSListEntry
+	if err := json.Unmarshal(output, &filesystems); err != nil {
+		return nil, fmt.Errorf("failed to parse CephFS list output: %w", err)
+	}
+
+	return filesystems, nil
+}
+
+func (c *CephCLI) CephFSExists(ctx context.Context, name string) (bool, error) {
+	filesystems, err := c.CephFSList(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	for _, fs := range filesystems {
+		if fs.Name == name {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (c *CephCLI) CephFSVolumeCreate(ctx context.Context, name string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "volume", "create", name)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create CephFS volume %s: %w, output: %s", name, err, string(output))
+	}
+	return nil
+}
+
+func (c *CephCLI) CephFSVolumeDelete(ctx context.Context, name string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "volume", "rm", name, "--yes-i-really-mean-it")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to delete CephFS volume %s: %w, output: %s", name, err, string(output))
+	}
+	return nil
+}

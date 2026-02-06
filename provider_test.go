@@ -117,6 +117,10 @@ func startCephCluster(ctx context.Context, tmpDir string, out io.Writer) (string
 		return "", "", nil, err
 	}
 
+	if err := configureClusterSettings(startupCtx, confPath, out); err != nil {
+		return "", "", nil, err
+	}
+
 	if err := startCephOsd(&wg, ctx, confPath, out); err != nil {
 		return "", "", nil, err
 	}
@@ -149,6 +153,10 @@ func startCephCluster(ctx context.Context, tmpDir string, out io.Writer) (string
 		return "", "", nil, err
 	}
 
+	if err := startCephMds(&wg, ctx, confPath, out); err != nil {
+		return "", "", nil, err
+	}
+
 	dashboardURL, err := enableCephDashboard(startupCtx, confPath, out)
 	if err != nil {
 		return "", "", nil, err
@@ -176,6 +184,7 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 			"keyring":                               filepath.Join(tmpDir, "keyring"),
 			"log_to_file":                           "false",
 			"log_to_stderr":                         "true",
+			"mon_allow_pool_delete":                 "true",
 			"mon_allow_pool_size_one":               "true",
 			"mon_host":                              "v1:127.0.0.1:6789/0",
 			"mon_osd_backfillfull_ratio":            ".99",
@@ -217,6 +226,10 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 			"rgw_data":      filepath.Join(tmpDir, "rgw", "ceph-rgw1"),
 			"rgw_frontends": "beast port=7480",
 		},
+		"mds.mds1": {
+			"debug_mds": "0",
+			"mds_data":  filepath.Join(tmpDir, "mds", "ceph-mds1"),
+		},
 	}
 
 	keyringConfig := map[string]map[string]string{
@@ -242,6 +255,12 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 			"caps mon": "allow rw",
 			"caps osd": "allow rwx",
 			"caps mgr": "allow rw",
+		},
+		"mds.mds1": {
+			"key":      "AQDFm89oNP7bAxAA6TgZ1toOkhDjUNEkRL18Gg==",
+			"caps mon": "allow profile mds",
+			"caps osd": "allow rwx",
+			"caps mds": "allow",
 		},
 	}
 
@@ -272,6 +291,11 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 	}
 
 	err = os.MkdirAll(filepath.Join(tmpDir, "rgw", "ceph-rgw1"), 0o755)
+	if err != nil {
+		return confPath, err
+	}
+
+	err = os.MkdirAll(filepath.Join(tmpDir, "mds", "ceph-mds1"), 0o755)
 	if err != nil {
 		return confPath, err
 	}
@@ -390,6 +414,16 @@ func waitForCephMon(ctx context.Context, confPath string) error {
 			}
 		}
 	}
+}
+
+func configureClusterSettings(ctx context.Context, confPath string, out io.Writer) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", confPath, "config", "set", "mon", "mon_allow_pool_delete", "true")
+	cmd.Stdout = out
+	cmd.Stderr = out
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to set mon_allow_pool_delete: %w", err)
+	}
+	return nil
 }
 
 func startCephOsd(wg *sync.WaitGroup, ctx context.Context, confPath string, out io.Writer) error {
@@ -545,6 +579,25 @@ func waitForCephRgw(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func startCephMds(wg *sync.WaitGroup, ctx context.Context, confPath string, out io.Writer) error {
+	cmd := exec.CommandContext(ctx, "ceph-mds", "--conf", confPath, "--id", "mds1", "--foreground")
+	cmd.Stdout = out
+	cmd.Stderr = out
+
+	err := cmd.Start()
+	if err != nil {
+		return fmt.Errorf("failed to start MDS: %w", err)
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = cmd.Wait()
+	}()
+
+	return nil
 }
 
 func enableCephDashboard(ctx context.Context, confPath string, out io.Writer) (string, error) {
