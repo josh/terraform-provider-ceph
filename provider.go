@@ -202,6 +202,7 @@ func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource
 	return []func() resource.Resource{
 		newAuthResource,
 		newCephFSResource,
+		newCephFSSubvolumeResource,
 		newConfigResource,
 		newCrushRuleResource,
 		newErasureCodeProfileResource,
@@ -217,6 +218,7 @@ func (p *CephProvider) DataSources(ctx context.Context) []func() datasource.Data
 	return []func() datasource.DataSource{
 		newAuthDataSource,
 		newCephFSDataSource,
+		newCephFSSubvolumeDataSource,
 		newConfigDataSource,
 		newConfigValueDataSource,
 		newCrushRuleDataSource,

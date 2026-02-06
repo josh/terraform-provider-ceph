@@ -1073,3 +1073,55 @@ func (c *CephCLI) CephFSVolumeDelete(ctx context.Context, name string) error {
 	}
 	return nil
 }
+
+func (c *CephCLI) CephFSSubvolumeCreate(ctx context.Context, volName string, subvolName string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "subvolume", "create", volName, subvolName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create CephFS subvolume %s/%s: %w, output: %s", volName, subvolName, err, string(output))
+	}
+	return nil
+}
+
+func (c *CephCLI) CephFSSubvolumeDelete(ctx context.Context, volName string, subvolName string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "subvolume", "rm", volName, subvolName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to delete CephFS subvolume %s/%s: %w, output: %s", volName, subvolName, err, string(output))
+	}
+	return nil
+}
+
+type CephFSSubvolumeListEntry struct {
+	Name string `json:"name"`
+}
+
+func (c *CephCLI) CephFSSubvolumeList(ctx context.Context, volName string) ([]CephFSSubvolumeListEntry, error) {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "subvolume", "ls", volName, "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list CephFS subvolumes for %s: %w", volName, err)
+	}
+
+	var entries []CephFSSubvolumeListEntry
+	if err := json.Unmarshal(output, &entries); err != nil {
+		return nil, fmt.Errorf("failed to parse CephFS subvolume list: %w", err)
+	}
+
+	return entries, nil
+}
+
+func (c *CephCLI) CephFSSubvolumeExists(ctx context.Context, volName string, subvolName string) (bool, error) {
+	entries, err := c.CephFSSubvolumeList(ctx, volName)
+	if err != nil {
+		return false, err
+	}
+
+	for _, entry := range entries {
+		if entry.Name == subvolName {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
