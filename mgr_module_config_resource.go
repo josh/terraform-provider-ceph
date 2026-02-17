@@ -225,6 +225,35 @@ func (r *MgrModuleConfigResource) Update(ctx context.Context, req resource.Updat
 		return
 	}
 
+	var stateData MgrModuleConfigResourceModel
+	resp.Diagnostics.Append(req.State.Get(ctx, &stateData)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	var oldConfigsMap map[string]string
+	resp.Diagnostics.Append(stateData.Configs.ElementsAs(ctx, &oldConfigsMap, false)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	for key := range oldConfigsMap {
+		if _, ok := newConfigsMap[key]; !ok {
+			configName := fmt.Sprintf("mgr/%s/%s", moduleName, key)
+			err := r.client.ClusterDeleteConf(ctx, configName, "mgr")
+			if err != nil {
+				if errors.Is(err, ErrAPINotFound) {
+					continue
+				}
+				resp.Diagnostics.AddError(
+					"API Request Error",
+					fmt.Sprintf("Unable to delete removed MGR module config '%s': %s", configName, err),
+				)
+				return
+			}
+		}
+	}
+
 	apiConfigs := make(CephAPIMgrModuleConfig)
 	for key, value := range newConfigsMap {
 		apiConfigs[key] = value
