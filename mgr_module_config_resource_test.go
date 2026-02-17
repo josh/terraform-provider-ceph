@@ -608,6 +608,109 @@ func checkCephMgrModuleConfigExists(t *testing.T, module, option string) resourc
 	}
 }
 
+func TestAccCephMgrModuleConfigResource_removeProperty(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	var defaultStandbyErrorStatusCode string
+	var defaultServerPort string
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephMgrModuleConfigDestroy(t),
+		PreCheck: func() {
+			ctx := t.Context()
+
+			var err error
+			defaultStandbyErrorStatusCode, err = getCephMgrModuleConfigValue(ctx, "dashboard", "standby_error_status_code")
+			if err != nil {
+				t.Fatalf("Failed to get default standby_error_status_code: %v", err)
+			}
+			t.Logf("Default standby_error_status_code: %s", defaultStandbyErrorStatusCode)
+
+			defaultServerPort, err = getCephMgrModuleConfigValue(ctx, "dashboard", "server_port")
+			if err != nil {
+				t.Fatalf("Failed to get default server_port: %v", err)
+			}
+			t.Logf("Default server_port: %s", defaultServerPort)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_mgr_module_config" "test" {
+						module_name = "dashboard"
+						configs = {
+							standby_error_status_code = "503"
+							server_port               = "8080"
+						}
+					}
+				`,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs").AtMapKey("standby_error_status_code"),
+						knownvalue.StringExact("503"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs").AtMapKey("server_port"),
+						knownvalue.StringExact("8080"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					func(s *terraform.State) error {
+						if err := assertCephMgrModuleConfigValue(t.Context(), "dashboard", "standby_error_status_code", "503"); err != nil {
+							return err
+						}
+						return assertCephMgrModuleConfigValue(t.Context(), "dashboard", "server_port", "8080")
+					},
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_mgr_module_config" "test" {
+						module_name = "dashboard"
+						configs = {
+							standby_error_status_code = "503"
+						}
+					}
+				`,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs"),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							"standby_error_status_code": knownvalue.StringExact("503"),
+						}),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					func(s *terraform.State) error {
+						ctx := t.Context()
+
+						if err := assertCephMgrModuleConfigValue(ctx, "dashboard", "standby_error_status_code", "503"); err != nil {
+							return err
+						}
+
+						if err := assertCephMgrModuleConfigValue(ctx, "dashboard", "server_port", defaultServerPort); err != nil {
+							return fmt.Errorf("server_port should have reverted to default %q: %w", defaultServerPort, err)
+						}
+
+						_, err := cephTestClusterCLI.ConfigGetFromDump(ctx, "mgr", "mgr/dashboard/server_port")
+						if err == nil {
+							return fmt.Errorf("server_port should not be explicitly set in config dump after removal")
+						}
+
+						return nil
+					},
+				),
+			},
+		},
+	})
+}
+
 func TestAccCephMgrModuleConfigResource_OutOfBandDeletion(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
