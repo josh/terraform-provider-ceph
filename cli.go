@@ -1125,3 +1125,55 @@ func (c *CephCLI) CephFSSubvolumeExists(ctx context.Context, volName string, sub
 
 	return false, nil
 }
+
+func (c *CephCLI) CephFSSubvolumeGroupCreate(ctx context.Context, volName string, groupName string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "subvolumegroup", "create", volName, groupName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create CephFS subvolume group %s/%s: %w, output: %s", volName, groupName, err, string(output))
+	}
+	return nil
+}
+
+func (c *CephCLI) CephFSSubvolumeGroupDelete(ctx context.Context, volName string, groupName string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "subvolumegroup", "rm", volName, groupName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to delete CephFS subvolume group %s/%s: %w, output: %s", volName, groupName, err, string(output))
+	}
+	return nil
+}
+
+type CephFSSubvolumeGroupListEntry struct {
+	Name string `json:"name"`
+}
+
+func (c *CephCLI) CephFSSubvolumeGroupList(ctx context.Context, volName string) ([]CephFSSubvolumeGroupListEntry, error) {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "subvolumegroup", "ls", volName, "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list CephFS subvolume groups for %s: %w", volName, err)
+	}
+
+	var entries []CephFSSubvolumeGroupListEntry
+	if err := json.Unmarshal(output, &entries); err != nil {
+		return nil, fmt.Errorf("failed to parse CephFS subvolume group list: %w", err)
+	}
+
+	return entries, nil
+}
+
+func (c *CephCLI) CephFSSubvolumeGroupExists(ctx context.Context, volName string, groupName string) (bool, error) {
+	entries, err := c.CephFSSubvolumeGroupList(ctx, volName)
+	if err != nil {
+		return false, err
+	}
+
+	for _, entry := range entries {
+		if entry.Name == groupName {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
