@@ -94,9 +94,53 @@ func (r *ErasureCodeProfileResource) Metadata(ctx context.Context, req resource.
 	resp.TypeName = req.ProviderTypeName + "_erasure_code_profile"
 }
 
+type erasureCodeFailureDomainValidator struct{}
+
+func (v erasureCodeFailureDomainValidator) Description(ctx context.Context) string {
+	return "validates crush_num_failure_domains is set when crush_osds_per_failure_domain is specified"
+}
+
+func (v erasureCodeFailureDomainValidator) MarkdownDescription(ctx context.Context) string {
+	return "Validates that `crush_num_failure_domains` is >= 1 when `crush_osds_per_failure_domain` is specified."
+}
+
+func (v erasureCodeFailureDomainValidator) ValidateResource(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var config ErasureCodeProfileResourceModel
+
+	resp.Diagnostics.Append(req.Config.Get(ctx, &config)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if config.CrushOSDsPerFailureDomain.IsUnknown() || config.CrushOSDsPerFailureDomain.IsNull() {
+		return
+	}
+
+	if config.CrushNumFailureDomains.IsUnknown() || config.CrushNumFailureDomains.IsNull() {
+		resp.Diagnostics.Append(diag.NewAttributeErrorDiagnostic(
+			path.Root("crush_num_failure_domains"),
+			"Missing Required Attribute",
+			"crush_num_failure_domains must be specified and >= 1 when crush_osds_per_failure_domain is set.",
+		))
+		return
+	}
+
+	if config.CrushNumFailureDomains.ValueInt64() < 1 {
+		resp.Diagnostics.Append(diag.NewAttributeErrorDiagnostic(
+			path.Root("crush_num_failure_domains"),
+			"Invalid Erasure Code Configuration",
+			fmt.Sprintf(
+				"crush_num_failure_domains must be >= 1 when crush_osds_per_failure_domain is specified. Got crush_num_failure_domains=%d.",
+				config.CrushNumFailureDomains.ValueInt64(),
+			),
+		))
+	}
+}
+
 func (r *ErasureCodeProfileResource) ConfigValidators(ctx context.Context) []resource.ConfigValidator {
 	return []resource.ConfigValidator{
 		erasureCodeKMValidator{},
+		erasureCodeFailureDomainValidator{},
 	}
 }
 
