@@ -351,9 +351,9 @@ func (r *CrushRuleResource) updateModelFromAPI(data *CrushRuleResourceModel, rul
 	data.MaxSize = types.Int64Value(int64(rule.MaxSize))
 
 	switch rule.Type {
-	case 1:
+	case 1, 4:
 		data.PoolType = types.StringValue("replicated")
-	case 3:
+	case 3, 5:
 		data.PoolType = types.StringValue("erasure")
 	default:
 		data.PoolType = types.StringUnknown()
