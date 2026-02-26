@@ -430,6 +430,14 @@ func configureClusterSettings(ctx context.Context, confPath string, out io.Write
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to set mon_allow_pool_delete: %w", err)
 	}
+
+	cmd = exec.CommandContext(ctx, "ceph", "--conf", confPath, "osd", "set-require-min-compat-client", "squid")
+	cmd.Stdout = out
+	cmd.Stderr = out
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to set require-min-compat-client: %w", err)
+	}
+
 	return nil
 }
 

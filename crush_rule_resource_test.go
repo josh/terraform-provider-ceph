@@ -227,6 +227,66 @@ func TestAccCephCrushRuleResource_erasure(t *testing.T) {
 	})
 }
 
+func TestAccCephCrushRuleResource_erasureWithOSDsPerFailureDomain(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	ruleName := fmt.Sprintf("test-erasure-msr-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+	profileName := fmt.Sprintf("test-profile-msr-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephCrushRuleDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_erasure_code_profile" "test" {
+					  name                          = %q
+					  k                             = 4
+					  m                             = 2
+					  crush_failure_domain          = "osd"
+					  crush_num_failure_domains     = 3
+					  crush_osds_per_failure_domain = 2
+					}
+
+					resource "ceph_crush_rule" "test" {
+					  name           = %q
+					  pool_type      = "erasure"
+					  failure_domain = "osd"
+					  profile        = ceph_erasure_code_profile.test.name
+					}
+				`, profileName, ruleName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("name"),
+						knownvalue.StringExact(ruleName),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("pool_type"),
+						knownvalue.StringExact("erasure"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("profile"),
+						knownvalue.StringExact(profileName),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephCrushRuleExists(t, ruleName),
+					resource.TestCheckResourceAttr("ceph_crush_rule.test", "name", ruleName),
+					resource.TestCheckResourceAttr("ceph_crush_rule.test", "pool_type", "erasure"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccCephCrushRuleResource_withDeviceClass(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
