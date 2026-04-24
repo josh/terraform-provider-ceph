@@ -173,6 +173,9 @@ func (c *CephAPIClient) Configure(ctx context.Context, endpoints []*url.URL, use
 func queryEndpoints(ctx context.Context, endpoints []*url.URL) (*url.URL, error) {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
 
 	for _, endpoint := range endpoints {
@@ -187,8 +190,13 @@ func queryEndpoints(ctx context.Context, endpoints []*url.URL) (*url.URL, error)
 		if err != nil {
 			continue
 		}
+		httpResp.Body.Close() //nolint:errcheck
 
 		if httpResp.StatusCode == http.StatusServiceUnavailable {
+			continue
+		}
+
+		if httpResp.StatusCode == http.StatusSeeOther {
 			continue
 		}
 
