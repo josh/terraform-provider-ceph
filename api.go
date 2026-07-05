@@ -936,12 +936,11 @@ func (c *CephAPIClient) RGWGetUser(ctx context.Context, uid string) (*CephAPIRGW
 		return nil, fmt.Errorf("unable to read response body: %w", err)
 	}
 
-	tflog.Trace(ctx, "Ceph API response body", map[string]any{
-		"response_body": string(body),
-		"status_code":   httpResp.StatusCode,
-	})
-
 	if httpResp.StatusCode != http.StatusOK {
+		tflog.Trace(ctx, "Ceph API response body", map[string]any{
+			"response_body": string(body),
+			"status_code":   httpResp.StatusCode,
+		})
 		if dashboardErr, err := ParseCephDashboardError(body); err == nil {
 			if rgwErr, ok := dashboardErr.RGWError(); ok {
 				if rgwErr.Code == "NoSuchUser" {
@@ -957,6 +956,18 @@ func (c *CephAPIClient) RGWGetUser(ctx context.Context, uid string) (*CephAPIRGW
 	if err != nil {
 		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
 	}
+
+	for _, key := range user.Keys {
+		ctx = tflog.MaskLogStrings(ctx, key.AccessKey, key.SecretKey)
+	}
+	for _, key := range user.SwiftKeys {
+		ctx = tflog.MaskLogStrings(ctx, key.SecretKey)
+	}
+
+	tflog.Trace(ctx, "Ceph API response body", map[string]any{
+		"response_body": string(body),
+		"status_code":   httpResp.StatusCode,
+	})
 
 	return &user, nil
 }
