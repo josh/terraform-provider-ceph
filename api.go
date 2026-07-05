@@ -497,6 +497,14 @@ func (c *CephAPIClient) ClusterImportUser(ctx context.Context, importData string
 		return fmt.Errorf("unable to encode request payload: %w", err)
 	}
 
+	if users, err := parseCephKeyring(importData); err == nil {
+		for _, user := range users {
+			if user.Key != "" {
+				ctx = tflog.MaskLogStrings(ctx, user.Key)
+			}
+		}
+	}
+
 	tflog.Trace(ctx, "Ceph API request body", map[string]any{
 		"request_body": string(jsonPayload),
 	})
