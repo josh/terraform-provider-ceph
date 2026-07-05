@@ -231,14 +231,6 @@ func (r *RGWUserResource) Update(ctx context.Context, req resource.UpdateRequest
 		updateReq.Suspended = &suspended
 	}
 
-	if !data.Suspended.IsNull() && !data.Suspended.IsUnknown() {
-		suspended := 0
-		if data.Suspended.ValueBool() {
-			suspended = 1
-		}
-		updateReq.Suspended = &suspended
-	}
-
 	user, err := r.client.RGWUpdateUser(ctx, userID, updateReq)
 	if err != nil {
 		resp.Diagnostics.AddError(
