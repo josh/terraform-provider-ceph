@@ -279,3 +279,52 @@ func TestAccCephFSSubvolumeGroupResource_OutOfBandDeletion(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephFSSubvolumeGroupResource_TimeoutsOnlyUpdate(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	fsName := testSharedCephFSName
+	groupName := acctest.RandomWithPrefix("test-group-touts")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephFSSubvolumeGroupDestroy(t, fsName),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_cephfs_subvolume_group" "test" {
+					  name     = %q
+					  vol_name = %q
+					}
+				`, groupName, fsName),
+				Check: checkCephFSSubvolumeGroupExists(t, fsName, groupName),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_cephfs_subvolume_group" "test" {
+					  name     = %q
+					  vol_name = %q
+
+					  timeouts = {
+					    create = "10m"
+					    delete = "10m"
+					  }
+					}
+				`, groupName, fsName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_cephfs_subvolume_group.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: checkCephFSSubvolumeGroupExists(t, fsName, groupName),
+			},
+		},
+	})
+}
