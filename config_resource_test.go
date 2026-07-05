@@ -1125,3 +1125,58 @@ func TestAccCephConfigResource_emptyValueRejected(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephConfigResource_importMgrSkipsFsid(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_config" "test" {
+						section = "mgr"
+						config = {
+							"mgr_stats_period" = "7"
+						}
+					}
+				`,
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_config" "test" {
+						section = "mgr"
+						config = {
+							"mgr_stats_period" = "7"
+						}
+					}
+				`,
+				ResourceName:  "ceph_config.test",
+				ImportState:   true,
+				ImportStateId: "mgr",
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if len(states) != 1 {
+						return fmt.Errorf("expected 1 state, got %d", len(states))
+					}
+					attrs := states[0].Attributes
+					if attrs["config.mgr_stats_period"] != "7" {
+						return fmt.Errorf("expected config.mgr_stats_period=7, got %q", attrs["config.mgr_stats_period"])
+					}
+					// The dashboard injects a synthetic fsid entry into the
+					// mgr section; it must not be imported.
+					if v, ok := attrs["config.fsid"]; ok {
+						return fmt.Errorf("imported state unexpectedly contains fsid=%q", v)
+					}
+					return nil
+				},
+			},
+		},
+	})
+}
