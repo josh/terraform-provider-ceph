@@ -102,6 +102,30 @@ func TestParseClientFooKeyring(t *testing.T) {
 	}
 }
 
+func TestParseQuotedCommandCapsKeyring(t *testing.T) {
+	text := `[client.foo]
+	key = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+	caps mon = "allow command "osd blacklist""
+`
+
+	expected := []CephUser{
+		{
+			Entity: "client.foo",
+			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+			Caps:   MustCephCapsFromMap(map[string]string{"mon": `allow command "osd blacklist"`}),
+		},
+	}
+
+	actual, err := parseCephKeyring(text)
+	if err != nil {
+		t.Errorf("parseCephKeyring() error = %v, wantErr nil", err)
+	}
+
+	if !reflect.DeepEqual(actual, expected) {
+		t.Errorf("parseCephKeyring() = %v, want %v", actual, expected)
+	}
+}
+
 func TestParseNoCapsKeyring(t *testing.T) {
 	text := `[client.foo]
 	key = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==`

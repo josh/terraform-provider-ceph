@@ -99,7 +99,10 @@ func parseCephKeyring(content string) ([]CephUser, error) {
 				cur.Key = strings.TrimSpace(matches[1])
 			} else if matches := capsRegex.FindStringSubmatch(line); matches != nil {
 				capType := matches[1]
-				capsValue := strings.Trim(strings.TrimSpace(matches[2]), `"`)
+				capsValue := strings.TrimSpace(matches[2])
+				if len(capsValue) >= 2 && strings.HasPrefix(capsValue, `"`) && strings.HasSuffix(capsValue, `"`) {
+					capsValue = capsValue[1 : len(capsValue)-1]
+				}
 
 				lower := strings.ToLower(capType)
 				switch lower {
