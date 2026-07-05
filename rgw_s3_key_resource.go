@@ -154,7 +154,14 @@ func (r *RGWS3KeyResource) Create(ctx context.Context, req resource.CreateReques
 	existingKeys := make(map[string]bool)
 	if accessKeyPtr == nil {
 		user, err := r.client.RGWGetUser(ctx, parentUID)
-		if err == nil {
+		if err != nil && !errors.Is(err, ErrAPINotFound) {
+			resp.Diagnostics.AddError(
+				"API Request Error",
+				fmt.Sprintf("Unable to read RGW user before key creation: %s", err),
+			)
+			return
+		}
+		if user != nil {
 			for _, key := range user.Keys {
 				if key.User == userID {
 					existingKeys[key.AccessKey] = true
