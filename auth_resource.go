@@ -167,8 +167,10 @@ func (r *AuthResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 func (r *AuthResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data AuthResourceModel
+	var state AuthResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
 
 	if resp.Diagnostics.HasError() {
 		return
@@ -181,7 +183,22 @@ func (r *AuthResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		return
 	}
 
-	err := r.client.ClusterUpdateUser(ctx, entity, caps)
+	var err error
+	key := data.Key.ValueString()
+	if !data.Key.IsNull() && !data.Key.IsUnknown() && key != "" && key != state.Key.ValueString() {
+		// ceph auth import replaces both the key and the caps of an
+		// existing entity; a plain caps update can never change the key.
+		users := []CephUser{
+			{
+				Entity: entity,
+				Key:    key,
+				Caps:   caps,
+			},
+		}
+		err = r.client.ClusterImportUser(ctx, formatCephKeyring(users))
+	} else {
+		err = r.client.ClusterUpdateUser(ctx, entity, caps)
+	}
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
