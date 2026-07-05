@@ -128,17 +128,26 @@ func (r *MgrModuleConfigResource) Create(ctx context.Context, req resource.Creat
 
 	stringConfigs := make(map[string]string)
 	for key := range configsMap {
-		if val, ok := readConfigs[key]; ok {
-			formattedVal, err := formatMgrModuleConfigValue(val)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Configuration Value Formatting Error",
-					fmt.Sprintf("Unable to format config value for key '%s': %s", key, err),
-				)
-				return
-			}
-			stringConfigs[key] = formattedVal
+		val, ok := readConfigs[key]
+		if !ok {
+			// The dashboard silently ignores unknown keys on set, so a
+			// missing key on read-back means the module never accepted it.
+			resp.Diagnostics.AddAttributeError(
+				path.Root("configs").AtMapKey(key),
+				"Unknown Configuration Option",
+				fmt.Sprintf("MGR module '%s' has no config option named '%s'.", moduleName, key),
+			)
+			return
 		}
+		formattedVal, err := formatMgrModuleConfigValue(val)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Configuration Value Formatting Error",
+				fmt.Sprintf("Unable to format config value for key '%s': %s", key, err),
+			)
+			return
+		}
+		stringConfigs[key] = formattedVal
 	}
 
 	configsValue, diags := types.MapValueFrom(ctx, types.StringType, stringConfigs)
@@ -279,17 +288,24 @@ func (r *MgrModuleConfigResource) Update(ctx context.Context, req resource.Updat
 
 	stringConfigs := make(map[string]string)
 	for key := range newConfigsMap {
-		if val, ok := readConfigs[key]; ok {
-			formattedVal, err := formatMgrModuleConfigValue(val)
-			if err != nil {
-				resp.Diagnostics.AddError(
-					"Configuration Value Formatting Error",
-					fmt.Sprintf("Unable to format config value for key '%s': %s", key, err),
-				)
-				return
-			}
-			stringConfigs[key] = formattedVal
+		val, ok := readConfigs[key]
+		if !ok {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("configs").AtMapKey(key),
+				"Unknown Configuration Option",
+				fmt.Sprintf("MGR module '%s' has no config option named '%s'.", moduleName, key),
+			)
+			return
 		}
+		formattedVal, err := formatMgrModuleConfigValue(val)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"Configuration Value Formatting Error",
+				fmt.Sprintf("Unable to format config value for key '%s': %s", key, err),
+			)
+			return
+		}
+		stringConfigs[key] = formattedVal
 	}
 
 	configsValue, diags := types.MapValueFrom(ctx, types.StringType, stringConfigs)
