@@ -1102,3 +1102,26 @@ func testAccCheckCephConfigDestroy(t *testing.T) resource.TestCheckFunc {
 		return nil
 	}
 }
+
+func TestAccCephConfigResource_emptyValueRejected(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_config" "test" {
+						section = "global"
+						config = {
+							"mon_max_pg_per_osd" = ""
+						}
+					}
+				`,
+				ExpectError: regexp.MustCompile(`(?i)cannot be an empty string`),
+			},
+		},
+	})
+}
