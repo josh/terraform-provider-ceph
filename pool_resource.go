@@ -80,7 +80,7 @@ func (r *PoolResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				},
 			},
 			"pg_num": resourceSchema.Int64Attribute{
-				MarkdownDescription: "The number of placement groups for the pool.",
+				MarkdownDescription: "The number of placement groups for the pool. Conflicts with `pg_autoscale_mode = \"on\"`; exactly one of the two must decide the placement group count.",
 				Optional:            true,
 				Computed:            true,
 			},
@@ -124,7 +124,7 @@ func (r *PoolResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				},
 			},
 			"pg_autoscale_mode": resourceSchema.StringAttribute{
-				MarkdownDescription: "The placement group autoscale mode. Must be one of: 'off', 'warn', or 'on'.",
+				MarkdownDescription: "The placement group autoscale mode. Must be one of: 'off', 'warn', or 'on'. When 'on', pg_num must not be set.",
 				Optional:            true,
 				Computed:            true,
 				Validators: []validator.String{
@@ -225,7 +225,14 @@ func (r *PoolResource) updateModelFromAPI(ctx context.Context, data *PoolResourc
 		data.MinSize = types.Int64Null()
 	}
 
-	if pool.PGAutoscaleMode != "on" && pool.PGNum > 0 {
+	if pool.PGAutoscaleMode == "on" {
+		// The autoscaler owns pg_num, so keep the configured value instead
+		// of tracking Ceph's current one to avoid spurious drift, but never
+		// leave an unknown planned value in state.
+		if data.PgNum.IsUnknown() {
+			data.PgNum = types.Int64Null()
+		}
+	} else if pool.PGNum > 0 {
 		data.PgNum = types.Int64Value(int64(pool.PGNum))
 	} else {
 		data.PgNum = types.Int64Null()
@@ -520,12 +527,14 @@ func (r *PoolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	updateReq := CephAPIPoolUpdateRequest{}
 
-	if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() {
+	// Only send pg counts that actually changed, so updates to unrelated
+	// attributes never reset a value the autoscaler has since adjusted.
+	if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() && !data.PgNum.Equal(state.PgNum) {
 		v := int(data.PgNum.ValueInt64())
 		updateReq.PgNum = &v
 	}
 
-	if !data.PgpNum.IsNull() && !data.PgpNum.IsUnknown() {
+	if !data.PgpNum.IsNull() && !data.PgpNum.IsUnknown() && !data.PgpNum.Equal(state.PgpNum) {
 		v := int(data.PgpNum.ValueInt64())
 		updateReq.PgpNum = &v
 	}
@@ -788,6 +797,15 @@ func (r *PoolResource) ValidateConfig(ctx context.Context, req resource.Validate
 			path.Root("pg_num"),
 			"Invalid Attribute Combination",
 			`Either pg_num must be set or pg_autoscale_mode must be "on" so Ceph can size the pool's placement groups.`,
+		)
+	}
+
+	if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() &&
+		!data.PgAutoscaleMode.IsUnknown() && data.PgAutoscaleMode.ValueString() == "on" {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("pg_num"),
+			"Invalid Attribute Combination",
+			`pg_num cannot be set when pg_autoscale_mode is "on"; the autoscaler owns the placement group count. Remove pg_num, or set pg_autoscale_mode to "off" or "warn" to manage it manually.`,
 		)
 	}
 }
