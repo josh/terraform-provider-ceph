@@ -1090,3 +1090,62 @@ func TestAccCephRGWUserResource_OutOfBandDeletionDestroy(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephRGWUserResource_emailRemoval(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-user-email-rm")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Email Removal Test"
+					  email        = "remove-me@example.com"
+					}
+				`, testUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("email"),
+						knownvalue.StringExact("remove-me@example.com"),
+					),
+				},
+			},
+			// Removing the email attribute must clear it on the server and
+			// leave it null in state, not fail with an inconsistent result.
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Email Removal Test"
+					}
+				`, testUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("email"),
+						knownvalue.Null(),
+					),
+				},
+				Check: func(s *terraform.State) error {
+					userInfo, err := cephTestClusterCLI.RgwUserInfo(t.Context(), testUID)
+					if err != nil {
+						return fmt.Errorf("failed to get rgw user info: %w", err)
+					}
+					if userInfo.Email != "" {
+						return fmt.Errorf("expected email to be cleared, got %q", userInfo.Email)
+					}
+					return nil
+				},
+			},
+		},
+	})
+}
