@@ -68,7 +68,11 @@ func (r *CephFSSubvolumeResource) Schema(ctx context.Context, req resource.Schem
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
+					// Not plain RequiresReplace: with no quota set the
+					// computed null is re-planned as unknown on any config
+					// change, which would force a replacement for e.g. a
+					// timeouts edit.
+					int64planmodifier.RequiresReplaceIfConfigured(),
 				},
 			},
 			"path": resourceSchema.StringAttribute{
@@ -216,7 +220,28 @@ func (r *CephFSSubvolumeResource) Read(ctx context.Context, req resource.ReadReq
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
+// All Ceph-side attributes require replacement, but Update still runs for
+// changes to the timeouts block and must produce a state matching the plan.
 func (r *CephFSSubvolumeResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
+	var data CephFSSubvolumeResourceModel
+
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	info, err := r.client.CephFSSubvolumeInfo(ctx, data.VolName.ValueString(), data.Name.ValueString(), "")
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"API Request Error",
+			fmt.Sprintf("Unable to read CephFS subvolume '%s' in '%s': %s", data.Name.ValueString(), data.VolName.ValueString(), err),
+		)
+		return
+	}
+
+	r.updateModelFromAPI(&data, info)
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
 func (r *CephFSSubvolumeResource) Delete(ctx context.Context, req resource.DeleteRequest, resp *resource.DeleteResponse) {
