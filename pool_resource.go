@@ -781,4 +781,13 @@ func (r *PoolResource) ValidateConfig(ctx context.Context, req resource.Validate
 		}
 	}
 
+	if data.PgNum.IsNull() &&
+		!data.PgAutoscaleMode.IsUnknown() &&
+		(data.PgAutoscaleMode.IsNull() || data.PgAutoscaleMode.ValueString() != "on") {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("pg_num"),
+			"Invalid Attribute Combination",
+			`Either pg_num must be set or pg_autoscale_mode must be "on" so Ceph can size the pool's placement groups.`,
+		)
+	}
 }
