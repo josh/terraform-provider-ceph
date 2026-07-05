@@ -32,12 +32,6 @@ jobs:
             python3-setuptools \
             radosgw
 
-      # FIXME
-      # https://tracker.ceph.com/issues/74199
-      - name: Disable ceph-mgr dashboard smb module
-        run: |
-          sudo rm -f /usr/share/ceph/mgr/dashboard/controllers/smb.py
-
       - name: Print Ceph version
         run: ceph --version
 
