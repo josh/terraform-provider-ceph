@@ -118,6 +118,8 @@ func (d *MgrModuleConfigDataSource) Read(ctx context.Context, req datasource.Rea
 
 func formatMgrModuleConfigValue(val any) (string, error) {
 	switch v := val.(type) {
+	case nil:
+		return "", nil
 	case float64:
 		if v == float64(int64(v)) {
 			return fmt.Sprintf("%d", int64(v)), nil
