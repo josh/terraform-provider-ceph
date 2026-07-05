@@ -237,6 +237,10 @@ func (r *RGWS3KeyResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	user, err := r.client.RGWGetUser(ctx, parentUID)
 	if err != nil {
+		if errors.Is(err, ErrAPINotFound) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"API Request Error",
 			fmt.Sprintf("Unable to read RGW user: %s", err),
