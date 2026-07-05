@@ -1897,10 +1897,11 @@ func (c *CephAPIClient) UpdatePool(ctx context.Context, poolName string, req Cep
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-crush_rule>
 
 type CephAPICrushRuleStep struct {
-	Op   string `json:"op"`
-	Num  int    `json:"num"`
-	Type string `json:"type"`
-	Item int    `json:"item,omitempty"`
+	Op       string `json:"op"`
+	Num      int    `json:"num"`
+	Type     string `json:"type"`
+	Item     int    `json:"item,omitempty"`
+	ItemName string `json:"item_name,omitempty"`
 }
 
 type CephAPICrushRule struct {
