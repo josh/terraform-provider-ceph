@@ -411,6 +411,67 @@ func TestAccCephAuthResource_staticKey(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephAuthResource_keyUpdate(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testEntity := acctest.RandomWithPrefix("client.test-key-update")
+	oldKey := "AQBvaBVesCMcKRAAoKhLdz8Qh/qPNqF9UGKYfg=="
+	newKey := "AQBvaBVesCMcKRAAbbbbdz8Qh/qPNqF9UGKYfg=="
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephAuthDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_auth" "foo" {
+					  entity = %q
+					  key    = %q
+					  caps = {
+					    mon = "allow r"
+					  }
+					}
+				`, testEntity, oldKey),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephAuthExists(t, testEntity),
+					checkCephAuthHasKey(t, testEntity, oldKey),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_auth" "foo" {
+					  entity = %q
+					  key    = %q
+					  caps = {
+					    mon = "allow r"
+					  }
+					}
+				`, testEntity, newKey),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_auth.foo", plancheck.ResourceActionUpdate),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_auth.foo",
+						tfjsonpath.New("key"),
+						knownvalue.StringExact(newKey),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephAuthExists(t, testEntity),
+					checkCephAuthHasKey(t, testEntity, newKey),
+				),
+			},
+		},
+	})
+}
+
 func TestAccCephAuthResource_capsDriftDetection(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
