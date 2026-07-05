@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -765,6 +766,29 @@ func TestAccCephMgrModuleConfigResource_OutOfBandDeletion(t *testing.T) {
 					resource.TestCheckResourceAttr("ceph_mgr_module_config.test", "module_name", "dashboard"),
 					resource.TestCheckResourceAttr("ceph_mgr_module_config.test", "configs.standby_behaviour", "error"),
 				),
+			},
+		},
+	})
+}
+
+func TestAccCephMgrModuleConfigResource_unknownKey(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_mgr_module_config" "test" {
+						module_name = "dashboard"
+						configs = {
+							"no_such_option_xyz" = "1"
+						}
+					}
+				`,
+				ExpectError: regexp.MustCompile(`(?i)has no config option named`),
 			},
 		},
 	})
