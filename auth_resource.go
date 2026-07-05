@@ -5,12 +5,15 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -53,6 +56,9 @@ func (r *AuthResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				ElementType:         types.StringType,
 				MarkdownDescription: "The caps of the entity",
 				Required:            true,
+				Validators: []validator.Map{
+					mapvalidator.KeysAre(stringvalidator.OneOf("mds", "mgr", "mon", "osd")),
+				},
 			},
 			"key": resourceSchema.StringAttribute{
 				MarkdownDescription: "The cephx key of the entity. If not specified, Ceph will generate a random key.",
