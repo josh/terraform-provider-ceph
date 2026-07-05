@@ -53,6 +53,7 @@ func (r *ConfigResource) Schema(ctx context.Context, req resource.SchemaRequest,
 				ElementType:         types.StringType,
 				Validators: []validator.Map{
 					NoMgrPrefixKeys(),
+					NoEmptyValues(),
 				},
 			},
 		},
