@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
@@ -226,4 +227,55 @@ func testAccCheckCephFSSubvolumeGroupDestroy(t *testing.T, fsName string) resour
 
 		return nil
 	}
+}
+
+func TestAccCephFSSubvolumeGroupResource_OutOfBandDeletion(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	fsName := testSharedCephFSName
+	groupName := acctest.RandomWithPrefix("test-group-oob")
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_cephfs_subvolume_group" "test" {
+		  name     = %q
+		  vol_name = %q
+
+		  timeouts = {
+		    create = "5m"
+		    delete = "5m"
+		  }
+		}
+	`, groupName, fsName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephFSSubvolumeGroupDestroy(t, fsName),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				Check:           checkCephFSSubvolumeGroupExists(t, fsName, groupName),
+			},
+			{
+				PreConfig: func() {
+					if err := cephTestClusterCLI.CephFSSubvolumeGroupDelete(t.Context(), fsName, groupName); err != nil {
+						t.Fatalf("Failed to delete subvolume group out of band: %v", err)
+					}
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_cephfs_subvolume_group.test", plancheck.ResourceActionCreate),
+					},
+				},
+				Check: checkCephFSSubvolumeGroupExists(t, fsName, groupName),
+			},
+		},
+	})
 }
