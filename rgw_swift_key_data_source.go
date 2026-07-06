@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var _ datasource.DataSource = &RGWSwiftKeyDataSource{}
@@ -17,7 +18,7 @@ func newRGWSwiftKeyDataSource() datasource.DataSource {
 }
 
 type RGWSwiftKeyDataSource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type RGWSwiftKeyDataSourceModel struct {
@@ -61,12 +62,12 @@ func (d *RGWSwiftKeyDataSource) Configure(ctx context.Context, req datasource.Co
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 
 		return
@@ -105,7 +106,7 @@ func (d *RGWSwiftKeyDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
-	var foundKey *CephAPIRGWSwiftKey
+	var foundKey *restapi.RGWSwiftKey
 	for i := range user.SwiftKeys {
 		if user.SwiftKeys[i].User == subuserID {
 			foundKey = &user.SwiftKeys[i]

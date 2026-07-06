@@ -19,6 +19,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var (
@@ -32,7 +33,7 @@ func newPoolResource() resource.Resource {
 }
 
 type PoolResource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type PoolResourceModel struct {
@@ -193,12 +194,12 @@ func (r *PoolResource) Configure(ctx context.Context, req resource.ConfigureRequ
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -206,7 +207,7 @@ func (r *PoolResource) Configure(ctx context.Context, req resource.ConfigureRequ
 	r.client = client
 }
 
-func (r *PoolResource) updateModelFromAPI(ctx context.Context, data *PoolResourceModel, pool *CephAPIPool) diag.Diagnostics {
+func (r *PoolResource) updateModelFromAPI(ctx context.Context, data *PoolResourceModel, pool *restapi.Pool) diag.Diagnostics {
 	var diags diag.Diagnostics
 
 	data.Name = types.StringValue(pool.PoolName)
@@ -333,7 +334,7 @@ func (r *PoolResource) Create(ctx context.Context, req resource.CreateRequest, r
 	defer cancel()
 
 	poolType := data.PoolType.ValueString()
-	createReq := CephAPIPoolCreateRequest{
+	createReq := restapi.PoolCreateRequest{
 		Pool:     data.Name.ValueString(),
 		PoolType: &poolType,
 	}
@@ -477,7 +478,7 @@ func (r *PoolResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 
 	pool, err := r.client.GetPool(ctx, poolName)
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			tflog.Debug(ctx, "Pool not found, removing from state", map[string]interface{}{
 				"pool_name": poolName,
 			})
@@ -525,7 +526,7 @@ func (r *PoolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	originalPoolName := state.Name.ValueString()
 	newPoolName := data.Name.ValueString()
 
-	updateReq := CephAPIPoolUpdateRequest{}
+	updateReq := restapi.PoolUpdateRequest{}
 
 	// Only send pg counts that actually changed, so updates to unrelated
 	// attributes never reset a value the autoscaler has since adjusted.
@@ -665,7 +666,7 @@ func (r *PoolResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 
 	taskInfo, err := r.client.DeletePool(ctx, poolName)
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			return
 		}
 		resp.Diagnostics.AddError(

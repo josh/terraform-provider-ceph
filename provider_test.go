@@ -24,6 +24,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/echoprovider"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var (
@@ -1003,7 +1004,7 @@ func TestAccProvider_tokenAuthentication(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			client := &CephAPIClient{}
+			client := &restapi.Client{}
 			endpoint, err := url.Parse(testDashboardURL)
 			if err != nil {
 				t.Fatalf("Failed to parse test dashboard URL: %v", err)
@@ -1013,7 +1014,7 @@ func TestAccProvider_tokenAuthentication(t *testing.T) {
 				t.Fatalf("Failed to configure client: %v", err)
 			}
 
-			authToken := client.token
+			authToken := client.Token()
 			if authToken == "" {
 				t.Fatal("Failed to obtain auth token")
 			}
@@ -1053,7 +1054,7 @@ func TestAccProvider_jwtSecretAuthentication(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			client := &CephAPIClient{}
+			client := &restapi.Client{}
 			endpoint, err := url.Parse(testDashboardURL)
 			if err != nil {
 				t.Fatalf("Failed to parse test dashboard URL: %v", err)
@@ -1103,7 +1104,7 @@ func TestAccProvider_jwtSecretAuthenticationWithCustomUsername(t *testing.T) {
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			client := &CephAPIClient{}
+			client := &restapi.Client{}
 			endpoint, err := url.Parse(testDashboardURL)
 			if err != nil {
 				t.Fatalf("Failed to parse test dashboard URL: %v", err)

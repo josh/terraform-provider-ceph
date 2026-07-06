@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var (
@@ -28,7 +29,7 @@ func newCephFSSubvolumeResource() resource.Resource {
 }
 
 type CephFSSubvolumeResource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type CephFSSubvolumeResourceModel struct {
@@ -106,12 +107,12 @@ func (r *CephFSSubvolumeResource) Configure(ctx context.Context, req resource.Co
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -119,7 +120,7 @@ func (r *CephFSSubvolumeResource) Configure(ctx context.Context, req resource.Co
 	r.client = client
 }
 
-func (r *CephFSSubvolumeResource) updateModelFromAPI(data *CephFSSubvolumeResourceModel, info *CephAPISubvolumeInfo) {
+func (r *CephFSSubvolumeResource) updateModelFromAPI(data *CephFSSubvolumeResourceModel, info *restapi.SubvolumeInfo) {
 	data.Path = types.StringValue(info.Path)
 	data.DataPool = types.StringValue(info.DataPool)
 	data.State = types.StringValue(info.State)
@@ -148,7 +149,7 @@ func (r *CephFSSubvolumeResource) Create(ctx context.Context, req resource.Creat
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	createReq := CephAPISubvolumeCreateRequest{
+	createReq := restapi.SubvolumeCreateRequest{
 		VolName:    data.VolName.ValueString(),
 		SubvolName: data.Name.ValueString(),
 	}
@@ -200,7 +201,7 @@ func (r *CephFSSubvolumeResource) Read(ctx context.Context, req resource.ReadReq
 
 	info, err := r.client.CephFSSubvolumeInfo(ctx, data.VolName.ValueString(), data.Name.ValueString(), "")
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			tflog.Debug(ctx, "CephFS subvolume not found, removing from state", map[string]interface{}{
 				"vol_name":    data.VolName.ValueString(),
 				"subvol_name": data.Name.ValueString(),
@@ -268,7 +269,7 @@ func (r *CephFSSubvolumeResource) Delete(ctx context.Context, req resource.Delet
 
 	err := r.client.CephFSSubvolumeDelete(ctx, data.VolName.ValueString(), data.Name.ValueString(), "")
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			return
 		}
 		resp.Diagnostics.AddError(

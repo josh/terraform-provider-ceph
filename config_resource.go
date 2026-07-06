@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var (
@@ -26,7 +27,7 @@ func newConfigResource() resource.Resource {
 }
 
 type ConfigResource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type ConfigResourceModel struct {
@@ -67,12 +68,12 @@ func (r *ConfigResource) Configure(ctx context.Context, req resource.ConfigureRe
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -266,7 +267,7 @@ func (r *ConfigResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	for name := range configs {
 		err := r.client.ClusterDeleteConf(ctx, name, section)
 		if err != nil {
-			if errors.Is(err, ErrAPINotFound) {
+			if errors.Is(err, restapi.ErrNotFound) {
 				continue
 			}
 			resp.Diagnostics.AddWarning(

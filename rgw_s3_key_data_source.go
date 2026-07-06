@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var _ datasource.DataSource = &RGWS3KeyDataSource{}
@@ -17,7 +18,7 @@ func newRGWS3KeyDataSource() datasource.DataSource {
 }
 
 type RGWS3KeyDataSource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type RGWS3KeyDataSourceModel struct {
@@ -67,12 +68,12 @@ func (d *RGWS3KeyDataSource) Configure(ctx context.Context, req datasource.Confi
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 
 		return
@@ -105,7 +106,7 @@ func (d *RGWS3KeyDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	var matchingKeys []CephAPIRGWS3Key
+	var matchingKeys []restapi.RGWS3Key
 	for i := range user.Keys {
 		if user.Keys[i].User == userID {
 			matchingKeys = append(matchingKeys, user.Keys[i])
@@ -113,7 +114,7 @@ func (d *RGWS3KeyDataSource) Read(ctx context.Context, req datasource.ReadReques
 	}
 
 	if accessKey != "" {
-		var filteredKeys []CephAPIRGWS3Key
+		var filteredKeys []restapi.RGWS3Key
 		for i := range matchingKeys {
 			if matchingKeys[i].AccessKey == accessKey {
 				filteredKeys = append(filteredKeys, matchingKeys[i])

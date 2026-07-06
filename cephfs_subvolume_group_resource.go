@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var (
@@ -27,7 +28,7 @@ func newCephFSSubvolumeGroupResource() resource.Resource {
 }
 
 type CephFSSubvolumeGroupResource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type CephFSSubvolumeGroupResourceModel struct {
@@ -78,12 +79,12 @@ func (r *CephFSSubvolumeGroupResource) Configure(ctx context.Context, req resour
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -91,7 +92,7 @@ func (r *CephFSSubvolumeGroupResource) Configure(ctx context.Context, req resour
 	r.client = client
 }
 
-func (r *CephFSSubvolumeGroupResource) updateModelFromAPI(data *CephFSSubvolumeGroupResourceModel, info *CephAPISubvolumeInfo) {
+func (r *CephFSSubvolumeGroupResource) updateModelFromAPI(data *CephFSSubvolumeGroupResourceModel, info *restapi.SubvolumeInfo) {
 	if quota, ok := info.BytesQuotaInt64(); ok && quota > 0 {
 		data.Size = types.Int64Value(quota)
 	} else {
@@ -116,7 +117,7 @@ func (r *CephFSSubvolumeGroupResource) Create(ctx context.Context, req resource.
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	createReq := CephAPISubvolumeGroupCreateRequest{
+	createReq := restapi.SubvolumeGroupCreateRequest{
 		VolName:   data.VolName.ValueString(),
 		GroupName: data.Name.ValueString(),
 	}
@@ -136,7 +137,7 @@ func (r *CephFSSubvolumeGroupResource) Create(ctx context.Context, req resource.
 	}
 
 	if !data.Size.IsNull() && !data.Size.IsUnknown() {
-		updateReq := CephAPISubvolumeGroupUpdateRequest{
+		updateReq := restapi.SubvolumeGroupUpdateRequest{
 			GroupName: data.Name.ValueString(),
 			Size:      data.Size.ValueInt64(),
 		}
@@ -180,7 +181,7 @@ func (r *CephFSSubvolumeGroupResource) Read(ctx context.Context, req resource.Re
 
 	info, err := r.client.CephFSSubvolumeGroupInfo(ctx, data.VolName.ValueString(), data.Name.ValueString())
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			tflog.Debug(ctx, "CephFS subvolume group not found, removing from state", map[string]interface{}{
 				"vol_name":   data.VolName.ValueString(),
 				"group_name": data.Name.ValueString(),
@@ -226,7 +227,7 @@ func (r *CephFSSubvolumeGroupResource) Update(ctx context.Context, req resource.
 	// call it when there is a quota to apply; other updates (e.g. timeouts)
 	// have nothing to change on the Ceph side.
 	if !data.Size.IsNull() && !data.Size.IsUnknown() {
-		updateReq := CephAPISubvolumeGroupUpdateRequest{
+		updateReq := restapi.SubvolumeGroupUpdateRequest{
 			GroupName: data.Name.ValueString(),
 			Size:      data.Size.ValueInt64(),
 		}
@@ -279,7 +280,7 @@ func (r *CephFSSubvolumeGroupResource) Delete(ctx context.Context, req resource.
 
 	err := r.client.CephFSSubvolumeGroupDelete(ctx, data.VolName.ValueString(), data.Name.ValueString())
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			return
 		}
 		resp.Diagnostics.AddError(

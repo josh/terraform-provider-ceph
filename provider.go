@@ -13,6 +13,7 @@ import (
 	providerSchema "github.com/hashicorp/terraform-plugin-framework/provider/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 func providerFunc() provider.Provider {
@@ -177,7 +178,7 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		parsedEndpoints = append(parsedEndpoints, parsedURL)
 	}
 
-	cephClient := &CephAPIClient{}
+	cephClient := &restapi.Client{}
 	err := cephClient.Configure(ctx, parsedEndpoints, username, password, token, jwtSecret, jwtUsername, jwtExpiry)
 	if err != nil {
 		resp.Diagnostics.AddError(

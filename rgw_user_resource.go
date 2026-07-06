@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var (
@@ -23,7 +24,7 @@ func newRGWUserResource() resource.Resource {
 }
 
 type RGWUserResource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type RGWUserResourceModel struct {
@@ -92,12 +93,12 @@ func (r *RGWUserResource) Configure(ctx context.Context, req resource.ConfigureR
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -114,7 +115,7 @@ func (r *RGWUserResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	createReq := CephAPIRGWUserCreateRequest{
+	createReq := restapi.RGWUserCreateRequest{
 		UID:         data.UserID.ValueString(),
 		DisplayName: data.DisplayName.ValueString(),
 	}
@@ -170,7 +171,7 @@ func (r *RGWUserResource) Read(ctx context.Context, req resource.ReadRequest, re
 	userID := data.UserID.ValueString()
 	user, err := r.client.RGWGetUser(ctx, userID)
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -198,7 +199,7 @@ func (r *RGWUserResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	userID := data.UserID.ValueString()
-	updateReq := CephAPIRGWUserUpdateRequest{}
+	updateReq := restapi.RGWUserUpdateRequest{}
 
 	if !data.DisplayName.IsNull() && !data.DisplayName.IsUnknown() {
 		displayName := data.DisplayName.ValueString()
@@ -257,7 +258,7 @@ func (r *RGWUserResource) Delete(ctx context.Context, req resource.DeleteRequest
 	userID := data.UserID.ValueString()
 	err := r.client.RGWDeleteUser(ctx, userID)
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			return
 		}
 		resp.Diagnostics.AddError(
@@ -272,7 +273,7 @@ func (r *RGWUserResource) ImportState(ctx context.Context, req resource.ImportSt
 	resource.ImportStatePassthroughID(ctx, path.Root("user_id"), req, resp)
 }
 
-func updateModelFromAPIUser(data *RGWUserResourceModel, user *CephAPIRGWUser) {
+func updateModelFromAPIUser(data *RGWUserResourceModel, user *restapi.RGWUser) {
 	data.UserID = types.StringValue(user.UserID)
 	data.DisplayName = types.StringValue(user.DisplayName)
 	switch {

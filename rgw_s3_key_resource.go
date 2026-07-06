@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var (
@@ -27,7 +28,7 @@ func newRGWS3KeyResource() resource.Resource {
 }
 
 type RGWS3KeyResource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 func (r *RGWS3KeyResource) getUserLock(uid string) *sync.RWMutex {
@@ -100,12 +101,12 @@ func (r *RGWS3KeyResource) Configure(ctx context.Context, req resource.Configure
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -154,7 +155,7 @@ func (r *RGWS3KeyResource) Create(ctx context.Context, req resource.CreateReques
 	existingKeys := make(map[string]bool)
 	if accessKeyPtr == nil {
 		user, err := r.client.RGWGetUser(ctx, parentUID)
-		if err != nil && !errors.Is(err, ErrAPINotFound) {
+		if err != nil && !errors.Is(err, restapi.ErrNotFound) {
 			resp.Diagnostics.AddError(
 				"API Request Error",
 				fmt.Sprintf("Unable to read RGW user before key creation: %s", err),
@@ -187,7 +188,7 @@ func (r *RGWS3KeyResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	var createdKey *CephAPIRGWS3Key
+	var createdKey *restapi.RGWS3Key
 	if accessKeyPtr != nil {
 		for i := range keys {
 			if keys[i].AccessKey == *accessKeyPtr && keys[i].User == userID {
@@ -244,7 +245,7 @@ func (r *RGWS3KeyResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	user, err := r.client.RGWGetUser(ctx, parentUID)
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -255,7 +256,7 @@ func (r *RGWS3KeyResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	var foundKey *CephAPIRGWS3Key
+	var foundKey *restapi.RGWS3Key
 	for i := range user.Keys {
 		if user.Keys[i].User == userID && user.Keys[i].AccessKey == accessKey {
 			foundKey = &user.Keys[i]
@@ -301,7 +302,7 @@ func (r *RGWS3KeyResource) Delete(ctx context.Context, req resource.DeleteReques
 
 	user, err := r.client.RGWGetUser(ctx, parentUID)
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			return
 		}
 		resp.Diagnostics.AddWarning(
@@ -360,7 +361,7 @@ func (r *RGWS3KeyResource) ImportState(ctx context.Context, req resource.ImportS
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("access_key"), accessKey)...)
 }
 
-func updateModelFromAPIKey(data *RGWS3KeyResourceModel, key *CephAPIRGWS3Key) {
+func updateModelFromAPIKey(data *RGWS3KeyResourceModel, key *restapi.RGWS3Key) {
 	data.AccessKey = types.StringValue(key.AccessKey)
 	data.SecretKey = types.StringValue(key.SecretKey)
 	data.User = types.StringValue(key.User)

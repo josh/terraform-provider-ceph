@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var (
@@ -23,7 +24,7 @@ func newMgrModuleConfigResource() resource.Resource {
 }
 
 type MgrModuleConfigResource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type MgrModuleConfigResourceModel struct {
@@ -71,12 +72,12 @@ func (r *MgrModuleConfigResource) Configure(ctx context.Context, req resource.Co
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -101,7 +102,7 @@ func (r *MgrModuleConfigResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	apiConfigs := make(CephAPIMgrModuleConfig)
+	apiConfigs := make(restapi.MgrModuleConfig)
 	for key, value := range configsMap {
 		apiConfigs[key] = value
 	}
@@ -174,7 +175,7 @@ func (r *MgrModuleConfigResource) Read(ctx context.Context, req resource.ReadReq
 
 	readConfigs, err := r.client.MgrGetModuleConfig(ctx, moduleName)
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -251,7 +252,7 @@ func (r *MgrModuleConfigResource) Update(ctx context.Context, req resource.Updat
 			configName := fmt.Sprintf("mgr/%s/%s", moduleName, key)
 			err := r.client.ClusterDeleteConf(ctx, configName, "mgr")
 			if err != nil {
-				if errors.Is(err, ErrAPINotFound) {
+				if errors.Is(err, restapi.ErrNotFound) {
 					continue
 				}
 				resp.Diagnostics.AddError(
@@ -263,7 +264,7 @@ func (r *MgrModuleConfigResource) Update(ctx context.Context, req resource.Updat
 		}
 	}
 
-	apiConfigs := make(CephAPIMgrModuleConfig)
+	apiConfigs := make(restapi.MgrModuleConfig)
 	for key, value := range newConfigsMap {
 		apiConfigs[key] = value
 	}
@@ -341,7 +342,7 @@ func (r *MgrModuleConfigResource) Delete(ctx context.Context, req resource.Delet
 
 		err := r.client.ClusterDeleteConf(ctx, configName, "mgr")
 		if err != nil {
-			if errors.Is(err, ErrAPINotFound) {
+			if errors.Is(err, restapi.ErrNotFound) {
 				continue
 			}
 			resp.Diagnostics.AddError(

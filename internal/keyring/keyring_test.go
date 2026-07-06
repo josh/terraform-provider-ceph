@@ -1,4 +1,4 @@
-package main
+package keyring
 
 import (
 	"reflect"
@@ -7,9 +7,9 @@ import (
 )
 
 func TestEmptyKeyring(t *testing.T) {
-	_, err := parseCephKeyring("")
+	_, err := Parse("")
 	if err == nil {
-		t.Errorf("parseCephKeyring() error = nil, wantErr non-nil")
+		t.Errorf("Parse() error = nil, wantErr non-nil")
 	}
 }
 
@@ -22,21 +22,21 @@ caps mon = "allow *"
 caps osd = "allow *"
 `
 
-	expected := []CephUser{
+	expected := []User{
 		{
 			Entity: "client.admin",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps:   MustCephCapsFromMap(map[string]string{"mds": "allow *", "mgr": "allow *", "mon": "allow *", "osd": "allow *"}),
+			Caps:   MustCapsFromMap(map[string]string{"mds": "allow *", "mgr": "allow *", "mon": "allow *", "osd": "allow *"}),
 		},
 	}
 
-	actual, err := parseCephKeyring(text)
+	actual, err := Parse(text)
 	if err != nil {
-		t.Errorf("parseCephKeyring() error = %v, wantErr nil", err)
+		t.Errorf("Parse() error = %v, wantErr nil", err)
 	}
 
 	if !reflect.DeepEqual(actual, expected) {
-		t.Errorf("parseCephKeyring() = %v, want %v", actual, expected)
+		t.Errorf("Parse() = %v, want %v", actual, expected)
 	}
 }
 
@@ -53,26 +53,26 @@ caps mgr = "allow profile osd"
 caps mon = "allow profile osd"
 caps osd = "allow *"`
 
-	expected := []CephUser{
+	expected := []User{
 		{
 			Entity: "osd.0",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps:   MustCephCapsFromMap(map[string]string{"mgr": "allow profile osd", "mon": "allow profile osd", "osd": "allow *"}),
+			Caps:   MustCapsFromMap(map[string]string{"mgr": "allow profile osd", "mon": "allow profile osd", "osd": "allow *"}),
 		},
 		{
 			Entity: "osd.1",
 			Key:    "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB==",
-			Caps:   MustCephCapsFromMap(map[string]string{"mgr": "allow profile osd", "mon": "allow profile osd", "osd": "allow *"}),
+			Caps:   MustCapsFromMap(map[string]string{"mgr": "allow profile osd", "mon": "allow profile osd", "osd": "allow *"}),
 		},
 	}
 
-	actual, err := parseCephKeyring(text)
+	actual, err := Parse(text)
 	if err != nil {
-		t.Errorf("parseCephKeyring() error = %v, wantErr nil", err)
+		t.Errorf("Parse() error = %v, wantErr nil", err)
 	}
 
 	if !reflect.DeepEqual(actual, expected) {
-		t.Errorf("parseCephKeyring() = %v, want %v", actual, expected)
+		t.Errorf("Parse() = %v, want %v", actual, expected)
 	}
 }
 
@@ -84,21 +84,21 @@ func TestParseClientFooKeyring(t *testing.T) {
 	caps osd = "allow rwx"
 `
 
-	expected := []CephUser{
+	expected := []User{
 		{
 			Entity: "client.foo",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps:   MustCephCapsFromMap(map[string]string{"mds": "allow rw path=/", "mon": "allow rw", "osd": "allow rwx"}),
+			Caps:   MustCapsFromMap(map[string]string{"mds": "allow rw path=/", "mon": "allow rw", "osd": "allow rwx"}),
 		},
 	}
 
-	actual, err := parseCephKeyring(text)
+	actual, err := Parse(text)
 	if err != nil {
-		t.Errorf("parseCephKeyring() error = %v, wantErr nil", err)
+		t.Errorf("Parse() error = %v, wantErr nil", err)
 	}
 
 	if !reflect.DeepEqual(actual, expected) {
-		t.Errorf("parseCephKeyring() = %v, want %v", actual, expected)
+		t.Errorf("Parse() = %v, want %v", actual, expected)
 	}
 }
 
@@ -108,21 +108,21 @@ func TestParseQuotedCommandCapsKeyring(t *testing.T) {
 	caps mon = "allow command "osd blacklist""
 `
 
-	expected := []CephUser{
+	expected := []User{
 		{
 			Entity: "client.foo",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps:   MustCephCapsFromMap(map[string]string{"mon": `allow command "osd blacklist"`}),
+			Caps:   MustCapsFromMap(map[string]string{"mon": `allow command "osd blacklist"`}),
 		},
 	}
 
-	actual, err := parseCephKeyring(text)
+	actual, err := Parse(text)
 	if err != nil {
-		t.Errorf("parseCephKeyring() error = %v, wantErr nil", err)
+		t.Errorf("Parse() error = %v, wantErr nil", err)
 	}
 
 	if !reflect.DeepEqual(actual, expected) {
-		t.Errorf("parseCephKeyring() = %v, want %v", actual, expected)
+		t.Errorf("Parse() = %v, want %v", actual, expected)
 	}
 }
 
@@ -130,36 +130,36 @@ func TestParseNoCapsKeyring(t *testing.T) {
 	text := `[client.foo]
 	key = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==`
 
-	expected := []CephUser{
+	expected := []User{
 		{
 			Entity: "client.foo",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps:   CephCaps{},
+			Caps:   Caps{},
 		},
 	}
 
-	actual, err := parseCephKeyring(text)
+	actual, err := Parse(text)
 	if err != nil {
-		t.Errorf("parseCephKeyring() error = %v, wantErr nil", err)
+		t.Errorf("Parse() error = %v, wantErr nil", err)
 	}
 
 	if !reflect.DeepEqual(actual, expected) {
-		t.Errorf("parseCephKeyring() = %v, want %v", actual, expected)
+		t.Errorf("Parse() = %v, want %v", actual, expected)
 	}
 }
 
 func TestInvalidKeyring(t *testing.T) {
 	text := `hello`
 
-	_, err := parseCephKeyring(text)
+	_, err := Parse(text)
 	if err == nil {
-		t.Errorf("parseCephKeyring() error = nil, wantErr non-nil")
+		t.Errorf("Parse() error = nil, wantErr non-nil")
 		return
 	}
 
 	expectedError := "parse error:1:hello"
 	if !strings.Contains(err.Error(), expectedError) {
-		t.Errorf("parseCephKeyring() error = %q, want error containing %q", err.Error(), expectedError)
+		t.Errorf("Parse() error = %q, want error containing %q", err.Error(), expectedError)
 	}
 }
 
@@ -169,30 +169,30 @@ func TestIgnoreUnknownProperties(t *testing.T) {
 	foo = bar
 `
 
-	expected := []CephUser{
+	expected := []User{
 		{
 			Entity: "client.foo",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps:   CephCaps{},
+			Caps:   Caps{},
 		},
 	}
 
-	actual, err := parseCephKeyring(text)
+	actual, err := Parse(text)
 	if err != nil {
-		t.Errorf("parseCephKeyring() error = %v, wantErr nil", err)
+		t.Errorf("Parse() error = %v, wantErr nil", err)
 	}
 
 	if !reflect.DeepEqual(actual, expected) {
-		t.Errorf("parseCephKeyring() = %v, want %v", actual, expected)
+		t.Errorf("Parse() = %v, want %v", actual, expected)
 	}
 }
 
 func TestFormatClientAdminKeyring(t *testing.T) {
-	users := []CephUser{
+	users := []User{
 		{
 			Entity: "client.admin",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps:   MustCephCapsFromMap(map[string]string{"mds": "allow *", "mgr": "allow *", "mon": "allow *", "osd": "allow *"}),
+			Caps:   MustCapsFromMap(map[string]string{"mds": "allow *", "mgr": "allow *", "mon": "allow *", "osd": "allow *"}),
 		},
 	}
 
@@ -204,19 +204,19 @@ func TestFormatClientAdminKeyring(t *testing.T) {
 	caps osd = "allow *"
 `
 
-	actual := formatCephKeyring(users)
+	actual := Format(users)
 
 	if actual != expected {
-		t.Errorf("formatCephKeyring() = %q, want %q", actual, expected)
+		t.Errorf("Format() = %q, want %q", actual, expected)
 	}
 }
 
 func TestFormatClientFooKeyring(t *testing.T) {
-	users := []CephUser{
+	users := []User{
 		{
 			Entity: "client.foo",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps:   MustCephCapsFromMap(map[string]string{"mds": "allow rw path=/", "mon": "allow rw", "osd": "allow rwx"}),
+			Caps:   MustCapsFromMap(map[string]string{"mds": "allow rw path=/", "mon": "allow rw", "osd": "allow rwx"}),
 		},
 	}
 
@@ -227,19 +227,19 @@ func TestFormatClientFooKeyring(t *testing.T) {
 	caps osd = "allow rwx"
 `
 
-	actual := formatCephKeyring(users)
+	actual := Format(users)
 
 	if actual != expected {
-		t.Errorf("formatCephKeyring() = %q, want %q", actual, expected)
+		t.Errorf("Format() = %q, want %q", actual, expected)
 	}
 }
 
 func TestFormatNoCapsKeyring(t *testing.T) {
-	users := []CephUser{
+	users := []User{
 		{
 			Entity: "client.foo",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps:   CephCaps{},
+			Caps:   Caps{},
 		},
 	}
 
@@ -247,24 +247,24 @@ func TestFormatNoCapsKeyring(t *testing.T) {
 	key = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
 `
 
-	actual := formatCephKeyring(users)
+	actual := Format(users)
 
 	if actual != expected {
-		t.Errorf("formatCephKeyring() = %q, want %q", actual, expected)
+		t.Errorf("Format() = %q, want %q", actual, expected)
 	}
 }
 
 func TestFormatMultipleUsers(t *testing.T) {
-	users := []CephUser{
+	users := []User{
 		{
 			Entity: "osd.0",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps:   MustCephCapsFromMap(map[string]string{"mgr": "allow profile osd", "mon": "allow profile osd", "osd": "allow *"}),
+			Caps:   MustCapsFromMap(map[string]string{"mgr": "allow profile osd", "mon": "allow profile osd", "osd": "allow *"}),
 		},
 		{
 			Entity: "osd.1",
 			Key:    "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB==",
-			Caps:   MustCephCapsFromMap(map[string]string{"mgr": "allow profile osd", "mon": "allow profile osd", "osd": "allow *"}),
+			Caps:   MustCapsFromMap(map[string]string{"mgr": "allow profile osd", "mon": "allow profile osd", "osd": "allow *"}),
 		},
 	}
 
@@ -281,34 +281,34 @@ func TestFormatMultipleUsers(t *testing.T) {
 	caps osd = "allow *"
 `
 
-	actual := formatCephKeyring(users)
+	actual := Format(users)
 
 	if actual != expected {
-		t.Errorf("formatCephKeyring() = %q, want %q", actual, expected)
+		t.Errorf("Format() = %q, want %q", actual, expected)
 	}
 }
 
 func TestFormatParseRoundTrip(t *testing.T) {
-	original := []CephUser{
+	original := []User{
 		{
 			Entity: "client.admin",
 			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
-			Caps:   MustCephCapsFromMap(map[string]string{"mds": "allow *", "mgr": "allow *", "mon": "allow *", "osd": "allow *"}),
+			Caps:   MustCapsFromMap(map[string]string{"mds": "allow *", "mgr": "allow *", "mon": "allow *", "osd": "allow *"}),
 		},
 	}
 
-	serialized := formatCephKeyring(original)
+	serialized := Format(original)
 
-	parsed, err := parseCephKeyring(serialized)
+	parsed, err := Parse(serialized)
 	if err != nil {
-		t.Errorf("parseCephKeyring() error = %v, wantErr nil", err)
+		t.Errorf("Parse() error = %v, wantErr nil", err)
 	}
 
 	if !reflect.DeepEqual(parsed, original) {
 		t.Errorf("Round-trip failed: got %v, want %v", parsed, original)
 	}
 
-	reserialized := formatCephKeyring(parsed)
+	reserialized := Format(parsed)
 	if reserialized != serialized {
 		t.Errorf("Re-serialization changed output:\nFirst:  %q\nSecond: %q", serialized, reserialized)
 	}
