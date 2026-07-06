@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/cephvalues"
 	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
@@ -162,7 +163,7 @@ func (r *ConfigResource) Read(ctx context.Context, req resource.ReadRequest, res
 				// Ceph stores a canonicalized form of the value, so keep the
 				// state's spelling when it means the same thing to avoid a
 				// perpetual diff (e.g. "0.5" vs "0.500000").
-				if configValuesEqual(apiConfig.Type, configs[name], v.Value) {
+				if cephvalues.ClusterEqual(apiConfig.Type, configs[name], v.Value) {
 					updatedConfigs[name] = configs[name]
 				} else {
 					updatedConfigs[name] = v.Value

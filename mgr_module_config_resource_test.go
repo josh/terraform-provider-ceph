@@ -483,6 +483,52 @@ func TestAccCephMgrModuleConfigResource_booleanValues(t *testing.T) {
 	})
 }
 
+func TestAccCephMgrModuleConfigResource_normalizedValues(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	config := testAccProviderConfigBlock + `
+		resource "ceph_mgr_module_config" "test" {
+			module_name = "dashboard"
+			configs = {
+				ssl = "1"
+			}
+		}
+	`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephMgrModuleConfigDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_mgr_module_config.test",
+						tfjsonpath.New("configs").AtMapKey("ssl"),
+						knownvalue.StringExact("1"),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					func(s *terraform.State) error {
+						return assertCephMgrModuleConfigValue(t.Context(), "dashboard", "ssl", "true")
+					},
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
 func TestAccCephMgrModuleConfigResource_stringValues(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()

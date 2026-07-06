@@ -1,8 +1,8 @@
-package main
+package cephvalues
 
 import "testing"
 
-func TestConfigValuesEqual(t *testing.T) {
+func TestClusterEqual(t *testing.T) {
 	tests := []struct {
 		optType string
 		a, b    string
@@ -82,8 +82,8 @@ func TestConfigValuesEqual(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		if got := configValuesEqual(tt.optType, tt.a, tt.b); got != tt.want {
-			t.Errorf("configValuesEqual(%q, %q, %q) = %v, want %v", tt.optType, tt.a, tt.b, got, tt.want)
+		if got := ClusterEqual(tt.optType, tt.a, tt.b); got != tt.want {
+			t.Errorf("ClusterEqual(%q, %q, %q) = %v, want %v", tt.optType, tt.a, tt.b, got, tt.want)
 		}
 	}
 }

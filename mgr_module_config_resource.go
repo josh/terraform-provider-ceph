@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/cephvalues"
 	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
@@ -140,7 +141,7 @@ func (r *MgrModuleConfigResource) Create(ctx context.Context, req resource.Creat
 			)
 			return
 		}
-		formattedVal, err := formatMgrModuleConfigValue(val)
+		formattedVal, err := cephvalues.MgrModuleString(configsMap[key], val)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Configuration Value Formatting Error",
@@ -195,7 +196,7 @@ func (r *MgrModuleConfigResource) Read(ctx context.Context, req resource.ReadReq
 	stringConfigs := make(map[string]string)
 	for key := range currentConfigsMap {
 		if val, ok := readConfigs[key]; ok {
-			formattedVal, err := formatMgrModuleConfigValue(val)
+			formattedVal, err := cephvalues.MgrModuleString(currentConfigsMap[key], val)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Configuration Value Formatting Error",
@@ -298,7 +299,7 @@ func (r *MgrModuleConfigResource) Update(ctx context.Context, req resource.Updat
 			)
 			return
 		}
-		formattedVal, err := formatMgrModuleConfigValue(val)
+		formattedVal, err := cephvalues.MgrModuleString(newConfigsMap[key], val)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Configuration Value Formatting Error",
@@ -382,7 +383,7 @@ func (r *MgrModuleConfigResource) ImportState(ctx context.Context, req resource.
 			continue
 		}
 
-		valStr, err := formatMgrModuleConfigValue(val)
+		valStr, err := cephvalues.FormatMgrModuleValue(val)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Configuration Value Formatting Error",
@@ -391,7 +392,7 @@ func (r *MgrModuleConfigResource) ImportState(ctx context.Context, req resource.
 			return
 		}
 
-		defaultStr, err := formatMgrModuleConfigValue(option.DefaultValue)
+		defaultStr, err := cephvalues.FormatMgrModuleValue(option.DefaultValue)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Configuration Value Formatting Error",

@@ -3,11 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/cephvalues"
 	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
@@ -94,7 +94,7 @@ func (d *MgrModuleConfigDataSource) Read(ctx context.Context, req datasource.Rea
 
 	configMap := make(map[string]string)
 	for key, value := range config {
-		formattedVal, err := formatMgrModuleConfigValue(value)
+		formattedVal, err := cephvalues.FormatMgrModuleValue(value)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Configuration Value Formatting Error",
@@ -115,31 +115,4 @@ func (d *MgrModuleConfigDataSource) Read(ctx context.Context, req datasource.Rea
 	data.ID = types.StringValue(moduleName)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
-}
-
-func formatMgrModuleConfigValue(val any) (string, error) {
-	switch v := val.(type) {
-	case nil:
-		return "", nil
-	case float64:
-		if v == float64(int64(v)) {
-			return fmt.Sprintf("%d", int64(v)), nil
-		}
-		return strconv.FormatFloat(v, 'g', -1, 64), nil
-	case float32:
-		if v == float32(int32(v)) {
-			return fmt.Sprintf("%d", int32(v)), nil
-		}
-		return strconv.FormatFloat(float64(v), 'g', -1, 32), nil
-	case int, int8, int16, int32, int64:
-		return fmt.Sprintf("%d", v), nil
-	case uint, uint8, uint16, uint32, uint64:
-		return fmt.Sprintf("%d", v), nil
-	case bool:
-		return fmt.Sprintf("%t", v), nil
-	case string:
-		return v, nil
-	default:
-		return "", fmt.Errorf("unsupported config value type: %T", v)
-	}
 }
