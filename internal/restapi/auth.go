@@ -118,6 +118,10 @@ func queryEndpoints(ctx context.Context, endpoints []*url.URL) (*url.URL, error)
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-auth-check>
 
+type authCheckResponse struct {
+	Username string `json:"username"`
+}
+
 func (c *Client) AuthCheck(ctx context.Context) (bool, error) {
 	url := c.endpoint.JoinPath("/api/auth/check").String() + "?token=" + c.token
 	ctx = tflog.MaskLogStrings(ctx, c.token)
@@ -145,7 +149,21 @@ func (c *Client) AuthCheck(ctx context.Context) (bool, error) {
 
 	switch httpResp.StatusCode {
 	case http.StatusOK, http.StatusCreated, http.StatusAccepted:
-		return true, nil
+		body, err := io.ReadAll(httpResp.Body)
+		if err != nil {
+			return false, fmt.Errorf("unable to read check response: %w", err)
+		}
+
+		tflog.Trace(ctx, "Ceph API response body", map[string]any{
+			"response_body": string(body),
+			"status_code":   httpResp.StatusCode,
+		})
+
+		var checkResp authCheckResponse
+		if err := json.Unmarshal(body, &checkResp); err != nil {
+			return false, fmt.Errorf("unable to decode check response: %w", err)
+		}
+		return checkResp.Username != "", nil
 	case http.StatusUnauthorized:
 		return false, fmt.Errorf("token is invalid or expired")
 	default:
