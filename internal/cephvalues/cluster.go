@@ -1,4 +1,12 @@
-package main
+// Package cephvalues compares and formats Ceph option value spellings.
+//
+// Cluster config options (mon) are parsed at set time by strict C++
+// parsers in src/common and stored canonicalized, while mgr module
+// options are stored as raw strings and coerced typed at read time by
+// src/mgr/PyUtil.cc. The two backends accept different spellings for the
+// same option types (suffixes, bool synonyms, durations), so their
+// helpers are deliberately separate.
+package cephvalues
 
 import (
 	"math"
@@ -7,30 +15,27 @@ import (
 	"strings"
 )
 
-// Ceph normalizes option values before storing them (bool → "true"/"false",
-// float → fixed-point, size/secs suffixes → plain numbers), so the value in
-// `config dump` rarely matches the user's literal input byte-for-byte.
-// configValuesEqual reports whether two spellings mean the same value for a
-// given option type, mirroring the upstream parsers in src/common
+// ClusterEqual reports whether two spellings mean the same cluster config
+// value for a given option type, mirroring the upstream parsers
 // (strict_strtob, strict_si_cast, strict_iec_cast, parse_timespan, stoull)
 // and the canonical forms produced by Option::to_str.
-func configValuesEqual(optType, a, b string) bool {
+func ClusterEqual(optType, a, b string) bool {
 	if a == b {
 		return true
 	}
 
 	switch optType {
 	case "bool":
-		av, aok := parseCephBool(a)
-		bv, bok := parseCephBool(b)
+		av, aok := parseBool(a)
+		bv, bok := parseBool(b)
 		return aok && bok && av == bv
 	case "int", "uint":
-		av, aok := parseCephSIInt(a)
-		bv, bok := parseCephSIInt(b)
+		av, aok := parseSIInt(a)
+		bv, bok := parseSIInt(b)
 		return aok && bok && av == bv
 	case "size":
-		av, aok := parseCephIECInt(a)
-		bv, bok := parseCephIECInt(b)
+		av, aok := parseIECInt(a)
+		bv, bok := parseIECInt(b)
 		return aok && bok && av == bv
 	case "float":
 		af, aerr := strconv.ParseFloat(strings.TrimSpace(a), 64)
@@ -39,8 +44,8 @@ func configValuesEqual(optType, a, b string) bool {
 		return aerr == nil && berr == nil &&
 			strconv.FormatFloat(af, 'f', 6, 64) == strconv.FormatFloat(bf, 'f', 6, 64)
 	case "secs":
-		av, aok := parseCephTimespan(a)
-		bv, bok := parseCephTimespan(b)
+		av, aok := parseTimespan(a)
+		bv, bok := parseTimespan(b)
 		return aok && bok && av == bv
 	case "millisecs":
 		// Parsed with stoull, which reads the leading digits and ignores
@@ -51,13 +56,13 @@ func configValuesEqual(optType, a, b string) bool {
 	case "uuid":
 		return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
 	case "addr":
-		return cephAddrEqual(a, b) || cephAddrEqual(b, a)
+		return addrEqual(a, b) || addrEqual(b, a)
 	default:
 		return false
 	}
 }
 
-func parseCephBool(s string) (bool, bool) {
+func parseBool(s string) (bool, bool) {
 	s = strings.TrimSpace(s)
 	if strings.EqualFold(s, "true") {
 		return true, true
@@ -71,11 +76,11 @@ func parseCephBool(s string) (bool, bool) {
 	return false, false
 }
 
-var configScaleExponents = map[byte]int{'K': 1, 'M': 2, 'G': 3, 'T': 4, 'P': 5, 'E': 6}
+var scaleExponents = map[byte]int{'K': 1, 'M': 2, 'G': 3, 'T': 4, 'P': 5, 'E': 6}
 
 // int/uint options take a single trailing decimal suffix: K/M/G/T/P/E
 // multiply by powers of 1000, B multiplies by one.
-func parseCephSIInt(s string) (int64, bool) {
+func parseSIInt(s string) (int64, bool) {
 	s = strings.TrimSpace(s)
 	if v, err := strconv.ParseInt(s, 10, 64); err == nil {
 		return v, true
@@ -90,7 +95,7 @@ func parseCephSIInt(s string) (int64, bool) {
 		v, err := strconv.ParseInt(num, 10, 64)
 		return v, err == nil
 	}
-	exp, ok := configScaleExponents[suffix]
+	exp, ok := scaleExponents[suffix]
 	if !ok {
 		return 0, false
 	}
@@ -104,7 +109,7 @@ func parseCephSIInt(s string) (int64, bool) {
 // size options take binary suffixes: K/M/G/T/P/E and Ki/Mi/... all multiply
 // by powers of 1024, with an optional trailing B ("1K" = "1KiB" = 1024,
 // "100B" = 100).
-func parseCephIECInt(s string) (int64, bool) {
+func parseIECInt(s string) (int64, bool) {
 	s = strings.TrimSpace(s)
 	if v, err := strconv.ParseInt(s, 10, 64); err == nil {
 		return v, true
@@ -126,7 +131,7 @@ func parseCephIECInt(s string) (int64, bool) {
 	if len(unit) == 0 || len(unit) > 2 || (len(unit) == 2 && unit[1] != 'i') {
 		return 0, false
 	}
-	exp, ok := configScaleExponents[unit[0]]
+	exp, ok := scaleExponents[unit[0]]
 	if !ok {
 		return 0, false
 	}
@@ -147,7 +152,7 @@ func scaleInt(v int64, base int64, exp int) (int64, bool) {
 	return v, true
 }
 
-var configTimespanUnits = map[string]int64{
+var timespanUnits = map[string]int64{
 	"s": 1, "sec": 1, "second": 1, "seconds": 1,
 	"m": 60, "min": 60, "minute": 60, "minutes": 60,
 	"h": 3600, "hr": 3600, "hour": 3600, "hours": 3600,
@@ -159,7 +164,7 @@ var configTimespanUnits = map[string]int64{
 
 // secs options are parsed by summing value/unit pairs ("1h 30m" = 5400); a
 // bare trailing number counts as seconds.
-func parseCephTimespan(s string) (int64, bool) {
+func parseTimespan(s string) (int64, bool) {
 	var total int64
 	parsedAny := false
 
@@ -193,7 +198,7 @@ func parseCephTimespan(s string) (int64, bool) {
 			pos++
 		}
 		if start != pos {
-			mult, ok := configTimespanUnits[s[start:pos]]
+			mult, ok := timespanUnits[s[start:pos]]
 			if !ok {
 				return 0, false
 			}
@@ -228,7 +233,7 @@ func parseLeadingUint(s string) (uint64, bool) {
 // type prefix, default port, and nonce ("1.2.3.4" is stored as
 // "v2:1.2.3.4:0/0"). Only exact decorated forms of the other spelling are
 // recognized; anything else stays unequal.
-func cephAddrEqual(a, b string) bool {
+func addrEqual(a, b string) bool {
 	a, b = strings.TrimSpace(a), strings.TrimSpace(b)
 	if a == b {
 		return true
