@@ -15,6 +15,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/keyring"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var (
@@ -27,7 +29,7 @@ func newAuthResource() resource.Resource {
 }
 
 type AuthResource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type AuthResourceModel struct {
@@ -80,12 +82,12 @@ func (r *AuthResource) Configure(ctx context.Context, req resource.ConfigureRequ
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -112,14 +114,14 @@ func (r *AuthResource) Create(ctx context.Context, req resource.CreateRequest, r
 	key := data.Key.ValueString()
 	var err error
 	if key != "" {
-		users := []CephUser{
+		users := []keyring.User{
 			{
 				Entity: entity,
 				Key:    key,
 				Caps:   caps,
 			},
 		}
-		importData := formatCephKeyring(users)
+		importData := keyring.Format(users)
 		err = r.client.ClusterImportUser(ctx, importData)
 	} else {
 		err = r.client.ClusterCreateUser(ctx, entity, caps)
@@ -152,7 +154,7 @@ func (r *AuthResource) Read(ctx context.Context, req resource.ReadRequest, resp 
 	entity := data.Entity.ValueString()
 	keyringRaw, err := r.client.ClusterExportUser(ctx, entity)
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -194,14 +196,14 @@ func (r *AuthResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	if !data.Key.IsNull() && !data.Key.IsUnknown() && key != "" && key != state.Key.ValueString() {
 		// ceph auth import replaces both the key and the caps of an
 		// existing entity; a plain caps update can never change the key.
-		users := []CephUser{
+		users := []keyring.User{
 			{
 				Entity: entity,
 				Key:    key,
 				Caps:   caps,
 			},
 		}
-		err = r.client.ClusterImportUser(ctx, formatCephKeyring(users))
+		err = r.client.ClusterImportUser(ctx, keyring.Format(users))
 	} else {
 		err = r.client.ClusterUpdateUser(ctx, entity, caps)
 	}
@@ -233,7 +235,7 @@ func (r *AuthResource) Delete(ctx context.Context, req resource.DeleteRequest, r
 	entity := data.Entity.ValueString()
 	err := r.client.ClusterDeleteUser(ctx, entity)
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			return
 		}
 		resp.Diagnostics.AddError(
@@ -248,7 +250,7 @@ func (r *AuthResource) ImportState(ctx context.Context, req resource.ImportState
 	resource.ImportStatePassthroughID(ctx, path.Root("entity"), req, resp)
 }
 
-func updateAuthModelFromCephExport(ctx context.Context, client *CephAPIClient, entity string, data *AuthResourceModel, diagnostics *diag.Diagnostics) {
+func updateAuthModelFromCephExport(ctx context.Context, client *restapi.Client, entity string, data *AuthResourceModel, diagnostics *diag.Diagnostics) {
 	keyringRaw, err := client.ClusterExportUser(ctx, entity)
 	if err != nil {
 		diagnostics.AddError(
@@ -262,7 +264,7 @@ func updateAuthModelFromCephExport(ctx context.Context, client *CephAPIClient, e
 }
 
 func updateAuthModelFromKeyring(ctx context.Context, keyringRaw string, data *AuthResourceModel, diagnostics *diag.Diagnostics) {
-	keyringUsers, err := parseCephKeyring(keyringRaw)
+	keyringUsers, err := keyring.Parse(keyringRaw)
 	if err != nil {
 		diagnostics.AddError(
 			"Unable to parse keyring data",
@@ -288,27 +290,27 @@ func updateAuthModelFromKeyring(ctx context.Context, keyringRaw string, data *Au
 	data.Keyring = types.StringValue(keyringRaw)
 }
 
-func mapAttrToCephCaps(ctx context.Context, caps types.Map, diags *diag.Diagnostics) (CephCaps, bool) {
+func mapAttrToCephCaps(ctx context.Context, caps types.Map, diags *diag.Diagnostics) (keyring.Caps, bool) {
 	if caps.IsUnknown() {
 		diags.AddError("Invalid Capabilities", "caps must be known")
-		return CephCaps{}, false
+		return keyring.Caps{}, false
 	}
 
 	if caps.IsNull() {
 		diags.AddError("Invalid Capabilities", "caps must be provided")
-		return CephCaps{}, false
+		return keyring.Caps{}, false
 	}
 
 	var raw map[string]string
 	diags.Append(caps.ElementsAs(ctx, &raw, false)...)
 	if diags.HasError() {
-		return CephCaps{}, false
+		return keyring.Caps{}, false
 	}
 
-	result, err := NewCephCapsFromMap(raw)
+	result, err := keyring.CapsFromMap(raw)
 	if err != nil {
 		diags.AddError("Invalid Capabilities", err.Error())
-		return CephCaps{}, false
+		return keyring.Caps{}, false
 	}
 
 	return result, true

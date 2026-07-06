@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var (
@@ -29,7 +30,7 @@ func newCephFSResource() resource.Resource {
 }
 
 type CephFSResource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type CephFSResourceModel struct {
@@ -88,12 +89,12 @@ func (r *CephFSResource) Configure(ctx context.Context, req resource.ConfigureRe
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -101,7 +102,7 @@ func (r *CephFSResource) Configure(ctx context.Context, req resource.ConfigureRe
 	r.client = client
 }
 
-func (r *CephFSResource) updateModelFromAPI(ctx context.Context, data *CephFSResourceModel, fs *CephAPICephFS) diag.Diagnostics {
+func (r *CephFSResource) updateModelFromAPI(ctx context.Context, data *CephFSResourceModel, fs *restapi.CephFS) diag.Diagnostics {
 	var diags diag.Diagnostics
 
 	data.Name = types.StringValue(fs.Name)
@@ -140,7 +141,7 @@ func (r *CephFSResource) Create(ctx context.Context, req resource.CreateRequest,
 	ctx, cancel := context.WithTimeout(ctx, createTimeout)
 	defer cancel()
 
-	createReq := CephAPICephFSCreateRequest{
+	createReq := restapi.CephFSCreateRequest{
 		Name: data.Name.ValueString(),
 		ServiceSpec: map[string]interface{}{
 			"placement": map[string]interface{}{},
@@ -160,7 +161,7 @@ func (r *CephFSResource) Create(ctx context.Context, req resource.CreateRequest,
 		return
 	}
 
-	var fs *CephAPICephFS
+	var fs *restapi.CephFS
 	for retries := 0; retries < 30; retries++ {
 		fs, err = r.client.CephFSGetByName(ctx, data.Name.ValueString())
 		if err == nil {
@@ -212,7 +213,7 @@ func (r *CephFSResource) Read(ctx context.Context, req resource.ReadRequest, res
 
 	fs, err := r.client.CephFSGetByName(ctx, fsName)
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			tflog.Debug(ctx, "CephFS filesystem not found, removing from state", map[string]interface{}{
 				"fs_name": fsName,
 			})
@@ -286,7 +287,7 @@ func (r *CephFSResource) Delete(ctx context.Context, req resource.DeleteRequest,
 
 	err := r.client.CephFSDelete(ctx, fsName)
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			return
 		}
 		resp.Diagnostics.AddError(

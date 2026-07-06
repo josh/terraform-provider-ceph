@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var (
@@ -24,7 +25,7 @@ func newAuthEphemeralResource() ephemeral.EphemeralResource {
 }
 
 type AuthEphemeralResource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type AuthEphemeralResourceModel struct {
@@ -73,12 +74,12 @@ func (r *AuthEphemeralResource) Configure(ctx context.Context, req ephemeral.Con
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -117,7 +118,7 @@ func (r *AuthEphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequ
 		if !resp.Diagnostics.HasError() {
 			return
 		}
-		if err := r.client.ClusterDeleteUser(ctx, entity); err != nil && !errors.Is(err, ErrAPINotFound) {
+		if err := r.client.ClusterDeleteUser(ctx, entity); err != nil && !errors.Is(err, restapi.ErrNotFound) {
 			resp.Diagnostics.AddWarning(
 				"Cleanup Failed",
 				fmt.Sprintf("Unable to delete user %q after failed open, it may need manual removal: %s", entity, err),
@@ -170,7 +171,7 @@ func (r *AuthEphemeralResource) Close(ctx context.Context, req ephemeral.CloseRe
 	}
 
 	err := r.client.ClusterDeleteUser(ctx, entity)
-	if err != nil && !errors.Is(err, ErrAPINotFound) {
+	if err != nil && !errors.Is(err, restapi.ErrNotFound) {
 		resp.Diagnostics.AddError(
 			"API Request Error",
 			fmt.Sprintf("Unable to delete user from Ceph API: %s", err),

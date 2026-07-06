@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var _ datasource.DataSource = &MgrModuleConfigDataSource{}
@@ -17,7 +18,7 @@ func newMgrModuleConfigDataSource() datasource.DataSource {
 }
 
 type MgrModuleConfigDataSource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type MgrModuleConfigDataSourceModel struct {
@@ -59,12 +60,12 @@ func (d *MgrModuleConfigDataSource) Configure(ctx context.Context, req datasourc
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Data Source Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}

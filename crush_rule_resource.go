@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var (
@@ -29,7 +30,7 @@ func newCrushRuleResource() resource.Resource {
 }
 
 type CrushRuleResource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type CrushRuleResourceModel struct {
@@ -164,12 +165,12 @@ func (r *CrushRuleResource) Configure(ctx context.Context, req resource.Configur
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -207,7 +208,7 @@ func (r *CrushRuleResource) Create(ctx context.Context, req resource.CreateReque
 		}
 	}
 
-	createReq := CephAPICrushRuleCreateRequest{
+	createReq := restapi.CrushRuleCreateRequest{
 		Name:          data.Name.ValueString(),
 		PoolType:      data.PoolType.ValueString(),
 		FailureDomain: data.FailureDomain.ValueString(),
@@ -265,7 +266,7 @@ func (r *CrushRuleResource) Read(ctx context.Context, req resource.ReadRequest, 
 
 	rule, err := r.client.GetCrushRule(ctx, data.Name.ValueString())
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -302,7 +303,7 @@ func (r *CrushRuleResource) Delete(ctx context.Context, req resource.DeleteReque
 
 	err := r.client.DeleteCrushRule(ctx, data.Name.ValueString())
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			return
 		}
 		resp.Diagnostics.AddError(
@@ -318,7 +319,7 @@ func (r *CrushRuleResource) ImportState(ctx context.Context, req resource.Import
 
 	rule, err := r.client.GetCrushRule(ctx, ruleName)
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			resp.Diagnostics.AddError(
 				"CRUSH Rule Not Found",
 				fmt.Sprintf("CRUSH rule '%s' does not exist in Ceph. Verify the rule name is correct.", ruleName),
@@ -362,7 +363,7 @@ func (r *CrushRuleResource) ImportState(ctx context.Context, req resource.Import
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func (r *CrushRuleResource) updateModelFromAPI(data *CrushRuleResourceModel, rule *CephAPICrushRule) diag.Diagnostics {
+func (r *CrushRuleResource) updateModelFromAPI(data *CrushRuleResourceModel, rule *restapi.CrushRule) diag.Diagnostics {
 	var diags diag.Diagnostics
 
 	data.RuleID = types.Int64Value(int64(rule.RuleID))

@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var (
@@ -23,7 +24,7 @@ func newRGWBucketResource() resource.Resource {
 }
 
 type RGWBucketResource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type RGWBucketResourceModel struct {
@@ -96,12 +97,12 @@ func (r *RGWBucketResource) Configure(ctx context.Context, req resource.Configur
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 
 		return
@@ -119,7 +120,7 @@ func (r *RGWBucketResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	createReq := CephAPIRGWBucketCreateRequest{
+	createReq := restapi.RGWBucketCreateRequest{
 		Bucket: data.Bucket.ValueString(),
 		UID:    data.Owner.ValueString(),
 	}
@@ -165,7 +166,7 @@ func (r *RGWBucketResource) Read(ctx context.Context, req resource.ReadRequest, 
 	bucketName := data.Bucket.ValueString()
 	bucket, err := r.client.RGWGetBucketWithRetry(ctx, bucketName)
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -200,7 +201,7 @@ func (r *RGWBucketResource) Delete(ctx context.Context, req resource.DeleteReque
 	bucketName := data.Bucket.ValueString()
 	err := r.client.RGWDeleteBucket(ctx, bucketName)
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			return
 		}
 		resp.Diagnostics.AddError(
@@ -215,7 +216,7 @@ func (r *RGWBucketResource) ImportState(ctx context.Context, req resource.Import
 	resource.ImportStatePassthroughID(ctx, path.Root("bucket"), req, resp)
 }
 
-func updateModelFromAPIBucket(data *RGWBucketResourceModel, bucket *CephAPIRGWBucket) {
+func updateModelFromAPIBucket(data *RGWBucketResourceModel, bucket *restapi.RGWBucket) {
 	data.Bucket = types.StringValue(bucket.Bucket)
 	data.Owner = types.StringValue(bucket.Owner)
 	data.Zonegroup = types.StringValue(bucket.Zonegroup)

@@ -8,6 +8,8 @@ import (
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/keyring"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var _ datasource.DataSource = &AuthDataSource{}
@@ -17,7 +19,7 @@ func newAuthDataSource() datasource.DataSource {
 }
 
 type AuthDataSource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type AuthDataSourceModel struct {
@@ -63,7 +65,7 @@ func (d *AuthDataSource) Configure(ctx context.Context, req datasource.Configure
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
@@ -96,7 +98,7 @@ func (d *AuthDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 		return
 	}
 
-	keyringUsers, err := parseCephKeyring(keyringRaw)
+	keyringUsers, err := keyring.Parse(keyringRaw)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to parse keyring data",
@@ -124,7 +126,7 @@ func (d *AuthDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-func cephCapsToMapValue(ctx context.Context, caps CephCaps, diags *diag.Diagnostics) types.Map {
+func cephCapsToMapValue(ctx context.Context, caps keyring.Caps, diags *diag.Diagnostics) types.Map {
 	value, err := types.MapValueFrom(ctx, types.StringType, caps.Map())
 	if err != nil {
 		diags.AddError("State Error", fmt.Sprintf("unable to encode caps: %s", err))

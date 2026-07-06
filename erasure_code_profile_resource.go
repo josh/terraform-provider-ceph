@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 var (
@@ -29,7 +30,7 @@ func newErasureCodeProfileResource() resource.Resource {
 }
 
 type ErasureCodeProfileResource struct {
-	client *CephAPIClient
+	client *restapi.Client
 }
 
 type ErasureCodeProfileResourceModel struct {
@@ -258,12 +259,12 @@ func (r *ErasureCodeProfileResource) Configure(ctx context.Context, req resource
 		return
 	}
 
-	client, ok := req.ProviderData.(*CephAPIClient)
+	client, ok := req.ProviderData.(*restapi.Client)
 
 	if !ok {
 		resp.Diagnostics.AddError(
 			"Unexpected Resource Configure Type",
-			fmt.Sprintf("Expected *CephAPIClient, got: %T. Please report this issue to the provider developers.", req.ProviderData),
+			fmt.Sprintf("Expected *restapi.Client, got: %T. Please report this issue to the provider developers.", req.ProviderData),
 		)
 		return
 	}
@@ -280,7 +281,7 @@ func (r *ErasureCodeProfileResource) Create(ctx context.Context, req resource.Cr
 		return
 	}
 
-	createReq := CephAPIErasureCodeProfileCreateRequest{
+	createReq := restapi.ErasureCodeProfileCreateRequest{
 		Name: data.Name.ValueString(),
 	}
 
@@ -363,7 +364,7 @@ func (r *ErasureCodeProfileResource) Read(ctx context.Context, req resource.Read
 
 	profile, err := r.client.GetErasureCodeProfile(ctx, data.Name.ValueString())
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -397,7 +398,7 @@ func (r *ErasureCodeProfileResource) Delete(ctx context.Context, req resource.De
 
 	err := r.client.DeleteErasureCodeProfile(ctx, data.Name.ValueString())
 	if err != nil {
-		if errors.Is(err, ErrAPINotFound) {
+		if errors.Is(err, restapi.ErrNotFound) {
 			return
 		}
 		resp.Diagnostics.AddError(
@@ -412,7 +413,7 @@ func (r *ErasureCodeProfileResource) ImportState(ctx context.Context, req resour
 	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
 }
 
-func (r *ErasureCodeProfileResource) updateModelFromAPI(data *ErasureCodeProfileResourceModel, profile *CephAPIErasureCodeProfile) {
+func (r *ErasureCodeProfileResource) updateModelFromAPI(data *ErasureCodeProfileResourceModel, profile *restapi.ErasureCodeProfile) {
 	data.K = types.Int64Value(int64(profile.K))
 	data.M = types.Int64Value(int64(profile.M))
 	data.Plugin = types.StringValue(profile.Plugin)

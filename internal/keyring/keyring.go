@@ -1,4 +1,4 @@
-package main
+package keyring
 
 import (
 	"fmt"
@@ -6,14 +6,14 @@ import (
 	"strings"
 )
 
-type CephCaps struct {
+type Caps struct {
 	MDS string `json:"mds,omitempty"`
 	MGR string `json:"mgr,omitempty"`
 	MON string `json:"mon,omitempty"`
 	OSD string `json:"osd,omitempty"`
 }
 
-func (c CephCaps) Map() map[string]string {
+func (c Caps) Map() map[string]string {
 	result := make(map[string]string, 4)
 
 	if c.MDS != "" {
@@ -32,8 +32,8 @@ func (c CephCaps) Map() map[string]string {
 	return result
 }
 
-func NewCephCapsFromMap(capabilities map[string]string) (CephCaps, error) {
-	var caps CephCaps
+func CapsFromMap(capabilities map[string]string) (Caps, error) {
+	var caps Caps
 
 	for capType, capValue := range capabilities {
 		lower := strings.ToLower(capType)
@@ -48,30 +48,30 @@ func NewCephCapsFromMap(capabilities map[string]string) (CephCaps, error) {
 		case "osd":
 			caps.OSD = capValue
 		default:
-			return CephCaps{}, fmt.Errorf("caps attribute contains unsupported capability type %q", capType)
+			return Caps{}, fmt.Errorf("caps attribute contains unsupported capability type %q", capType)
 		}
 	}
 
 	return caps, nil
 }
 
-func MustCephCapsFromMap(capabilities map[string]string) CephCaps {
-	caps, err := NewCephCapsFromMap(capabilities)
+func MustCapsFromMap(capabilities map[string]string) Caps {
+	caps, err := CapsFromMap(capabilities)
 	if err != nil {
 		panic(err)
 	}
 	return caps
 }
 
-type CephUser struct {
-	Entity string   `json:"entity"`
-	Key    string   `json:"key"`
-	Caps   CephCaps `json:"caps"`
+type User struct {
+	Entity string `json:"entity"`
+	Key    string `json:"key"`
+	Caps   Caps   `json:"caps"`
 }
 
-func parseCephKeyring(content string) ([]CephUser, error) {
-	users := []CephUser{}
-	var cur *CephUser
+func Parse(content string) ([]User, error) {
+	users := []User{}
+	var cur *User
 
 	entityRegex := regexp.MustCompile(`^\[([^\]]+)\]$`)
 	keyRegex := regexp.MustCompile(`^key\s*=\s*(.*)$`)
@@ -89,10 +89,10 @@ func parseCephKeyring(content string) ([]CephUser, error) {
 			if cur != nil {
 				users = append(users, *cur)
 			}
-			cur = &CephUser{
+			cur = &User{
 				Entity: matches[1],
 				Key:    "",
-				Caps:   CephCaps{},
+				Caps:   Caps{},
 			}
 		} else if cur != nil {
 			if matches := keyRegex.FindStringSubmatch(line); matches != nil {
@@ -134,7 +134,7 @@ func parseCephKeyring(content string) ([]CephUser, error) {
 	return users, nil
 }
 
-func formatCephKeyring(users []CephUser) string {
+func Format(users []User) string {
 	var result strings.Builder
 
 	for i, user := range users {
