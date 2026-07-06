@@ -159,7 +159,14 @@ func (r *ConfigResource) Read(ctx context.Context, req resource.ReadRequest, res
 		found := false
 		for _, v := range apiConfig.Value {
 			if v.Section == section {
-				updatedConfigs[name] = v.Value
+				// Ceph stores a canonicalized form of the value, so keep the
+				// state's spelling when it means the same thing to avoid a
+				// perpetual diff (e.g. "0.5" vs "0.500000").
+				if configValuesEqual(apiConfig.Type, configs[name], v.Value) {
+					updatedConfigs[name] = configs[name]
+				} else {
+					updatedConfigs[name] = v.Value
+				}
 				found = true
 				break
 			}

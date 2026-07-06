@@ -675,6 +675,56 @@ func TestAccCephConfigResource_nativeIntValue(t *testing.T) {
 	})
 }
 
+func TestAccCephConfigResource_normalizedValues(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	config := testAccProviderConfigBlock + `
+		resource "ceph_config" "test" {
+			section = "osd"
+			config = {
+				osd_scrub_load_threshold = "0.5"
+				osd_scrub_auto_repair    = "1"
+				osd_max_object_size      = "256Mi"
+			}
+		}
+	`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephConfigDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_config.test",
+						tfjsonpath.New("config"),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							"osd_scrub_load_threshold": knownvalue.StringExact("0.5"),
+							"osd_scrub_auto_repair":    knownvalue.StringExact("1"),
+							"osd_max_object_size":      knownvalue.StringExact("256Mi"),
+						}),
+					),
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
 func TestAccCephConfigResource_nativeBoolValue(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()

@@ -21,6 +21,7 @@ type ClusterConfValue struct {
 
 type ClusterConf struct {
 	Name               string             `json:"name"`
+	Type               string             `json:"type"`
 	Level              string             `json:"level"`
 	CanUpdateAtRuntime bool               `json:"can_update_at_runtime"`
 	Value              []ClusterConfValue `json:"value,omitempty"`
