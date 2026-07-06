@@ -62,11 +62,7 @@ func (r *RGWBucketResource) Schema(ctx context.Context, req resource.SchemaReque
 			},
 			"zonegroup": resourceSchema.StringAttribute{
 				MarkdownDescription: "The zonegroup this bucket belongs to",
-				Optional:            true,
 				Computed:            true,
-				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
-				},
 			},
 			"placement_rule": resourceSchema.StringAttribute{
 				MarkdownDescription: "The placement rule for this bucket",
@@ -123,11 +119,6 @@ func (r *RGWBucketResource) Create(ctx context.Context, req resource.CreateReque
 	createReq := restapi.RGWBucketCreateRequest{
 		Bucket: data.Bucket.ValueString(),
 		UID:    data.Owner.ValueString(),
-	}
-
-	if !data.Zonegroup.IsNull() && !data.Zonegroup.IsUnknown() {
-		zonegroup := data.Zonegroup.ValueString()
-		createReq.Zonegroup = &zonegroup
 	}
 
 	_, err := r.client.RGWCreateBucket(ctx, createReq)

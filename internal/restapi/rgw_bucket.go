@@ -176,9 +176,8 @@ func (c *Client) RGWGetBucketWithRetry(ctx context.Context, bucketName string) (
 }
 
 type RGWBucketCreateRequest struct {
-	Bucket    string  `json:"bucket"`
-	UID       string  `json:"uid"`
-	Zonegroup *string `json:"zonegroup,omitempty"`
+	Bucket string `json:"bucket"`
+	UID    string `json:"uid"`
 }
 
 func (c *Client) RGWCreateBucket(ctx context.Context, req RGWBucketCreateRequest) (*RGWBucket, error) {
