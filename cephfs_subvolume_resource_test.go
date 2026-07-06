@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -209,6 +210,31 @@ func TestAccCephFSSubvolumeResource_Size(t *testing.T) {
 					checkCephFSSubvolumeExists(t, fsName, subvolName),
 					resource.TestCheckResourceAttr("ceph_cephfs_subvolume.test", "size", "2147483648"),
 				),
+			},
+		},
+	})
+}
+
+func TestAccCephFSSubvolumeResource_zeroSizeRejected(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	fsName := testSharedCephFSName
+	subvolName := acctest.RandomWithPrefix("test-subvol-zero")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_cephfs_subvolume" "test" {
+					  name     = %q
+					  vol_name = %q
+					  size     = 0
+					}
+				`, subvolName, fsName),
+				ExpectError: regexp.MustCompile(`(?s)size.*must be at least 1`),
 			},
 		},
 	})

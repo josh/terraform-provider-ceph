@@ -8,11 +8,13 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/josh/terraform-provider-ceph/internal/restapi"
@@ -67,6 +69,9 @@ func (r *CephFSSubvolumeResource) Schema(ctx context.Context, req resource.Schem
 				MarkdownDescription: "The quota size in bytes. When not set, the subvolume has no quota.",
 				Optional:            true,
 				Computed:            true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+				},
 			},
 			"path": resourceSchema.StringAttribute{
 				MarkdownDescription: "The path of the subvolume within the filesystem.",
