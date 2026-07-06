@@ -105,6 +105,20 @@ func (r *AuthEphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequ
 		return
 	}
 
+	// The framework does not call Close after a failed Open, so delete the
+	// entity ourselves if anything below fails.
+	defer func() {
+		if !resp.Diagnostics.HasError() {
+			return
+		}
+		if err := r.client.ClusterDeleteUser(ctx, entity); err != nil && !errors.Is(err, ErrAPINotFound) {
+			resp.Diagnostics.AddWarning(
+				"Cleanup Failed",
+				fmt.Sprintf("Unable to delete user %q after failed open, it may need manual removal: %s", entity, err),
+			)
+		}
+	}()
+
 	entityJSON, err := json.Marshal(entity)
 	if err != nil {
 		resp.Diagnostics.AddError(
