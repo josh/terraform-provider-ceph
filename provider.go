@@ -210,6 +210,7 @@ func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource
 		newErasureCodeProfileResource,
 		newMgrModuleConfigResource,
 		newPoolResource,
+		newRBDImageResource,
 		newRGWBucketResource,
 		newRGWS3KeyResource,
 		newRGWUserResource,
