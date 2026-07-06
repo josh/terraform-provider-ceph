@@ -7,6 +7,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
 	"github.com/hashicorp/terraform-plugin-testing/knownvalue"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
@@ -246,4 +247,55 @@ func testAccCheckCephFSSubvolumeDestroy(t *testing.T, fsName string) resource.Te
 
 		return nil
 	}
+}
+
+func TestAccCephFSSubvolumeResource_OutOfBandDeletion(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	fsName := testSharedCephFSName
+	subvolName := acctest.RandomWithPrefix("test-subvol-oob")
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_cephfs_subvolume" "test" {
+		  name     = %q
+		  vol_name = %q
+
+		  timeouts = {
+		    create = "5m"
+		    delete = "5m"
+		  }
+		}
+	`, subvolName, fsName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephFSSubvolumeDestroy(t, fsName),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				Check:           checkCephFSSubvolumeExists(t, fsName, subvolName),
+			},
+			{
+				PreConfig: func() {
+					if err := cephTestClusterCLI.CephFSSubvolumeDelete(t.Context(), fsName, subvolName); err != nil {
+						t.Fatalf("Failed to delete subvolume out of band: %v", err)
+					}
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_cephfs_subvolume.test", plancheck.ResourceActionCreate),
+					},
+				},
+				Check: checkCephFSSubvolumeExists(t, fsName, subvolName),
+			},
+		},
+	})
 }

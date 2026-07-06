@@ -2513,10 +2513,27 @@ func (c *CephAPIClient) CephFSDelete(ctx context.Context, name string) error {
 
 	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusAccepted && httpResp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(httpResp.Body)
+		if isCephFSNotFoundError(httpResp.StatusCode, body) {
+			return ErrAPINotFound
+		}
 		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
 	}
 
 	return nil
+}
+
+// The dashboard's cephfs controllers raise DashboardException (HTTP 400)
+// rather than returning 404 when a volume, subvolume, or group is missing;
+// the mgr/volumes error text always contains "does not exist".
+func isCephFSNotFoundError(statusCode int, body []byte) bool {
+	if statusCode != http.StatusBadRequest {
+		return false
+	}
+	dashboardErr, err := ParseCephDashboardError(body)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(dashboardErr.Detail, "does not exist")
 }
 
 type CephAPISubvolumeListEntry struct {
@@ -2649,6 +2666,9 @@ func (c *CephAPIClient) CephFSSubvolumeInfo(ctx context.Context, volName string,
 
 	if httpResp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(httpResp.Body)
+		if isCephFSNotFoundError(httpResp.StatusCode, body) {
+			return nil, ErrAPINotFound
+		}
 		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
 	}
 
@@ -2739,6 +2759,9 @@ func (c *CephAPIClient) CephFSSubvolumeDelete(ctx context.Context, volName strin
 
 	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusAccepted && httpResp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(httpResp.Body)
+		if isCephFSNotFoundError(httpResp.StatusCode, body) {
+			return ErrAPINotFound
+		}
 		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
 	}
 
@@ -2786,6 +2809,9 @@ func (c *CephAPIClient) CephFSSubvolumeGroupInfo(ctx context.Context, volName st
 
 	if httpResp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(httpResp.Body)
+		if isCephFSNotFoundError(httpResp.StatusCode, body) {
+			return nil, ErrAPINotFound
+		}
 		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
 	}
 
@@ -2909,6 +2935,9 @@ func (c *CephAPIClient) CephFSSubvolumeGroupDelete(ctx context.Context, volName 
 
 	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusAccepted && httpResp.StatusCode != http.StatusNoContent {
 		body, _ := io.ReadAll(httpResp.Body)
+		if isCephFSNotFoundError(httpResp.StatusCode, body) {
+			return ErrAPINotFound
+		}
 		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
 	}
 
