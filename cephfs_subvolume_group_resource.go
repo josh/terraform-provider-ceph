@@ -222,21 +222,23 @@ func (r *CephFSSubvolumeGroupResource) Update(ctx context.Context, req resource.
 		"group_name": data.Name.ValueString(),
 	})
 
-	updateReq := CephAPISubvolumeGroupUpdateRequest{
-		GroupName: data.Name.ValueString(),
-	}
-
+	// The dashboard's subvolume group PUT requires a size argument, so only
+	// call it when there is a quota to apply; other updates (e.g. timeouts)
+	// have nothing to change on the Ceph side.
 	if !data.Size.IsNull() && !data.Size.IsUnknown() {
-		updateReq.Size = data.Size.ValueInt64()
-	}
+		updateReq := CephAPISubvolumeGroupUpdateRequest{
+			GroupName: data.Name.ValueString(),
+			Size:      data.Size.ValueInt64(),
+		}
 
-	err := r.client.CephFSSubvolumeGroupUpdate(ctx, data.VolName.ValueString(), updateReq)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"API Request Error",
-			fmt.Sprintf("Unable to update CephFS subvolume group '%s' in '%s': %s", data.Name.ValueString(), data.VolName.ValueString(), err),
-		)
-		return
+		err := r.client.CephFSSubvolumeGroupUpdate(ctx, data.VolName.ValueString(), updateReq)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"API Request Error",
+				fmt.Sprintf("Unable to update CephFS subvolume group '%s' in '%s': %s", data.Name.ValueString(), data.VolName.ValueString(), err),
+			)
+			return
+		}
 	}
 
 	info, err := r.client.CephFSSubvolumeGroupInfo(ctx, data.VolName.ValueString(), data.Name.ValueString())
