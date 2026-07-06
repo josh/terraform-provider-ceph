@@ -95,7 +95,6 @@ func (r *PoolResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.RequiresReplace(),
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
@@ -120,9 +119,6 @@ func (r *PoolResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				MarkdownDescription: "The number of replicas for the pool.",
 				Optional:            true,
 				Computed:            true,
-				PlanModifiers: []planmodifier.Int64{
-					int64planmodifier.RequiresReplace(),
-				},
 			},
 			"pg_autoscale_mode": resourceSchema.StringAttribute{
 				MarkdownDescription: "The placement group autoscale mode. Must be one of: 'off', 'warn', or 'on'. When 'on', pg_num must not be set.",
@@ -538,6 +534,18 @@ func (r *PoolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	if !data.PgpNum.IsNull() && !data.PgpNum.IsUnknown() && !data.PgpNum.Equal(state.PgpNum) {
 		v := int(data.PgpNum.ValueInt64())
 		updateReq.PgpNum = &v
+	}
+
+	// Only send size and crush_rule when they actually changed; Ceph rejects
+	// setting either on erasure-coded pools, where both are computed.
+	if !data.Size.IsNull() && !data.Size.IsUnknown() && !data.Size.Equal(state.Size) {
+		v := int(data.Size.ValueInt64())
+		updateReq.Size = &v
+	}
+
+	if !data.CrushRule.IsNull() && !data.CrushRule.IsUnknown() && !data.CrushRule.Equal(state.CrushRule) {
+		v := data.CrushRule.ValueString()
+		updateReq.CrushRule = &v
 	}
 
 	if !data.MinSize.IsNull() && !data.MinSize.IsUnknown() {

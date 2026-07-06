@@ -101,7 +101,7 @@ func TestAccCephPoolResource(t *testing.T) {
 				`, poolName),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionDestroyBeforeCreate),
+						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionUpdate),
 					},
 				},
 				ConfigStateChecks: []statecheck.StateCheck{
@@ -1726,11 +1726,11 @@ func TestAccCephPoolResource_QuotaMaxBytes(t *testing.T) {
 	})
 }
 
-func TestAccCephPoolResource_SizeRequiresReplace(t *testing.T) {
+func TestAccCephPoolResource_SizeUpdateInPlace(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
-	poolName := acctest.RandomWithPrefix("test-pool-size-replace")
+	poolName := acctest.RandomWithPrefix("test-pool-size-update")
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
@@ -1789,7 +1789,7 @@ func TestAccCephPoolResource_SizeRequiresReplace(t *testing.T) {
 				`, poolName),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionDestroyBeforeCreate),
+						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionUpdate),
 					},
 				},
 				ConfigStateChecks: []statecheck.StateCheck{
@@ -1809,11 +1809,11 @@ func TestAccCephPoolResource_SizeRequiresReplace(t *testing.T) {
 	})
 }
 
-func TestAccCephPoolResource_CrushRuleRequiresReplace(t *testing.T) {
+func TestAccCephPoolResource_CrushRuleUpdateInPlace(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
-	poolName := acctest.RandomWithPrefix("test-pool-crush-replace")
+	poolName := acctest.RandomWithPrefix("test-pool-crush-update")
 	crushRuleName1 := acctest.RandomWithPrefix("test-crush-rule-1")
 	crushRuleName2 := acctest.RandomWithPrefix("test-crush-rule-2")
 
@@ -1893,7 +1893,7 @@ func TestAccCephPoolResource_CrushRuleRequiresReplace(t *testing.T) {
 				`, crushRuleName1, crushRuleName2, poolName),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionDestroyBeforeCreate),
+						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionUpdate),
 					},
 				},
 				ConfigStateChecks: []statecheck.StateCheck{
@@ -1993,7 +1993,7 @@ func TestAccCephPoolResource_ErasurePoolLifecycle(t *testing.T) {
 				`, profileName, poolName),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
 					PreApply: []plancheck.PlanCheck{
-						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionDestroyBeforeCreate),
+						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionUpdate),
 					},
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
