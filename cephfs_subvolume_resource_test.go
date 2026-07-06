@@ -193,6 +193,11 @@ func TestAccCephFSSubvolumeResource_Size(t *testing.T) {
 					  }
 					}
 				`, subvolName, fsName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_cephfs_subvolume.test", plancheck.ResourceActionUpdate),
+					},
+				},
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(
 						"ceph_cephfs_subvolume.test",
