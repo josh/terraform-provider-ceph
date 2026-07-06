@@ -2283,3 +2283,64 @@ func TestAccCephPoolResource_ErasureWithCustomCrushRule(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephPoolResource_missingPgNumRejected(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-minimal")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_pool" "test" {
+					  name      = %q
+					  pool_type = "replicated"
+					}
+				`, poolName),
+				ExpectError: regexp.MustCompile(`(?i)either pg_num must be set`),
+			},
+		},
+	})
+}
+
+func TestAccCephPoolResource_autoscaleWithoutPgNum(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-autoscale-only")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_pool" "test" {
+					  name              = %q
+					  pool_type         = "replicated"
+					  pg_autoscale_mode = "on"
+
+					  timeouts = {
+					    create = "1m"
+					    delete = "1m"
+					  }
+					}
+				`, poolName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephPoolExists(t, poolName),
+					checkCephPoolPgAutoscaleMode(t, poolName, "on"),
+					resource.TestCheckResourceAttrSet("ceph_pool.test", "pool_id"),
+				),
+			},
+		},
+	})
+}
