@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+	"github.com/josh/terraform-provider-ceph/internal/cephcli"
 )
 
 func TestAccCephRGWS3KeyResource(t *testing.T) {
@@ -199,7 +200,7 @@ func createTestRGWUserWithSubuserWithoutKeys(t *testing.T, uid, displayName, sub
 		t.Fatalf("Failed to create test RGW user: %v", err)
 	}
 
-	err = cephTestClusterCLI.RgwSubuserCreate(t.Context(), uid, uid+":"+subuser, &RgwSubuserCreateOptions{
+	err = cephTestClusterCLI.RgwSubuserCreate(t.Context(), uid, uid+":"+subuser, &cephcli.RgwSubuserCreateOptions{
 		Access: "full",
 	})
 	if err != nil {
@@ -209,7 +210,7 @@ func createTestRGWUserWithSubuserWithoutKeys(t *testing.T, uid, displayName, sub
 	t.Logf("Created test RGW user: %s with subuser: %s", uid, subuser)
 
 	testCleanup(t, func(ctx context.Context) {
-		if err := cephTestClusterCLI.RgwUserRemove(ctx, uid, true); err != nil && !errors.Is(err, ErrRGWUserNotFound) {
+		if err := cephTestClusterCLI.RgwUserRemove(ctx, uid, true); err != nil && !errors.Is(err, cephcli.ErrRGWUserNotFound) {
 			t.Fatalf("Failed to cleanup RGW user %s: %v", uid, err)
 		}
 	})
@@ -523,7 +524,7 @@ func TestAccCephRGWS3KeyResource_importMultipleKeysManagement(t *testing.T) {
 func createRGWS3Key(t *testing.T, userID, accessKey, secretKey string) {
 	t.Helper()
 
-	err := cephTestClusterCLI.RgwKeyCreate(t.Context(), userID, &RgwKeyCreateOptions{
+	err := cephTestClusterCLI.RgwKeyCreate(t.Context(), userID, &cephcli.RgwKeyCreateOptions{
 		AccessKey: accessKey,
 		SecretKey: secretKey,
 	})

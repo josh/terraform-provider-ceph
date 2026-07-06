@@ -24,6 +24,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/config"
 	"github.com/hashicorp/terraform-plugin-testing/echoprovider"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/josh/terraform-provider-ceph/internal/cephcli"
 	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
@@ -32,7 +33,7 @@ var (
 	testClusterWG        *sync.WaitGroup
 	testConfPath         string
 	testSharedCephFSName string
-	cephTestClusterCLI   *CephCLI
+	cephTestClusterCLI   *cephcli.CLI
 	testTimeout          = flag.Duration("timeout", 0, "test timeout")
 	cephDaemonLogs       *LogDemux
 	testNumOsds          = 5
@@ -84,7 +85,7 @@ func TestMain(m *testing.M) {
 		}
 		detachLogs()
 		testConfPath = confPath
-		cephTestClusterCLI = NewCephCLI(confPath)
+		cephTestClusterCLI = cephcli.New(confPath)
 
 		testSharedCephFSName = "test-shared-cephfs"
 		if err := cephTestClusterCLI.CephFSVolumeCreate(ctx, testSharedCephFSName); err != nil {
@@ -746,7 +747,7 @@ func testAccPreCheckWaitForPGsActiveClean(t *testing.T) {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
-	var lastInfo *PGStateInfo
+	var lastInfo *cephcli.PGStateInfo
 	for {
 		info, err := cephTestClusterCLI.PGStateInfo(ctx)
 		if err == nil {

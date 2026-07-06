@@ -85,4 +85,4 @@ Keep comments concise. Only add them when they clarify non-obvious logic. Avoid 
 - Reuse `restapi.Client` (`internal/restapi`, the Ceph RESTful API client) for Ceph API interactions to keep headers, timeouts, and error handling consistent across resources and data sources.
 - Propagate `context.Context` from Terraform entrypoints through every API call so operations respect cancellations and deadlines.
 - Use helpers like `mapAttrToCephCaps` and `cephCapsToMapValue` to convert between Terraform types and Go structs, guarding against unknown or null values before calling Ceph.
-- When tests shell out to `ceph`, wrap calls with context timeouts and rely on the shared harness to spin up and tear down the ephemeral cluster.
+- When tests shell out to `ceph`, `rbd`, or `radosgw-admin`, reuse `cephcli.CLI` (`internal/cephcli`), wrap calls with context timeouts, and rely on the shared harness to spin up and tear down the ephemeral cluster.

@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/josh/terraform-provider-ceph/internal/cephcli"
 )
 
 func TestAccCephRGWUserDataSource(t *testing.T) {
@@ -92,7 +93,7 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 			{
 				PreConfig: func() {
 					admin := true
-					err := cephTestClusterCLI.RgwUserModify(t.Context(), testUID, &RgwUserModifyOptions{
+					err := cephTestClusterCLI.RgwUserModify(t.Context(), testUID, &cephcli.RgwUserModifyOptions{
 						Admin: &admin,
 					})
 					if err != nil {
@@ -114,7 +115,7 @@ func TestAccCephRGWUserDataSource_adminFlagOutOfBand(t *testing.T) {
 			{
 				PreConfig: func() {
 					admin := false
-					err := cephTestClusterCLI.RgwUserModify(t.Context(), testUID, &RgwUserModifyOptions{
+					err := cephTestClusterCLI.RgwUserModify(t.Context(), testUID, &cephcli.RgwUserModifyOptions{
 						Admin: &admin,
 					})
 					if err != nil {
@@ -191,7 +192,7 @@ func createTestRGWUser(t *testing.T, uid, displayName string) {
 	t.Logf("Created test RGW user: %s", uid)
 
 	testCleanup(t, func(ctx context.Context) {
-		if err := cephTestClusterCLI.RgwUserRemove(ctx, uid, true); err != nil && !errors.Is(err, ErrRGWUserNotFound) {
+		if err := cephTestClusterCLI.RgwUserRemove(ctx, uid, true); err != nil && !errors.Is(err, cephcli.ErrRGWUserNotFound) {
 			t.Fatalf("Failed to cleanup RGW user %s: %v", uid, err)
 		}
 	})
