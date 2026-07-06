@@ -96,16 +96,7 @@ func (c *Client) CreatePool(ctx context.Context, req PoolCreateRequest) (*TaskIn
 	}
 
 	if httpResp.StatusCode == http.StatusAccepted {
-		var taskInfo TaskInfo
-		err = json.Unmarshal(body, &taskInfo)
-		if err != nil {
-			return nil, fmt.Errorf("unable to decode task response: %w", err)
-		}
-		tflog.Debug(ctx, "Pool creation returned 202, task is running", map[string]any{
-			"task_name": taskInfo.Name,
-			"metadata":  taskInfo.Metadata,
-		})
-		return &taskInfo, nil
+		return decodeTaskInfo(ctx, body, "Pool creation")
 	}
 
 	if httpResp.StatusCode != http.StatusCreated {
@@ -150,16 +141,7 @@ func (c *Client) DeletePool(ctx context.Context, poolName string) (*TaskInfo, er
 	}
 
 	if httpResp.StatusCode == http.StatusAccepted {
-		var taskInfo TaskInfo
-		err = json.Unmarshal(body, &taskInfo)
-		if err != nil {
-			return nil, fmt.Errorf("unable to decode task response: %w", err)
-		}
-		tflog.Debug(ctx, "Pool deletion returned 202, task is running", map[string]any{
-			"task_name": taskInfo.Name,
-			"metadata":  taskInfo.Metadata,
-		})
-		return &taskInfo, nil
+		return decodeTaskInfo(ctx, body, "Pool deletion")
 	}
 
 	return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
@@ -270,16 +252,7 @@ func (c *Client) UpdatePool(ctx context.Context, poolName string, req PoolUpdate
 	}
 
 	if httpResp.StatusCode == http.StatusAccepted {
-		var taskInfo TaskInfo
-		err = json.Unmarshal(body, &taskInfo)
-		if err != nil {
-			return nil, fmt.Errorf("unable to decode task response: %w", err)
-		}
-		tflog.Debug(ctx, "Pool update returned 202, task is running", map[string]any{
-			"task_name": taskInfo.Name,
-			"metadata":  taskInfo.Metadata,
-		})
-		return &taskInfo, nil
+		return decodeTaskInfo(ctx, body, "Pool update")
 	}
 
 	if httpResp.StatusCode != http.StatusOK {
