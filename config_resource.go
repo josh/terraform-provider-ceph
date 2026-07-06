@@ -313,6 +313,12 @@ func (r *ConfigResource) ImportState(ctx context.Context, req resource.ImportSta
 			continue
 		}
 
+		// The dashboard appends a synthetic read-only fsid entry (section
+		// "mgr") to its config listing; it is not a settable option.
+		if config.Name == "fsid" {
+			continue
+		}
+
 		for _, v := range config.Value {
 			if v.Section == section {
 				importedConfigs[config.Name] = v.Value
