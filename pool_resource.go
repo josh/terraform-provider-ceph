@@ -54,7 +54,7 @@ type PoolResourceModel struct {
 	CompressionMinBlobSize   types.Int64    `tfsdk:"compression_min_blob_size"`
 	CompressionMaxBlobSize   types.Int64    `tfsdk:"compression_max_blob_size"`
 	PoolID                   types.Int64    `tfsdk:"pool_id"`
-	ApplicationMetadata      types.List     `tfsdk:"application_metadata"`
+	ApplicationMetadata      types.Set      `tfsdk:"application_metadata"`
 	Timeouts                 timeouts.Value `tfsdk:"timeouts"`
 }
 
@@ -174,7 +174,7 @@ func (r *PoolResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				MarkdownDescription: "The ID of the pool.",
 				Computed:            true,
 			},
-			"application_metadata": resourceSchema.ListAttribute{
+			"application_metadata": resourceSchema.SetAttribute{
 				MarkdownDescription: "List of application types for the pool (e.g., [\"rbd\", \"rgw\"]).",
 				Optional:            true,
 				Computed:            true,
@@ -306,11 +306,11 @@ func (r *PoolResource) updateModelFromAPI(ctx context.Context, data *PoolResourc
 	}
 
 	if len(pool.ApplicationMetadata) > 0 {
-		apps, d := types.ListValueFrom(ctx, types.StringType, pool.ApplicationMetadata)
+		apps, d := types.SetValueFrom(ctx, types.StringType, pool.ApplicationMetadata)
 		diags.Append(d...)
 		data.ApplicationMetadata = apps
 	} else {
-		data.ApplicationMetadata = types.ListNull(types.StringType)
+		data.ApplicationMetadata = types.SetNull(types.StringType)
 	}
 
 	return diags

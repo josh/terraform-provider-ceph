@@ -27,7 +27,7 @@ type PoolDataSourceModel struct {
 	MinSize                  types.Int64   `tfsdk:"min_size"`
 	PGNum                    types.Int64   `tfsdk:"pg_num"`
 	CrushRule                types.String  `tfsdk:"crush_rule"`
-	ApplicationMetadata      types.List    `tfsdk:"application_metadata"`
+	ApplicationMetadata      types.Set     `tfsdk:"application_metadata"`
 	Flags                    types.Int64   `tfsdk:"flags"`
 	ErasureCodeProfile       types.String  `tfsdk:"erasure_code_profile"`
 	AutoscaleMode            types.String  `tfsdk:"autoscale_mode"`
@@ -72,7 +72,7 @@ func (d *PoolDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 				MarkdownDescription: "The CRUSH rule for the pool.",
 				Computed:            true,
 			},
-			"application_metadata": dataSourceSchema.ListAttribute{
+			"application_metadata": dataSourceSchema.SetAttribute{
 				MarkdownDescription: "The list of applications enabled on the pool (e.g. 'rbd', 'rgw', 'cephfs').",
 				Computed:            true,
 				ElementType:         types.StringType,
@@ -175,7 +175,7 @@ func (d *PoolDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	data.Flags = types.Int64Value(int64(pool.Flags))
 
 	appMetaStrings := pool.ApplicationMetadata
-	appMeta, diags := types.ListValueFrom(ctx, types.StringType, appMetaStrings)
+	appMeta, diags := types.SetValueFrom(ctx, types.StringType, appMetaStrings)
 	resp.Diagnostics.Append(diags...)
 	if resp.Diagnostics.HasError() {
 		return
