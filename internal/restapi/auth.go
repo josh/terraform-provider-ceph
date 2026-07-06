@@ -145,7 +145,25 @@ func (c *Client) AuthCheck(ctx context.Context) (bool, error) {
 
 	switch httpResp.StatusCode {
 	case http.StatusOK, http.StatusCreated, http.StatusAccepted:
-		return true, nil
+		body, err := io.ReadAll(httpResp.Body)
+		if err != nil {
+			return false, fmt.Errorf("unable to read check response: %w", err)
+		}
+
+		tflog.Trace(ctx, "Ceph API response body", map[string]any{
+			"response_body": string(body),
+			"status_code":   httpResp.StatusCode,
+		})
+
+		// The auth/check endpoint is unauthenticated and returns 200 even
+		// for a bad token; only an authenticated response echoes a username.
+		var checkResp struct {
+			Username string `json:"username"`
+		}
+		if err := json.Unmarshal(body, &checkResp); err != nil {
+			return false, fmt.Errorf("unable to decode check response: %w", err)
+		}
+		return checkResp.Username != "", nil
 	case http.StatusUnauthorized:
 		return false, fmt.Errorf("token is invalid or expired")
 	default:

@@ -1047,6 +1047,68 @@ func TestAccProvider_tokenAuthentication(t *testing.T) {
 	})
 }
 
+func TestAccProvider_invalidTokenAuthentication(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: config.Variables{
+					"endpoint": config.StringVariable(testDashboardURL),
+				},
+				Config: `
+					variable "endpoint" {
+					  type = string
+					}
+
+					provider "ceph" {
+					  endpoint = var.endpoint
+					  token    = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIn0.aW52YWxpZC1zaWduYXR1cmU"
+					}
+
+					data "ceph_auth" "test" {
+					  entity = "client.admin"
+					}
+				`,
+				ExpectError: regexp.MustCompile(`provided token is invalid or expired`),
+			},
+		},
+	})
+}
+
+func TestAccProvider_invalidJWTSecretAuthentication(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: config.Variables{
+					"endpoint": config.StringVariable(testDashboardURL),
+				},
+				Config: `
+					variable "endpoint" {
+					  type = string
+					}
+
+					provider "ceph" {
+					  endpoint   = var.endpoint
+					  jwt_secret = "d3Jvbmctc2VjcmV0LXdyb25nLXNlY3JldA=="
+					}
+
+					data "ceph_auth" "test" {
+					  entity = "client.admin"
+					}
+				`,
+				ExpectError: regexp.MustCompile(`signed JWT token is invalid`),
+			},
+		},
+	})
+}
+
 func TestAccProvider_jwtSecretAuthentication(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
