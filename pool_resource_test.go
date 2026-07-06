@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"slices"
@@ -2339,6 +2340,90 @@ func TestAccCephPoolResource_autoscaleWithoutPgNum(t *testing.T) {
 					checkCephPoolExists(t, poolName),
 					checkCephPoolPgAutoscaleMode(t, poolName, "on"),
 					resource.TestCheckResourceAttrSet("ceph_pool.test", "pool_id"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccCephPoolResource_pgNumWithAutoscaleOnRejected(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-autoscale")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_pool" "test" {
+					  name              = %q
+					  pool_type         = "replicated"
+					  size              = 2
+					  pg_num            = 32
+					  pg_autoscale_mode = "on"
+					}
+				`, poolName),
+				ExpectError: regexp.MustCompile(`(?i)pg_num cannot be set when pg_autoscale_mode`),
+			},
+		},
+	})
+}
+
+func TestAccCephPoolResource_pgNumWithClusterDefaultAutoscale(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-implicit-autoscale")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+
+			if err := cephTestClusterCLI.ConfigSet(t.Context(), "global", "osd_pool_default_pg_autoscale_mode", "on"); err != nil {
+				t.Fatalf("Failed to set default pg_autoscale_mode: %v", err)
+			}
+			t.Cleanup(func() {
+				if err := cephTestClusterCLI.ConfigRemove(context.Background(), "global", "osd_pool_default_pg_autoscale_mode"); err != nil {
+					t.Logf("Failed to remove default pg_autoscale_mode: %v", err)
+				}
+			})
+		},
+		Steps: []resource.TestStep{
+			// The cluster default silently turns the autoscaler on for a
+			// config that only sets pg_num; the configured value must stay
+			// in state instead of failing the apply.
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_pool" "test" {
+					  name      = %q
+					  pool_type = "replicated"
+					  size      = 2
+					  pg_num    = 32
+
+					  timeouts = {
+					    create = "1m"
+					    update = "5m"
+					    delete = "1m"
+					  }
+					}
+				`, poolName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("pg_num"),
+						knownvalue.Int64Exact(32),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephPoolExists(t, poolName),
+					checkCephPoolPgAutoscaleMode(t, poolName, "on"),
 				),
 			},
 		},
