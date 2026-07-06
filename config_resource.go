@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
@@ -15,8 +16,9 @@ import (
 )
 
 var (
-	_ resource.Resource                = &ConfigResource{}
-	_ resource.ResourceWithImportState = &ConfigResource{}
+	_ resource.Resource                   = &ConfigResource{}
+	_ resource.ResourceWithImportState    = &ConfigResource{}
+	_ resource.ResourceWithValidateConfig = &ConfigResource{}
 )
 
 func newConfigResource() resource.Resource {
@@ -88,13 +90,6 @@ func (r *ConfigResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	section := data.Section.ValueString()
-
-	if strings.Contains(section, "/") {
-		resp.Diagnostics.AddWarning(
-			"Config Mask Limitation",
-			fmt.Sprintf("Section '%s' uses mask syntax which may cause drift detection issues.", section),
-		)
-	}
 
 	var configs map[string]string
 	resp.Diagnostics.Append(data.Config.ElementsAs(ctx, &configs, false)...)
@@ -279,6 +274,30 @@ func (r *ConfigResource) Delete(ctx context.Context, req resource.DeleteRequest,
 				fmt.Sprintf("Unable to delete cluster configuration %s/%s: %s. Continuing with remaining deletions.", section, name, err),
 			)
 		}
+	}
+}
+
+// The dashboard's config dump drops the mask from mask-scoped sections
+// (e.g. "osd/class:ssd" comes back as plain "osd"), so Read can never find
+// the value it set and the resource would be recreated on every apply.
+func (r *ConfigResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data ConfigResourceModel
+
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if data.Section.IsNull() || data.Section.IsUnknown() {
+		return
+	}
+
+	if strings.Contains(data.Section.ValueString(), "/") {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("section"),
+			"Unsupported Section Mask",
+			fmt.Sprintf("The dashboard API cannot read back mask-scoped sections like '%s', so this resource cannot manage them. Use a plain section (e.g. 'osd'), or set masked options with 'ceph config set'.", data.Section.ValueString()),
+		)
 	}
 }
 

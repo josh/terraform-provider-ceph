@@ -1180,3 +1180,26 @@ func TestAccCephConfigResource_importMgrSkipsFsid(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephConfigResource_maskSectionRejected(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_config" "test" {
+						section = "osd/class:ssd"
+						config = {
+							"osd_max_backfills" = "3"
+						}
+					}
+				`,
+				ExpectError: regexp.MustCompile(`(?i)unsupported section mask`),
+			},
+		},
+	})
+}
