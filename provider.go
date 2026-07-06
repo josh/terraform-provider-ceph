@@ -159,7 +159,7 @@ func (p *CephProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 			)
 			return
 		}
-		if strings.HasSuffix(endpointStr, "/api") {
+		if strings.HasSuffix(strings.TrimRight(endpointStr, "/"), "/api") {
 			resp.Diagnostics.AddError(
 				"Invalid Configuration",
 				fmt.Sprintf("Endpoint SHOULD NOT end with '/api', got: %s", endpointStr),

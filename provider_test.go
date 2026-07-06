@@ -965,6 +965,38 @@ func TestAccProvider_endpointWithApiSuffix(t *testing.T) {
 	})
 }
 
+func TestAccProvider_endpointWithApiSuffixTrailingSlash(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: config.Variables{
+					"endpoint": config.StringVariable(testDashboardURL + "api/"),
+				},
+				Config: `
+					variable "endpoint" {
+					  type = string
+					}
+
+					provider "ceph" {
+					  endpoint = var.endpoint
+					  username = "admin"
+					  password = "password"
+					}
+
+					data "ceph_auth" "test" {
+					  entity = "client.admin"
+					}
+				`,
+				ExpectError: regexp.MustCompile(`(?i)endpoint should not end with '/api'`),
+			},
+		},
+	})
+}
+
 func TestAccProvider_authenticationFailure(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
