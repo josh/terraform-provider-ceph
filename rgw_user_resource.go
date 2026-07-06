@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -70,11 +71,13 @@ func (r *RGWUserResource) Schema(ctx context.Context, req resource.SchemaRequest
 				MarkdownDescription: "Whether this is a system user",
 				Optional:            true,
 				Computed:            true,
+				Default:             booldefault.StaticBool(false),
 			},
 			"suspended": resourceSchema.BoolAttribute{
 				MarkdownDescription: "Whether this user is suspended",
 				Optional:            true,
 				Computed:            true,
+				Default:             booldefault.StaticBool(false),
 			},
 			"tenant": resourceSchema.StringAttribute{
 				MarkdownDescription: "The tenant this user belongs to (empty string for default tenant in multi-tenancy configurations)",

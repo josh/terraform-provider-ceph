@@ -137,6 +137,69 @@ func TestAccCephRGWUserResource(t *testing.T) {
 	})
 }
 
+func TestAccCephRGWUserResource_clearBooleanFlags(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-user-bool-clear")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Bool Clear Test User"
+					  suspended    = true
+					  system       = true
+					}
+				`, testUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("suspended"),
+						knownvalue.Bool(true),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("system"),
+						knownvalue.Bool(true),
+					),
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Bool Clear Test User"
+					}
+				`, testUID),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_rgw_user.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("suspended"),
+						knownvalue.Bool(false),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("system"),
+						knownvalue.Bool(false),
+					),
+				},
+			},
+		},
+	})
+}
+
 func TestAccCephRGWUserResource_fullConfig(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
