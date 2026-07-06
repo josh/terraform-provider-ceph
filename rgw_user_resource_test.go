@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+	"github.com/josh/terraform-provider-ceph/internal/cephcli"
 )
 
 func TestAccCephRGWUserResource(t *testing.T) {
@@ -600,7 +601,7 @@ func createTestRGWUserDirectly(t *testing.T, uid, displayName string) {
 	t.Logf("Pre-created test RGW user: %s", uid)
 
 	testCleanup(t, func(ctx context.Context) {
-		if err := cephTestClusterCLI.RgwUserRemove(ctx, uid, true); err != nil && !errors.Is(err, ErrRGWUserNotFound) {
+		if err := cephTestClusterCLI.RgwUserRemove(ctx, uid, true); err != nil && !errors.Is(err, cephcli.ErrRGWUserNotFound) {
 			t.Fatalf("Failed to cleanup RGW user %s: %v", uid, err)
 		}
 	})
@@ -1033,7 +1034,7 @@ func TestAccCephRGWUserResource_driftDetection(t *testing.T) {
 			{
 				PreConfig: func() {
 					maxBuckets := 200
-					err := cephTestClusterCLI.RgwUserModify(t.Context(), testUID, &RgwUserModifyOptions{
+					err := cephTestClusterCLI.RgwUserModify(t.Context(), testUID, &cephcli.RgwUserModifyOptions{
 						DisplayName: "Modified Display Name",
 						MaxBuckets:  &maxBuckets,
 					})
