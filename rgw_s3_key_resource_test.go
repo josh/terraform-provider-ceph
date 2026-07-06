@@ -688,3 +688,58 @@ func TestAccCephRGWS3KeyResource_OutOfBandDeletionDestroy(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephRGWS3KeyResource_OutOfBandUserDeletion(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-s3-key-user-oob")
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_rgw_user" "test" {
+		  user_id      = %q
+		  display_name = "OOB User Deletion Test"
+		}
+
+		resource "ceph_rgw_s3_key" "test" {
+		  user_id = ceph_rgw_user.test.user_id
+		}
+	`, testUID)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWS3KeyDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.test", "access_key"),
+				),
+			},
+			// Deleting the parent user must remove the key from state and
+			// plan a recreation of both, not fail the refresh.
+			{
+				PreConfig: func() {
+					if err := cephTestClusterCLI.RgwUserRemove(t.Context(), testUID, true); err != nil {
+						t.Fatalf("Failed to delete RGW user out of band: %v", err)
+					}
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_rgw_user.test", plancheck.ResourceActionCreate),
+						plancheck.ExpectResourceAction("ceph_rgw_s3_key.test", plancheck.ResourceActionCreate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("ceph_rgw_s3_key.test", "access_key"),
+				),
+			},
+		},
+	})
+}
