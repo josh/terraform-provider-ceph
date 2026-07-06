@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -227,6 +228,31 @@ func testAccCheckCephFSSubvolumeGroupDestroy(t *testing.T, fsName string) resour
 
 		return nil
 	}
+}
+
+func TestAccCephFSSubvolumeGroupResource_zeroSizeRejected(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	fsName := testSharedCephFSName
+	groupName := acctest.RandomWithPrefix("test-subvol-group-zero")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_cephfs_subvolume_group" "test" {
+					  name     = %q
+					  vol_name = %q
+					  size     = 0
+					}
+				`, groupName, fsName),
+				ExpectError: regexp.MustCompile(`(?s)size.*must be at least 1`),
+			},
+		},
+	})
 }
 
 func TestAccCephFSSubvolumeGroupResource_OutOfBandDeletion(t *testing.T) {
