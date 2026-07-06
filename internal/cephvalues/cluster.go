@@ -1,11 +1,15 @@
-// Package cephvalues compares and formats Ceph option value spellings.
+// Package cephvalues compares and formats Ceph option values.
 //
-// Cluster config options (mon) are parsed at set time by strict C++
-// parsers in src/common and stored canonicalized, while mgr module
-// options are stored as raw strings and coerced typed at read time by
-// src/mgr/PyUtil.cc. The two backends accept different spellings for the
-// same option types (suffixes, bool synonyms, durations), so their
-// helpers are deliberately separate.
+// The mon validates and normalizes every option value at set time:
+// Option::parse_value (src/common/options.cc) parses the raw value with
+// the strict parsers in src/common and stores the normalized value it
+// produces, for cluster config and mgr module options alike. Cluster
+// config reads return the normalized value, so ClusterEqual mirrors those
+// parsers directly. Mgr module reads instead coerce a cached string typed
+// via src/mgr/PyUtil.cc — the raw value until the mgr refreshes its
+// config, the normalized value after — so MgrModuleString only preserves
+// raw values both readings agree on. The accepted forms differ per
+// backend, which is why the helpers are deliberately separate.
 package cephvalues
 
 import (
@@ -15,10 +19,10 @@ import (
 	"strings"
 )
 
-// ClusterEqual reports whether two spellings mean the same cluster config
+// ClusterEqual reports whether two raw values mean the same cluster config
 // value for a given option type, mirroring the upstream parsers
 // (strict_strtob, strict_si_cast, strict_iec_cast, parse_timespan, stoull)
-// and the canonical forms produced by Option::to_str.
+// and the normalized values produced by Option::to_str.
 func ClusterEqual(optType, a, b string) bool {
 	if a == b {
 		return true
@@ -229,9 +233,9 @@ func parseLeadingUint(s string) (uint64, bool) {
 	return v, err == nil
 }
 
-// addr options are canonicalized through entity_addr_t, which adds a msgr2
+// addr options are normalized through entity_addr_t, which adds a msgr2
 // type prefix, default port, and nonce ("1.2.3.4" is stored as
-// "v2:1.2.3.4:0/0"). Only exact decorated forms of the other spelling are
+// "v2:1.2.3.4:0/0"). Only exact decorated forms of the other value are
 // recognized; anything else stays unequal.
 func addrEqual(a, b string) bool {
 	a, b = strings.TrimSpace(a), strings.TrimSpace(b)

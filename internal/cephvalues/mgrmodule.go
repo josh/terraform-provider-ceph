@@ -1,17 +1,20 @@
 package cephvalues
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
 )
 
 // FormatMgrModuleValue renders a typed mgr module option value (as decoded
-// from the dashboard's JSON response) back into its string spelling.
+// from the dashboard's JSON response) back into a string.
 func FormatMgrModuleValue(val any) (string, error) {
 	switch v := val.(type) {
 	case nil:
 		return "", nil
+	case json.Number:
+		return string(v), nil
 	case float64:
 		if v == float64(int64(v)) {
 			return fmt.Sprintf("%d", int64(v)), nil
@@ -35,13 +38,17 @@ func FormatMgrModuleValue(val any) (string, error) {
 	}
 }
 
-// The mgr stores module options as raw strings and coerces them typed at
-// read time (src/mgr/PyUtil.cc), so the read-back rarely matches the user's
-// literal spelling (e.g. "1" reads back as bool true). MgrModuleString
-// keeps the prior spelling when it means the same value so applies stay
-// consistent and plans converge. The bool spellings mirror the mgr's
-// exact-case true list; false spellings are safe because anything outside
-// that list coerces to false.
+// MgrModuleString keeps the prior raw value of an mgr module option when
+// it means the same value as the typed read-back, so applies stay
+// consistent and plans converge. The mon validates and normalizes the
+// value at set time, but the mgr serves the raw value from its local
+// cache until the next config refresh and coerces whichever string it
+// holds typed at read time (src/mgr/PyUtil.cc). A raw value is therefore
+// preserved only when the raw and normalized readings agree: bools via
+// the read-time exact-case true list intersected with the mon's parse,
+// integers via exact base-10 comparison without leading zeros (PyLong
+// base 0 rejects them), floats rounded to the mon's six-decimal
+// normalized form.
 func MgrModuleString(prior string, val any) (string, error) {
 	formatted, err := FormatMgrModuleValue(val)
 	if err != nil || prior == formatted {
@@ -51,20 +58,44 @@ func MgrModuleString(prior string, val any) (string, error) {
 	equal := false
 	switch v := val.(type) {
 	case bool:
-		switch strings.TrimSpace(prior) {
-		case "1", "true", "True", "on", "yes":
+		switch prior {
+		case "1", "true", "True":
 			equal = v
-		case "0", "false", "False", "off", "no":
-			equal = !v
+		default:
+			if pv, ok := parseBool(prior); ok && !pv {
+				equal = !v
+			}
 		}
-	case float32, float64, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		p, perr := strconv.ParseFloat(strings.TrimSpace(prior), 64)
-		f, ferr := strconv.ParseFloat(formatted, 64)
-		equal = perr == nil && ferr == nil && p == f
+	case json.Number:
+		if strings.ContainsAny(string(v), ".eE") {
+			equal = floatValuesEqual(prior, string(v))
+		} else {
+			equal = intValuesEqual(prior, string(v))
+		}
+	case float32, float64:
+		equal = floatValuesEqual(prior, formatted)
 	}
 
 	if equal {
 		return prior, nil
 	}
 	return formatted, nil
+}
+
+func intValuesEqual(a, b string) bool {
+	digits := strings.TrimLeft(strings.TrimSpace(a), "+-")
+	if len(digits) > 1 && digits[0] == '0' {
+		return false
+	}
+
+	av, aerr := strconv.ParseInt(strings.TrimSpace(a), 10, 64)
+	bv, berr := strconv.ParseInt(b, 10, 64)
+	return aerr == nil && berr == nil && av == bv
+}
+
+func floatValuesEqual(a, b string) bool {
+	av, aerr := strconv.ParseFloat(strings.TrimSpace(a), 64)
+	bv, berr := strconv.ParseFloat(b, 64)
+	return aerr == nil && berr == nil &&
+		strconv.FormatFloat(av, 'f', 6, 64) == strconv.FormatFloat(bv, 'f', 6, 64)
 }

@@ -58,8 +58,13 @@ func (c *Client) MgrGetModuleConfig(ctx context.Context, moduleName string) (Mgr
 		"status_code":   httpResp.StatusCode,
 	})
 
+	// Decode numbers as json.Number so integer option values survive
+	// beyond float64 precision.
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+
 	var config MgrModuleConfig
-	err = json.Unmarshal(body, &config)
+	err = decoder.Decode(&config)
 	if err != nil {
 		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
 	}
