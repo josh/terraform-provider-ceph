@@ -162,14 +162,20 @@ func (r *CephFSResource) Create(ctx context.Context, req resource.CreateRequest,
 	}
 
 	var fs *restapi.CephFS
-	for retries := 0; retries < 30; retries++ {
+	for {
 		fs, err = r.client.CephFSGetByName(ctx, data.Name.ValueString())
 		if err == nil {
 			break
 		}
+		if !errors.Is(err, restapi.ErrNotFound) {
+			resp.Diagnostics.AddError(
+				"API Request Error",
+				fmt.Sprintf("Unable to read CephFS filesystem '%s' after creation: %s", data.Name.ValueString(), err),
+			)
+			return
+		}
 		tflog.Debug(ctx, "Waiting for CephFS filesystem to be ready", map[string]interface{}{
-			"name":  data.Name.ValueString(),
-			"retry": retries,
+			"name": data.Name.ValueString(),
 		})
 		select {
 		case <-ctx.Done():
@@ -180,13 +186,6 @@ func (r *CephFSResource) Create(ctx context.Context, req resource.CreateRequest,
 			return
 		case <-time.After(2 * time.Second):
 		}
-	}
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"API Request Error",
-			fmt.Sprintf("Unable to read CephFS filesystem '%s' after creation: %s", data.Name.ValueString(), err),
-		)
-		return
 	}
 
 	resp.Diagnostics.Append(r.updateModelFromAPI(ctx, &data, fs)...)
