@@ -52,6 +52,42 @@ func TestAccCephRGWBucketResource(t *testing.T) {
 	})
 }
 
+func TestAccCephRGWBucketResource_zonegroupReadOnly(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-bucket-zg-owner")
+	testBucket := acctest.RandomWithPrefix("test-bucket-zg")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWBucketDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Bucket Zonegroup Test User"
+					}
+
+					resource "ceph_rgw_s3_key" "test" {
+					  user_id = ceph_rgw_user.test.user_id
+					}
+
+					resource "ceph_rgw_bucket" "test" {
+					  bucket    = %q
+					  owner     = ceph_rgw_user.test.user_id
+					  zonegroup = "bogus-zonegroup"
+					  depends_on = [ceph_rgw_s3_key.test]
+					}
+				`, testUID, testBucket),
+				ExpectError: regexp.MustCompile(`(?i)read-only`),
+			},
+		},
+	})
+}
+
 func TestAccCephRGWBucketResourceImport(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
