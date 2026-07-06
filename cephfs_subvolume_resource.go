@@ -11,7 +11,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
-	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -65,16 +64,9 @@ func (r *CephFSSubvolumeResource) Schema(ctx context.Context, req resource.Schem
 				},
 			},
 			"size": resourceSchema.Int64Attribute{
-				MarkdownDescription: "The quota size in bytes. When not set, the subvolume has no quota. Changing the size requires destroying and recreating the subvolume.",
+				MarkdownDescription: "The quota size in bytes. When not set, the subvolume has no quota.",
 				Optional:            true,
 				Computed:            true,
-				PlanModifiers: []planmodifier.Int64{
-					// Not plain RequiresReplace: with no quota set the
-					// computed null is re-planned as unknown on any config
-					// change, which would force a replacement for e.g. a
-					// timeouts edit.
-					int64planmodifier.RequiresReplaceIfConfigured(),
-				},
 			},
 			"path": resourceSchema.StringAttribute{
 				MarkdownDescription: "The path of the subvolume within the filesystem.",
@@ -96,6 +88,7 @@ func (r *CephFSSubvolumeResource) Schema(ctx context.Context, req resource.Schem
 			},
 			"timeouts": timeouts.Attributes(ctx, timeouts.Opts{
 				Create: true,
+				Update: true,
 				Delete: true,
 			}),
 		},
@@ -221,14 +214,43 @@ func (r *CephFSSubvolumeResource) Read(ctx context.Context, req resource.ReadReq
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
-// All Ceph-side attributes require replacement, but Update still runs for
-// changes to the timeouts block and must produce a state matching the plan.
 func (r *CephFSSubvolumeResource) Update(ctx context.Context, req resource.UpdateRequest, resp *resource.UpdateResponse) {
 	var data CephFSSubvolumeResourceModel
 
 	resp.Diagnostics.Append(req.Plan.Get(ctx, &data)...)
 	if resp.Diagnostics.HasError() {
 		return
+	}
+
+	updateTimeout, diags := data.Timeouts.Update(ctx, 10*time.Minute)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, updateTimeout)
+	defer cancel()
+
+	if !data.Size.IsNull() && !data.Size.IsUnknown() {
+		updateReq := restapi.SubvolumeUpdateRequest{
+			SubvolName: data.Name.ValueString(),
+			Size:       data.Size.ValueInt64(),
+		}
+
+		tflog.Debug(ctx, "Updating CephFS subvolume", map[string]interface{}{
+			"vol_name":    data.VolName.ValueString(),
+			"subvol_name": data.Name.ValueString(),
+			"size":        data.Size.ValueInt64(),
+		})
+
+		err := r.client.CephFSSubvolumeUpdate(ctx, data.VolName.ValueString(), updateReq)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"API Request Error",
+				fmt.Sprintf("Unable to update CephFS subvolume '%s' in '%s': %s", data.Name.ValueString(), data.VolName.ValueString(), err),
+			)
+			return
+		}
 	}
 
 	info, err := r.client.CephFSSubvolumeInfo(ctx, data.VolName.ValueString(), data.Name.ValueString(), "")

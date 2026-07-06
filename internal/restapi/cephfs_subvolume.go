@@ -45,6 +45,12 @@ type SubvolumeCreateRequest struct {
 	GroupName  string `json:"group_name,omitempty"`
 }
 
+type SubvolumeUpdateRequest struct {
+	SubvolName string `json:"subvol_name"`
+	Size       int64  `json:"size"`
+	GroupName  string `json:"group_name,omitempty"`
+}
+
 func (info *SubvolumeInfo) BytesQuotaInt64() (int64, bool) {
 	switch v := info.BytesQuota.(type) {
 	case float64:
@@ -197,6 +203,42 @@ func (c *Client) CephFSSubvolumeCreate(ctx context.Context, req SubvolumeCreateR
 	defer httpResp.Body.Close() //nolint:errcheck
 
 	if httpResp.StatusCode != http.StatusCreated && httpResp.StatusCode != http.StatusAccepted && httpResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(httpResp.Body)
+		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+func (c *Client) CephFSSubvolumeUpdate(ctx context.Context, volName string, req SubvolumeUpdateRequest) error {
+	jsonPayload, err := json.Marshal(req)
+	if err != nil {
+		return fmt.Errorf("unable to encode request payload: %w", err)
+	}
+
+	tflog.Trace(ctx, "Ceph API request body", map[string]any{
+		"request_body": string(jsonPayload),
+	})
+
+	url := c.endpoint.JoinPath("/api/cephfs/subvolume", volName).String()
+	httpReq, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	logRequest := logAPIRequest(ctx, httpReq)
+	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
+	if err != nil {
+		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(httpResp.Body)
 		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
 	}
