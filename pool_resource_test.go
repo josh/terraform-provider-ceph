@@ -503,6 +503,62 @@ func TestAccCephPoolResource_Application(t *testing.T) {
 	})
 }
 
+func TestAccCephPoolResource_ApplicationMultiple(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-multi-app")
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_pool" "test" {
+		  name              = %q
+		  pool_type         = "replicated"
+		  size              = 2
+		  min_size          = 1
+		  pg_num            = 32
+		  pg_autoscale_mode = "off"
+		  application_metadata = ["rgw", "rbd"]
+
+		  timeouts = {
+		    create = "1m"
+		    update = "5m"
+		    delete = "1m"
+		  }
+		}
+	`, poolName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephPoolExists(t, poolName),
+					checkCephPoolApplication(t, poolName, "rbd"),
+					checkCephPoolApplication(t, poolName, "rgw"),
+					resource.TestCheckResourceAttr("ceph_pool.test", "application_metadata.#", "2"),
+					resource.TestCheckTypeSetElemAttr("ceph_pool.test", "application_metadata.*", "rbd"),
+					resource.TestCheckTypeSetElemAttr("ceph_pool.test", "application_metadata.*", "rgw"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
 func TestAccCephPoolResource_CompressionModes(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
