@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -31,6 +33,39 @@ type MgrModuleConfigResourceModel struct {
 	ModuleName types.String `tfsdk:"module_name"`
 	Configs    types.Map    `tfsdk:"configs"`
 	ID         types.String `tfsdk:"id"`
+}
+
+// The mgr stores module options as raw strings and coerces them typed at
+// read time (src/mgr/PyUtil.cc), so the read-back rarely matches the user's
+// literal spelling (e.g. "1" reads back as bool true). Keep the prior
+// spelling when it means the same value so applies stay consistent and plans
+// converge. The bool spellings mirror the mgr's exact-case true list; false
+// spellings are safe because anything outside that list coerces to false.
+func mgrModuleConfigValueString(prior string, val any) (string, error) {
+	formatted, err := formatMgrModuleConfigValue(val)
+	if err != nil || prior == formatted {
+		return formatted, err
+	}
+
+	equal := false
+	switch v := val.(type) {
+	case bool:
+		switch strings.TrimSpace(prior) {
+		case "1", "true", "True", "on", "yes":
+			equal = v
+		case "0", "false", "False", "off", "no":
+			equal = !v
+		}
+	case float32, float64, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		p, perr := strconv.ParseFloat(strings.TrimSpace(prior), 64)
+		f, ferr := strconv.ParseFloat(formatted, 64)
+		equal = perr == nil && ferr == nil && p == f
+	}
+
+	if equal {
+		return prior, nil
+	}
+	return formatted, nil
 }
 
 func (r *MgrModuleConfigResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -140,7 +175,7 @@ func (r *MgrModuleConfigResource) Create(ctx context.Context, req resource.Creat
 			)
 			return
 		}
-		formattedVal, err := formatMgrModuleConfigValue(val)
+		formattedVal, err := mgrModuleConfigValueString(configsMap[key], val)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Configuration Value Formatting Error",
@@ -195,7 +230,7 @@ func (r *MgrModuleConfigResource) Read(ctx context.Context, req resource.ReadReq
 	stringConfigs := make(map[string]string)
 	for key := range currentConfigsMap {
 		if val, ok := readConfigs[key]; ok {
-			formattedVal, err := formatMgrModuleConfigValue(val)
+			formattedVal, err := mgrModuleConfigValueString(currentConfigsMap[key], val)
 			if err != nil {
 				resp.Diagnostics.AddError(
 					"Configuration Value Formatting Error",
@@ -298,7 +333,7 @@ func (r *MgrModuleConfigResource) Update(ctx context.Context, req resource.Updat
 			)
 			return
 		}
-		formattedVal, err := formatMgrModuleConfigValue(val)
+		formattedVal, err := mgrModuleConfigValueString(newConfigsMap[key], val)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"Configuration Value Formatting Error",
