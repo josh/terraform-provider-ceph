@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral"
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -47,6 +50,9 @@ func (r *AuthEphemeralResource) Schema(ctx context.Context, req ephemeral.Schema
 				ElementType:         types.StringType,
 				MarkdownDescription: "The caps of the entity",
 				Required:            true,
+				Validators: []validator.Map{
+					mapvalidator.KeysAre(stringvalidator.OneOf("mds", "mgr", "mon", "osd")),
+				},
 			},
 			"key": schema.StringAttribute{
 				MarkdownDescription: "The generated cephx key of the entity.",

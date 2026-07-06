@@ -177,7 +177,7 @@ func TestAccCephAuthResource_invalidCapType(t *testing.T) {
 					  }
 					}
 				`, testEntity),
-				ExpectError: regexp.MustCompile(`(?i)caps attribute contains unsupported capability type`),
+				ExpectError: regexp.MustCompile(`(?i)invalid attribute value match`),
 			},
 		},
 	})
@@ -215,7 +215,22 @@ func TestAccCephAuthResource_invalidCapTypeOnUpdate(t *testing.T) {
 					  }
 					}
 				`, testEntity),
-				ExpectError: regexp.MustCompile(`(?i)caps attribute contains unsupported capability type`),
+				ExpectError: regexp.MustCompile(`(?i)invalid attribute value match`),
+			},
+			// Restore a valid config so the post-test destroy can plan;
+			// the validator now rejects the invalid config at plan time,
+			// which would otherwise fail the destroy as well.
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_auth" "test_update" {
+					  entity = %q
+					  caps = {
+					    mon = "allow r"
+					    osd = "allow rw pool=test"
+					  }
+					}
+				`, testEntity),
 			},
 		},
 	})
