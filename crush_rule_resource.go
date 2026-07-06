@@ -387,14 +387,14 @@ func (r *CrushRuleResource) updateModelFromAPI(data *CrushRuleResourceModel, rul
 			"type": types.StringValue(step.Type),
 		}
 
-		if step.Num != 0 {
-			stepAttrs["num"] = types.Int64Value(int64(step.Num))
+		if step.Num != nil {
+			stepAttrs["num"] = types.Int64Value(int64(*step.Num))
 		} else {
 			stepAttrs["num"] = types.Int64Null()
 		}
 
-		if step.Item != 0 {
-			stepAttrs["item"] = types.Int64Value(int64(step.Item))
+		if step.Item != nil {
+			stepAttrs["item"] = types.Int64Value(int64(*step.Item))
 		} else {
 			stepAttrs["item"] = types.Int64Null()
 		}

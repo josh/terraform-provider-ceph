@@ -15,9 +15,9 @@ import (
 
 type CrushRuleStep struct {
 	Op       string `json:"op"`
-	Num      int    `json:"num"`
+	Num      *int   `json:"num,omitempty"`
 	Type     string `json:"type"`
-	Item     int    `json:"item,omitempty"`
+	Item     *int   `json:"item,omitempty"`
 	ItemName string `json:"item_name,omitempty"`
 }
 

@@ -63,6 +63,11 @@ func TestAccCephCrushRuleDataSource_replicated(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"data.ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(0).AtMapKey("num"),
+						knownvalue.Null(),
+					),
+					statecheck.ExpectKnownValue(
+						"data.ceph_crush_rule.test",
 						tfjsonpath.New("steps").AtSliceIndex(1).AtMapKey("op"),
 						knownvalue.StringExact("chooseleaf_firstn"),
 					),
@@ -73,8 +78,18 @@ func TestAccCephCrushRuleDataSource_replicated(t *testing.T) {
 					),
 					statecheck.ExpectKnownValue(
 						"data.ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(1).AtMapKey("num"),
+						knownvalue.Int64Exact(0),
+					),
+					statecheck.ExpectKnownValue(
+						"data.ceph_crush_rule.test",
 						tfjsonpath.New("steps").AtSliceIndex(2).AtMapKey("op"),
 						knownvalue.StringExact("emit"),
+					),
+					statecheck.ExpectKnownValue(
+						"data.ceph_crush_rule.test",
+						tfjsonpath.New("steps").AtSliceIndex(2).AtMapKey("num"),
+						knownvalue.Null(),
 					),
 				},
 			},
