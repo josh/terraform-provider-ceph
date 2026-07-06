@@ -99,7 +99,6 @@ func TestAccCephCrushRuleResource_replicated(t *testing.T) {
 				ImportStateVerify:                    true,
 				ImportStateId:                        ruleName,
 				ImportStateVerifyIdentifierAttribute: "name",
-				ImportStateVerifyIgnore:              []string{"pool_type", "failure_domain", "device_class", "profile", "root"},
 			},
 		},
 	})
@@ -221,7 +220,8 @@ func TestAccCephCrushRuleResource_erasure(t *testing.T) {
 				ImportStateVerify:                    true,
 				ImportStateId:                        ruleName,
 				ImportStateVerifyIdentifierAttribute: "name",
-				ImportStateVerifyIgnore:              []string{"pool_type", "failure_domain", "device_class", "profile", "root"},
+				// The erasure profile is not recoverable from the rule dump.
+				ImportStateVerifyIgnore: []string{"profile"},
 			},
 		},
 	})
@@ -626,6 +626,63 @@ func TestAccCephCrushRuleResource_FailureDomainMismatchWithProfile(t *testing.T)
 					}
 				`, profileName, ruleName),
 				ExpectError: regexp.MustCompile(`Failure Domain Mismatch`),
+			},
+		},
+	})
+}
+
+func TestAccCephCrushRuleResource_importOutOfBand(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	ruleName := fmt.Sprintf("test-import-oob-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_crush_rule" "test" {
+		  name           = %q
+		  pool_type      = "replicated"
+		  failure_domain = "host"
+		}
+	`, ruleName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephCrushRuleDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+
+			if err := cephTestClusterCLI.CrushRuleCreateReplicated(t.Context(), ruleName, "default", "host"); err != nil {
+				t.Fatalf("Failed to create crush rule out of band: %v", err)
+			}
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables:    testAccProviderConfig(),
+				Config:             config,
+				ResourceName:       "ceph_crush_rule.test",
+				ImportState:        true,
+				ImportStateId:      ruleName,
+				ImportStatePersist: true,
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if len(states) != 1 {
+						return fmt.Errorf("expected 1 state, got %d", len(states))
+					}
+					attrs := states[0].Attributes
+					if attrs["failure_domain"] != "host" {
+						return fmt.Errorf("expected failure_domain host, got %q", attrs["failure_domain"])
+					}
+					if attrs["root"] != "default" {
+						return fmt.Errorf("expected root default, got %q", attrs["root"])
+					}
+					return nil
+				},
+			},
+			// The plan after import must be empty; before placement
+			// attributes were recovered it forced a replacement.
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				PlanOnly:        true,
 			},
 		},
 	})
