@@ -229,6 +229,7 @@ func (p *CephProvider) DataSources(ctx context.Context) []func() datasource.Data
 		newErasureCodeProfileDataSource,
 		newMgrModuleConfigDataSource,
 		newPoolDataSource,
+		newRBDImageDataSource,
 		newRGWBucketDataSource,
 		newRGWS3KeyDataSource,
 		newRGWSubuserDataSource,
