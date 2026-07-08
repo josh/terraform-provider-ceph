@@ -120,11 +120,14 @@ func (r *RBDImageResource) Schema(ctx context.Context, req resource.SchemaReques
 				},
 			},
 			"object_size": resourceSchema.Int64Attribute{
-				MarkdownDescription: "The object size of the image in bytes. When not set, Ceph uses its default. Changing requires destroying and recreating the image.",
+				MarkdownDescription: "The object size of the image in bytes. Must be a power of two, since Ceph rounds any other value to the nearest one. When not set, Ceph uses its default. Changing requires destroying and recreating the image.",
 				Optional:            true,
 				Computed:            true,
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.RequiresReplaceIfConfigured(),
+				},
+				Validators: []validator.Int64{
+					powerOfTwo(),
 				},
 			},
 			"data_pool": resourceSchema.StringAttribute{
