@@ -512,6 +512,48 @@ func TestAccCephRGWUserResource_noKeys(t *testing.T) {
 	})
 }
 
+func TestAccCephRGWUserResource_tenant(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	tenant := "testtenant" + acctest.RandString(8)
+	user := acctest.RandomWithPrefix("user")
+	testUID := tenant + "$" + user
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_rgw_user" "test" {
+					  user_id      = %q
+					  display_name = "Tenanted User"
+					}
+				`, testUID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("user_id"),
+						knownvalue.StringExact(testUID),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("tenant"),
+						knownvalue.StringExact(tenant),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWUserExists(t, testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "user_id", testUID),
+					resource.TestCheckResourceAttr("ceph_rgw_user.test", "tenant", tenant),
+				),
+			},
+		},
+	})
+}
+
 func TestAccCephRGWUserResource_managedS3Keys(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()

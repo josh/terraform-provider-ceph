@@ -277,7 +277,11 @@ func (r *RGWUserResource) ImportState(ctx context.Context, req resource.ImportSt
 }
 
 func updateModelFromAPIUser(data *RGWUserResourceModel, user *restapi.RGWUser) {
-	data.UserID = types.StringValue(user.UserID)
+	if user.Tenant != "" {
+		data.UserID = types.StringValue(user.Tenant + "$" + user.UserID)
+	} else {
+		data.UserID = types.StringValue(user.UserID)
+	}
 	data.DisplayName = types.StringValue(user.DisplayName)
 	switch {
 	case user.Email != "":
