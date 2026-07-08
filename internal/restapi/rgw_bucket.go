@@ -87,7 +87,7 @@ func (c *Client) RGWGetBucketWithRetry(ctx context.Context, bucketName string) (
 	}
 	url := c.endpoint.JoinPath("/api/rgw/bucket", bucketName).String()
 
-	for attempt := 0; attempt < len(retryDelays); attempt++ {
+	for attempt := 0; ; attempt++ {
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
@@ -151,7 +151,7 @@ func (c *Client) RGWGetBucketWithRetry(ctx context.Context, bucketName string) (
 
 		isRetryable := httpResp.StatusCode == 500
 
-		if isRetryable && attempt < len(retryDelays)-1 {
+		if isRetryable && attempt < len(retryDelays) {
 			backoff := retryDelays[attempt]
 
 			tflog.Debug(ctx, "Retrying RGW bucket GET due to server error", map[string]any{
@@ -171,8 +171,6 @@ func (c *Client) RGWGetBucketWithRetry(ctx context.Context, bucketName string) (
 
 		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
 	}
-
-	return nil, fmt.Errorf("max retries exceeded")
 }
 
 type RGWBucketCreateRequest struct {
