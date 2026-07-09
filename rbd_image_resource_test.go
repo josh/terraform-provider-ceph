@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"testing"
 	"time"
 
@@ -33,6 +34,33 @@ func testAccRBDPoolConfig(poolName string) string {
 		  }
 		}
 	`, poolName)
+}
+
+func TestAccCephRBDImageResource_invalidObjectSize(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-rbd-pool")
+	imageName := acctest.RandomWithPrefix("test-image")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRBDImageDestroy(t, poolName),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + testAccRBDPoolConfig(poolName) + fmt.Sprintf(`
+					resource "ceph_rbd_image" "test" {
+					  pool_name   = ceph_pool.test.name
+					  name        = %q
+					  size        = 8388608
+					  object_size = 5000000
+					}
+				`, imageName),
+				ExpectError: regexp.MustCompile(`(?i)power of two`),
+			},
+		},
+	})
 }
 
 func TestAccCephRBDImageResource(t *testing.T) {
