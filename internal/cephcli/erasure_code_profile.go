@@ -9,6 +9,17 @@ import (
 )
 
 func (c *CLI) ErasureCodeProfileSet(ctx context.Context, name string, params map[string]string) error {
+	return c.erasureCodeProfileSet(ctx, name, params, false)
+}
+
+// ErasureCodeProfileSetForce overwrites an existing profile in place, which
+// Ceph otherwise refuses (-EPERM); the flags are required to simulate
+// out-of-band mutation of a profile that is already present.
+func (c *CLI) ErasureCodeProfileSetForce(ctx context.Context, name string, params map[string]string) error {
+	return c.erasureCodeProfileSet(ctx, name, params, true)
+}
+
+func (c *CLI) erasureCodeProfileSet(ctx context.Context, name string, params map[string]string, force bool) error {
 	args := []string{"--conf", c.confPath, "osd", "erasure-code-profile", "set", name}
 
 	keys := make([]string, 0, len(params))
@@ -19,6 +30,10 @@ func (c *CLI) ErasureCodeProfileSet(ctx context.Context, name string, params map
 
 	for _, key := range keys {
 		args = append(args, fmt.Sprintf("%s=%s", key, params[key]))
+	}
+
+	if force {
+		args = append(args, "--force", "--yes-i-really-mean-it")
 	}
 
 	cmd := exec.CommandContext(ctx, "ceph", args...)

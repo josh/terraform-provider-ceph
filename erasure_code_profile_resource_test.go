@@ -424,6 +424,69 @@ func TestAccCephErasureCodeProfileResource_invalidOSDsPerFailureDomainWithoutNum
 	})
 }
 
+func TestAccCephErasureCodeProfileResource_OutOfBandModification(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	profileName := fmt.Sprintf("test-profile-oob-mod-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_erasure_code_profile" "test" {
+		  name                 = %q
+		  k                    = 2
+		  m                    = 1
+		  crush_failure_domain = "osd"
+		}
+	`, profileName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephErasureCodeProfileDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_erasure_code_profile.test",
+						tfjsonpath.New("m"),
+						knownvalue.Int64Exact(1),
+					),
+				},
+			},
+			// Overwrite the profile's m out of band with --force; Read must
+			// reconcile the drift and plan a replacement back to the config.
+			{
+				PreConfig: func() {
+					err := cephTestClusterCLI.ErasureCodeProfileSetForce(t.Context(), profileName, map[string]string{
+						"k":                    "2",
+						"m":                    "2",
+						"crush-failure-domain": "osd",
+					})
+					if err != nil {
+						t.Fatalf("Failed to force-modify erasure code profile out of band: %v", err)
+					}
+					t.Logf("Force-modified erasure code profile %s out of band to m=2", profileName)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_erasure_code_profile.test", plancheck.ResourceActionDestroyBeforeCreate),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_erasure_code_profile.test",
+						tfjsonpath.New("m"),
+						knownvalue.Int64Exact(1),
+					),
+				},
+			},
+		},
+	})
+}
+
 func TestAccCephErasureCodeProfileResource_OutOfBandDeletion(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
