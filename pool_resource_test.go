@@ -1968,6 +1968,121 @@ func TestAccCephPoolResource_CrushRuleUpdateInPlace(t *testing.T) {
 	})
 }
 
+func TestAccCephPoolResource_CrushRuleReplaceInUseFailsAtPlan(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-crush-inuse")
+	crushRuleName := acctest.RandomWithPrefix("test-crush-rule-inuse")
+
+	poolConfig := func(failureDomain string) string {
+		return testAccProviderConfigBlock + fmt.Sprintf(`
+			resource "ceph_crush_rule" "test" {
+			  name           = %q
+			  pool_type      = "replicated"
+			  failure_domain = %q
+			}
+
+			resource "ceph_pool" "test" {
+			  name              = %q
+			  pool_type         = "replicated"
+			  crush_rule        = ceph_crush_rule.test.name
+			  size              = 2
+			  pg_num            = 32
+			  pg_autoscale_mode = "off"
+
+			  timeouts = {
+			    create = "1m"
+			    update = "5m"
+			    delete = "1m"
+			  }
+			}
+		`, crushRuleName, failureDomain, poolName)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          poolConfig("osd"),
+			},
+			// Changing the rule in place forces replacement while the pool
+			// still references it; this must be caught at plan, not apply.
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          poolConfig("host"),
+				PlanOnly:        true,
+				ExpectError:     regexp.MustCompile(`(?i)in use by\s+pool`),
+			},
+		},
+	})
+}
+
+func TestAccCephPoolResource_ErasureProfileReplaceInUseFailsAtPlan(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-ec-inuse")
+	profileName := acctest.RandomWithPrefix("test-profile-inuse")
+
+	poolConfig := func(m int) string {
+		return testAccProviderConfigBlock + fmt.Sprintf(`
+			resource "ceph_erasure_code_profile" "test" {
+			  name                 = %q
+			  k                    = 2
+			  m                    = %d
+			  crush_failure_domain = "osd"
+			}
+
+			resource "ceph_pool" "test" {
+			  name                 = %q
+			  pool_type            = "erasure"
+			  erasure_code_profile = ceph_erasure_code_profile.test.name
+			  pg_num               = 32
+			  pg_autoscale_mode    = "off"
+
+			  timeouts = {
+			    create = "1m"
+			    update = "5m"
+			    delete = "1m"
+			  }
+			}
+		`, profileName, m, poolName)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy: resource.ComposeAggregateTestCheckFunc(
+			testAccCheckCephPoolDestroy(t),
+			testAccCleanupCrushRule(t, poolName),
+		),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          poolConfig(1),
+			},
+			// Changing k/m forces the profile to be replaced while the pool
+			// holds it; this must be caught at plan, not apply.
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          poolConfig(2),
+				PlanOnly:        true,
+				ExpectError:     regexp.MustCompile(`(?i)in use by\s+pool`),
+			},
+		},
+	})
+}
+
 func TestAccCephPoolResource_ErasurePoolLifecycle(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()

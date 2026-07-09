@@ -197,6 +197,44 @@ func (c *Client) GetPool(ctx context.Context, poolName string) (*Pool, error) {
 	return &pool, nil
 }
 
+func (c *Client) ListPools(ctx context.Context) ([]Pool, error) {
+	endpoint := c.endpoint.JoinPath("/api/pool")
+	endpoint.RawQuery = "attrs=pool_name,crush_rule,erasure_code_profile"
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", endpoint.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	logRequest := logAPIRequest(ctx, httpReq)
+	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
+	if err != nil {
+		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response body: %w", err)
+	}
+
+	if httpResp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	var pools []Pool
+	if err := json.Unmarshal(body, &pools); err != nil {
+		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
+	}
+
+	return pools, nil
+}
+
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#put--api-pool--pool_name>
 
 type PoolUpdateRequest struct {
