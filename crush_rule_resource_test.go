@@ -512,6 +512,69 @@ func TestAccCephCrushRuleResource_OutOfBandDeletionDestroy(t *testing.T) {
 	})
 }
 
+func TestAccCephCrushRuleResource_OutOfBandModification(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	ruleName := fmt.Sprintf("test-crush-rule-oob-mod-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_crush_rule" "test" {
+		  name           = %q
+		  pool_type      = "replicated"
+		  failure_domain = "host"
+		}
+	`, ruleName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephCrushRuleDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("failure_domain"),
+						knownvalue.StringExact("host"),
+					),
+				},
+			},
+			// Rebuild the rule out of band with a different failure domain under
+			// the same name; Read must reconcile the drift and plan a replacement.
+			{
+				PreConfig: func() {
+					if err := cephTestClusterCLI.CrushRuleRemove(t.Context(), ruleName); err != nil {
+						t.Fatalf("Failed to remove CRUSH rule out of band: %v", err)
+					}
+					if err := cephTestClusterCLI.CrushRuleCreateReplicated(t.Context(), ruleName, "default", "osd"); err != nil {
+						t.Fatalf("Failed to recreate CRUSH rule out of band: %v", err)
+					}
+					t.Logf("Recreated CRUSH rule %s out of band with failure_domain=osd", ruleName)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_crush_rule.test", plancheck.ResourceActionDestroyBeforeCreate),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_crush_rule.test",
+						tfjsonpath.New("failure_domain"),
+						knownvalue.StringExact("host"),
+					),
+				},
+			},
+		},
+	})
+}
+
 func TestAccCephCrushRuleResource_ReplacementOnPoolTypeChange(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
