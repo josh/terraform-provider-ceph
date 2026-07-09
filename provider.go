@@ -212,6 +212,7 @@ func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource
 		newPoolResource,
 		newRBDImageResource,
 		newRGWBucketResource,
+		newRGWRoleResource,
 		newRGWS3KeyResource,
 		newRGWUserResource,
 	}
@@ -231,6 +232,7 @@ func (p *CephProvider) DataSources(ctx context.Context) []func() datasource.Data
 		newPoolDataSource,
 		newRBDImageDataSource,
 		newRGWBucketDataSource,
+		newRGWRoleDataSource,
 		newRGWS3KeyDataSource,
 		newRGWSubuserDataSource,
 		newRGWSwiftKeyDataSource,
