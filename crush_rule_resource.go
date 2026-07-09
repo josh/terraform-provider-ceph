@@ -336,28 +336,11 @@ func (r *CrushRuleResource) ImportState(ctx context.Context, req resource.Import
 	var data CrushRuleResourceModel
 	data.Name = types.StringValue(ruleName)
 
+	// The erasure profile is not recoverable from the rule dump and must be
+	// set in config to match; updateModelFromAPI derives the rest.
 	if diags := r.updateModelFromAPI(&data, rule); diags.HasError() {
 		resp.Diagnostics.Append(diags...)
 		return
-	}
-
-	// failure_domain, root, and device_class are not part of the rule dump
-	// proper, but can be recovered from its steps; without them the first
-	// plan after import would force a replacement. The erasure profile is
-	// not recoverable and must be set in config to match.
-	for _, step := range rule.Steps {
-		switch {
-		case step.Op == "take" && step.ItemName != "":
-			root, deviceClass, hasClass := strings.Cut(step.ItemName, "~")
-			data.Root = types.StringValue(root)
-			if hasClass {
-				data.DeviceClass = types.StringValue(deviceClass)
-			}
-		case strings.HasPrefix(step.Op, "choose") && step.Type != "":
-			if data.FailureDomain.IsNull() {
-				data.FailureDomain = types.StringValue(step.Type)
-			}
-		}
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
@@ -432,6 +415,38 @@ func (r *CrushRuleResource) updateModelFromAPI(data *CrushRuleResourceModel, rul
 		return diags
 	}
 	data.Steps = stepsValue
+
+	// failure_domain, root, and device_class are not part of the rule dump
+	// proper but can be recovered from its steps, so Read reconciles
+	// out-of-band changes to them and import can populate them.
+	var root, deviceClass, failureDomain string
+	hasDeviceClass := false
+	for _, step := range rule.Steps {
+		switch {
+		case step.Op == "take" && step.ItemName != "":
+			r, dc, hasClass := strings.Cut(step.ItemName, "~")
+			root = r
+			if hasClass {
+				deviceClass = dc
+				hasDeviceClass = true
+			}
+		case strings.HasPrefix(step.Op, "choose") && step.Type != "":
+			if failureDomain == "" {
+				failureDomain = step.Type
+			}
+		}
+	}
+	if root != "" {
+		data.Root = types.StringValue(root)
+	}
+	if hasDeviceClass {
+		data.DeviceClass = types.StringValue(deviceClass)
+	} else {
+		data.DeviceClass = types.StringNull()
+	}
+	if failureDomain != "" {
+		data.FailureDomain = types.StringValue(failureDomain)
+	}
 
 	return diags
 }
