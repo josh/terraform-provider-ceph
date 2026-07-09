@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
@@ -23,6 +24,7 @@ var (
 	_ resource.Resource                     = &ErasureCodeProfileResource{}
 	_ resource.ResourceWithImportState      = &ErasureCodeProfileResource{}
 	_ resource.ResourceWithConfigValidators = &ErasureCodeProfileResource{}
+	_ resource.ResourceWithModifyPlan       = &ErasureCodeProfileResource{}
 )
 
 func newErasureCodeProfileResource() resource.Resource {
@@ -406,6 +408,61 @@ func (r *ErasureCodeProfileResource) Delete(ctx context.Context, req resource.De
 			fmt.Sprintf("Unable to delete erasure code profile '%s': %s. Note that erasure code profiles cannot be deleted if they are in use by any pools.", data.Name.ValueString(), err),
 		)
 		return
+	}
+}
+
+func (r *ErasureCodeProfileResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Only guard an in-place replacement (same name, changed parameters): a
+	// plain destroy or a rename lets Terraform recreate/remove the referencing
+	// pool first. A same-name replace cannot, since Ceph refuses to delete a
+	// profile while a pool uses it.
+	if r.client == nil || req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var plan, state ErasureCodeProfileResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() || plan.Name.ValueString() != state.Name.ValueString() {
+		return
+	}
+	if plan.K.Equal(state.K) &&
+		plan.M.Equal(state.M) &&
+		plan.Plugin.Equal(state.Plugin) &&
+		plan.CrushFailureDomain.Equal(state.CrushFailureDomain) &&
+		plan.CrushNumFailureDomains.Equal(state.CrushNumFailureDomains) &&
+		plan.CrushOSDsPerFailureDomain.Equal(state.CrushOSDsPerFailureDomain) &&
+		plan.Technique.Equal(state.Technique) &&
+		plan.CrushRoot.Equal(state.CrushRoot) &&
+		plan.CrushDeviceClass.Equal(state.CrushDeviceClass) {
+		return
+	}
+
+	name := state.Name.ValueString()
+	pools, err := r.client.ListPools(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"API Request Error",
+			fmt.Sprintf("Unable to list pools to check whether erasure code profile '%s' is in use: %s", name, err),
+		)
+		return
+	}
+
+	var inUse []string
+	for _, pool := range pools {
+		if pool.ErasureCodeProfile == name {
+			inUse = append(inUse, pool.PoolName)
+		}
+	}
+
+	if len(inUse) > 0 {
+		resp.Diagnostics.AddError(
+			"Erasure Code Profile In Use",
+			fmt.Sprintf(
+				"Erasure code profile %q is in use by pool(s): %s. Replacing it in place will fail because Ceph cannot delete a profile while a pool uses it, and a pool's profile is fixed at creation. Recreate the pool with a new profile instead.",
+				name, strings.Join(inUse, ", "),
+			),
+		)
 	}
 }
 

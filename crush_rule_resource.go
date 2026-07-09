@@ -23,6 +23,7 @@ import (
 var (
 	_ resource.Resource                = &CrushRuleResource{}
 	_ resource.ResourceWithImportState = &CrushRuleResource{}
+	_ resource.ResourceWithModifyPlan  = &CrushRuleResource{}
 )
 
 func newCrushRuleResource() resource.Resource {
@@ -311,6 +312,57 @@ func (r *CrushRuleResource) Delete(ctx context.Context, req resource.DeleteReque
 			fmt.Sprintf("Unable to delete CRUSH rule '%s': %s. Note that CRUSH rules cannot be deleted if they are in use by any pools.", data.Name.ValueString(), err),
 		)
 		return
+	}
+}
+
+func (r *CrushRuleResource) ModifyPlan(ctx context.Context, req resource.ModifyPlanRequest, resp *resource.ModifyPlanResponse) {
+	// Only guard an in-place replacement (same name, changed topology): a plain
+	// destroy or a rename lets Terraform repoint/remove the referencing pool
+	// first, so those are left to apply. A same-name replace cannot, since Ceph
+	// refuses to delete a rule while a pool uses it.
+	if r.client == nil || req.State.Raw.IsNull() || req.Plan.Raw.IsNull() {
+		return
+	}
+
+	var plan, state CrushRuleResourceModel
+	resp.Diagnostics.Append(req.Plan.Get(ctx, &plan)...)
+	resp.Diagnostics.Append(req.State.Get(ctx, &state)...)
+	if resp.Diagnostics.HasError() || plan.Name.ValueString() != state.Name.ValueString() {
+		return
+	}
+	if plan.PoolType.Equal(state.PoolType) &&
+		plan.FailureDomain.Equal(state.FailureDomain) &&
+		plan.DeviceClass.Equal(state.DeviceClass) &&
+		plan.Profile.Equal(state.Profile) &&
+		plan.Root.Equal(state.Root) {
+		return
+	}
+
+	name := state.Name.ValueString()
+	pools, err := r.client.ListPools(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"API Request Error",
+			fmt.Sprintf("Unable to list pools to check whether CRUSH rule '%s' is in use: %s", name, err),
+		)
+		return
+	}
+
+	var inUse []string
+	for _, pool := range pools {
+		if pool.CrushRule == name {
+			inUse = append(inUse, pool.PoolName)
+		}
+	}
+
+	if len(inUse) > 0 {
+		resp.Diagnostics.AddError(
+			"CRUSH Rule In Use",
+			fmt.Sprintf(
+				"CRUSH rule %q is in use by pool(s): %s. Replacing it in place will fail because Ceph cannot delete a rule while a pool references it. Rename the rule (with lifecycle create_before_destroy) so the pool repoints first, or remove the pool.",
+				name, strings.Join(inUse, ", "),
+			),
+		)
 	}
 }
 
