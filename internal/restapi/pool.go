@@ -22,21 +22,23 @@ type PoolOptions struct {
 }
 
 type Pool struct {
-	PoolName            string      `json:"pool_name"`
-	Type                string      `json:"type"`
-	PoolID              int         `json:"pool_id"`
-	Size                int         `json:"size"`
-	MinSize             int         `json:"min_size"`
-	PGNum               int         `json:"pg_num"`
-	PGPlacementNum      int         `json:"pg_placement_num"`
-	CrushRule           string      `json:"crush_rule"`
-	ApplicationMetadata []string    `json:"application_metadata"`
-	Flags               int         `json:"flags"`
-	ErasureCodeProfile  string      `json:"erasure_code_profile"`
-	PGAutoscaleMode     string      `json:"pg_autoscale_mode"`
-	QuotaMaxObjects     int         `json:"quota_max_objects"`
-	QuotaMaxBytes       int         `json:"quota_max_bytes"`
-	Options             PoolOptions `json:"options"`
+	PoolName             string      `json:"pool_name"`
+	Type                 string      `json:"type"`
+	PoolID               int         `json:"pool_id"`
+	Size                 int         `json:"size"`
+	MinSize              int         `json:"min_size"`
+	PGNum                int         `json:"pg_num"`
+	PGNumTarget          int         `json:"pg_num_target"`
+	PGPlacementNum       int         `json:"pg_placement_num"`
+	PGPlacementNumTarget int         `json:"pg_placement_num_target"`
+	CrushRule            string      `json:"crush_rule"`
+	ApplicationMetadata  []string    `json:"application_metadata"`
+	Flags                int         `json:"flags"`
+	ErasureCodeProfile   string      `json:"erasure_code_profile"`
+	PGAutoscaleMode      string      `json:"pg_autoscale_mode"`
+	QuotaMaxObjects      int         `json:"quota_max_objects"`
+	QuotaMaxBytes        int         `json:"quota_max_bytes"`
+	Options              PoolOptions `json:"options"`
 }
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-pool>
