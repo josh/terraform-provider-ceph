@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	version string = "0.7.0"
+	version string = "0.7.1"
 )
 
 func main() {
