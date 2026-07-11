@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
@@ -14,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 func TestAccCephPoolResource(t *testing.T) {
@@ -132,6 +135,212 @@ func TestAccCephPoolResource(t *testing.T) {
 				ImportStateVerify:                    true,
 				ImportStateId:                        poolName,
 				ImportStateVerifyIdentifierAttribute: "name",
+			},
+		},
+	})
+}
+
+// TestAccCephPoolResource_TracksPgNumTarget verifies that the provider reports
+// the pg_num a pool is converging toward, not the physical count Ceph exposes
+// while a split or merge is still in flight. Ceph accepts a pg_num change into
+// pg_num_target immediately but adjusts the physical pg_num over minutes, so a
+// provider that read the physical value would report spurious drift toward the
+// old count for the whole transition.
+func TestAccCephPoolResource_TracksPgNumTarget(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-pgtarget")
+
+	config := func(pgNum int) string {
+		return testAccProviderConfigBlock + fmt.Sprintf(`
+			resource "ceph_pool" "test" {
+			  name              = %q
+			  pool_type         = "replicated"
+			  size              = 2
+			  min_size          = 1
+			  pg_num            = %d
+			  pgp_num           = %d
+			  pg_autoscale_mode = "off"
+
+			  timeouts = {
+			    create = "2m"
+			    update = "2m"
+			    delete = "1m"
+			  }
+			}
+		`, poolName, pgNum, pgNum)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(32),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("pg_num"),
+						knownvalue.Int64Exact(32),
+					),
+				},
+			},
+			{
+				// Shrink pg_num behind Terraform's back. Ceph records target 8
+				// at once but merges the physical PGs down over minutes. With
+				// the config already asking for 8, refreshing the resource must
+				// observe 8 (the target) and plan no change; a provider reading
+				// the still-32 physical count would plan a spurious update.
+				ConfigVariables: testAccProviderConfig(),
+				PreConfig: func() {
+					client := &restapi.Client{}
+					endpoint, err := url.Parse(testDashboardURL)
+					if err != nil {
+						t.Fatalf("parse dashboard URL: %v", err)
+					}
+					if err := client.Configure(context.Background(), []*url.URL{endpoint}, "admin", "password", "", "", "", time.Hour); err != nil {
+						t.Fatalf("configure client: %v", err)
+					}
+					pgNum := 8
+					if _, err := client.UpdatePool(context.Background(), poolName, restapi.PoolUpdateRequest{PgNum: &pgNum}); err != nil {
+						t.Fatalf("shrink pg_num out of band: %v", err)
+					}
+					// The dashboard applies the change in an async task, so wait
+					// for the target to settle before the refresh below reads it.
+					// The physical pg_num is still ~32, mid-merge, at this point.
+					settled := false
+					for i := 0; i < 60; i++ {
+						p, err := client.GetPool(context.Background(), poolName)
+						if err == nil && p.PGNumTarget == 8 {
+							settled = true
+							break
+						}
+						time.Sleep(time.Second)
+					}
+					if !settled {
+						t.Fatal("pg_num_target did not settle to 8 out of band")
+					}
+				},
+				Config: config(8),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionNoop),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("pg_num"),
+						knownvalue.Int64Exact(8),
+					),
+				},
+			},
+		},
+	})
+}
+
+// TestAccCephPoolResource_AutoscaleOnKeepsPinnedPgpNum verifies that with
+// pg_autoscale_mode "on" the provider keeps the configured pgp_num in state
+// instead of tracking Ceph's, mirroring the pg_num behavior. When the
+// autoscaler resizes the pool it moves pgp_num along with pg_num; tracking
+// that value would make every later plan fight the autoscaler with a
+// spurious pgp_num update.
+func TestAccCephPoolResource_AutoscaleOnKeepsPinnedPgpNum(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-autoscale-pgp")
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_pool" "test" {
+		  name              = %q
+		  pool_type         = "replicated"
+		  size              = 2
+		  min_size          = 1
+		  pgp_num           = 1
+		  pg_autoscale_mode = "on"
+
+		  timeouts = {
+		    create = "2m"
+		    update = "2m"
+		    delete = "1m"
+		  }
+		}
+	`, poolName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("pgp_num"),
+						knownvalue.Int64Exact(1),
+					),
+				},
+			},
+			{
+				// Resize the pool out of band the way the autoscaler would;
+				// Ceph moves the pgp target (and then the physical count)
+				// along with pg_num. The refresh must keep the configured
+				// pgp_num and plan no change.
+				ConfigVariables: testAccProviderConfig(),
+				PreConfig: func() {
+					client := &restapi.Client{}
+					endpoint, err := url.Parse(testDashboardURL)
+					if err != nil {
+						t.Fatalf("parse dashboard URL: %v", err)
+					}
+					if err := client.Configure(context.Background(), []*url.URL{endpoint}, "admin", "password", "", "", "", time.Hour); err != nil {
+						t.Fatalf("configure client: %v", err)
+					}
+					pgNum := 32
+					if _, err := client.UpdatePool(context.Background(), poolName, restapi.PoolUpdateRequest{PgNum: &pgNum}); err != nil {
+						t.Fatalf("grow pg_num out of band: %v", err)
+					}
+					// Wait until the physical pgp count has visibly moved off
+					// the configured value so the refresh below would see the
+					// divergence if it tracked Ceph's count.
+					moved := false
+					for i := 0; i < 180; i++ {
+						p, err := client.GetPool(context.Background(), poolName)
+						if err == nil && p.PGPlacementNum > 1 {
+							moved = true
+							break
+						}
+						time.Sleep(time.Second)
+					}
+					if !moved {
+						t.Fatal("physical pgp_num never moved off 1 out of band")
+					}
+				},
+				Config: config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionNoop),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("pgp_num"),
+						knownvalue.Int64Exact(1),
+					),
+				},
 			},
 		},
 	})

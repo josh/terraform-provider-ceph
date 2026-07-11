@@ -222,23 +222,31 @@ func (r *PoolResource) updateModelFromAPI(ctx context.Context, data *PoolResourc
 		data.MinSize = types.Int64Null()
 	}
 
+	// Ceph applies a pg_num/pgp_num change to its target immediately, then
+	// splits or merges the physical count toward it in the background. Track
+	// the target so state reflects the requested value as soon as it is
+	// accepted, without waiting for (or drifting during) physical convergence.
 	if pool.PGAutoscaleMode == "on" {
-		// The autoscaler owns pg_num, so keep the configured value instead
-		// of tracking Ceph's current one to avoid spurious drift, but never
+		// The autoscaler owns both pg_num and pgp_num, so keep the configured
+		// values instead of tracking Ceph's to avoid spurious drift, but never
 		// leave an unknown planned value in state.
 		if data.PgNum.IsUnknown() {
 			data.PgNum = types.Int64Null()
 		}
-	} else if pool.PGNum > 0 {
-		data.PgNum = types.Int64Value(int64(pool.PGNum))
+		if data.PgpNum.IsUnknown() {
+			data.PgpNum = types.Int64Null()
+		}
 	} else {
-		data.PgNum = types.Int64Null()
-	}
-
-	if pool.PGPlacementNum > 0 {
-		data.PgpNum = types.Int64Value(int64(pool.PGPlacementNum))
-	} else {
-		data.PgpNum = types.Int64Null()
+		if pgNum := pgNumForState(pool.PGNumTarget, pool.PGNum); pgNum > 0 {
+			data.PgNum = types.Int64Value(int64(pgNum))
+		} else {
+			data.PgNum = types.Int64Null()
+		}
+		if pgpNum := pgNumForState(pool.PGPlacementNumTarget, pool.PGPlacementNum); pgpNum > 0 {
+			data.PgpNum = types.Int64Value(int64(pgpNum))
+		} else {
+			data.PgpNum = types.Int64Null()
+		}
 	}
 
 	if pool.CrushRule != "" {
@@ -450,12 +458,139 @@ func (r *PoolResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
+	// The dashboard turns pg_autoscale_mode off only after the pool exists,
+	// so the autoscaler can move pg_num_target during that window. If the
+	// requested value did not survive, set it again now that autoscaling is
+	// settled. Ceph accepts the new target synchronously and converges the
+	// physical pg_num in the background, so there is nothing to wait on
+	// beyond the target being visible.
+	if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() && pool.PGAutoscaleMode != "on" {
+		requested := int(data.PgNum.ValueInt64())
+		target := pgNumForState(pool.PGNumTarget, pool.PGNum)
+		if target != requested {
+			tflog.Debug(ctx, "Reasserting pg_num after creation", map[string]interface{}{
+				"requested": requested,
+				"target":    target,
+			})
+
+			// Send pgp_num alongside pg_num when the user pinned it: the
+			// dashboard rewrites pgp_num to match pg_num whenever pg_num is
+			// set, so omitting it would clobber a distinctly-configured value.
+			reassert := restapi.PoolUpdateRequest{PgNum: &requested}
+			if !data.PgpNum.IsNull() && !data.PgpNum.IsUnknown() {
+				pgp := int(data.PgpNum.ValueInt64())
+				reassert.PgpNum = &pgp
+			}
+
+			if _, err := r.client.UpdatePool(ctx, data.Name.ValueString(), reassert); err != nil {
+				resp.Diagnostics.AddError(
+					"API Request Error",
+					fmt.Sprintf("Unable to reassert pg_num for pool '%s' after creation: %s", data.Name.ValueString(), err),
+				)
+				return
+			}
+
+			pool, err = r.waitForPgNumTarget(ctx, data.Name.ValueString(), requested)
+			if err != nil {
+				resp.Diagnostics.AddError(
+					"API Request Error",
+					fmt.Sprintf("Unable to confirm pg_num for pool '%s' after reasserting: %s", data.Name.ValueString(), err),
+				)
+				return
+			}
+		}
+	}
+
 	resp.Diagnostics.Append(r.updateModelFromAPI(ctx, &data, pool)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
+}
+
+// pgNumForState prefers Ceph's *_target (the value it accepted and converges
+// the physical count toward in the background) over the current physical
+// count, so state reflects the requested value without drifting during a
+// split or merge. It falls back to the physical count on the rare osdmap that
+// omits the target.
+func pgNumForState(target, physical int) int {
+	if target > 0 {
+		return target
+	}
+	return physical
+}
+
+// waitForPgNumTarget polls until Ceph reports the requested pg_num as the
+// pool's target. The dashboard applies the change inside an async task, so the
+// target may not be visible on the first read; it settles within an osdmap
+// epoch, long before the physical split or merge finishes.
+func (r *PoolResource) waitForPgNumTarget(ctx context.Context, poolName string, requested int) (*restapi.Pool, error) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
+	var lastErr error
+	for {
+		pool, err := r.client.GetPool(ctx, poolName)
+		switch {
+		case err != nil:
+			// The pool already exists, so a transient read failure should not
+			// sink an otherwise-successful create; keep polling until the
+			// deadline and report the last error if we never recover.
+			lastErr = err
+		case pool.PGNumTarget == requested || (pool.PGNumTarget == 0 && pool.PGNum == requested):
+			return pool, nil
+		}
+
+		select {
+		case <-ctx.Done():
+			if lastErr != nil {
+				return nil, fmt.Errorf("pg_num target did not reach %d (last read error: %v): %w", requested, lastErr, ctx.Err())
+			}
+			return nil, fmt.Errorf("pg_num target did not reach %d: %w", requested, ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+// waitForNoPoolEditTask polls until no pool/edit task for the pool is
+// executing. The dashboard identifies tasks by (name, metadata) and returns
+// the already-running task instead of applying a new edit, so issuing one
+// while a previous edit is still converging would be silently ignored.
+func (r *PoolResource) waitForNoPoolEditTask(ctx context.Context, poolName string) error {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	var lastErr error
+	for {
+		tasks, err := r.client.GetTasks(ctx, "pool/edit")
+		if err != nil {
+			lastErr = err
+		} else {
+			busy := false
+			for _, task := range tasks.ExecutingTasks {
+				if task.Metadata["pool_name"] == poolName {
+					busy = true
+					break
+				}
+			}
+			if !busy {
+				return nil
+			}
+			tflog.Debug(ctx, "Waiting for running pool edit task to finish", map[string]interface{}{
+				"pool_name": poolName,
+			})
+		}
+
+		select {
+		case <-ctx.Done():
+			if lastErr != nil {
+				return fmt.Errorf("earlier pool edit task still running (last poll error: %v): %w", lastErr, ctx.Err())
+			}
+			return fmt.Errorf("earlier pool edit task still running: %w", ctx.Err())
+		case <-ticker.C:
+		}
+	}
 }
 
 func (r *PoolResource) Read(ctx context.Context, req resource.ReadRequest, resp *resource.ReadResponse) {
@@ -609,6 +744,18 @@ func (r *PoolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		"original_name": originalPoolName,
 		"new_name":      newPoolName,
 	})
+
+	// The dashboard deduplicates tasks by (name, metadata) and silently drops
+	// an edit that arrives while another edit on the same pool is executing,
+	// e.g. the create-time pg_num reassert still converging its PG merge. Wait
+	// for the pool's edit slot to free up so this update is actually applied.
+	if err := r.waitForNoPoolEditTask(ctx, originalPoolName); err != nil {
+		resp.Diagnostics.AddError(
+			"Task Wait Failed",
+			fmt.Sprintf("Unable to update pool '%s' while an earlier edit is still running: %s", originalPoolName, err),
+		)
+		return
+	}
 
 	taskInfo, err := r.client.UpdatePool(ctx, originalPoolName, updateReq)
 	if err != nil {
