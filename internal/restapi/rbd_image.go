@@ -15,15 +15,25 @@ import (
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-block-image--image_spec>
 
 type RBDImage struct {
-	Name            string   `json:"name"`
-	PoolName        string   `json:"pool_name"`
-	ID              string   `json:"id"`
-	Size            int64    `json:"size"`
-	ObjSize         int64    `json:"obj_size"`
-	NumObjs         int64    `json:"num_objs"`
-	BlockNamePrefix string   `json:"block_name_prefix"`
-	FeaturesName    []string `json:"features_name"`
-	DataPool        *string  `json:"data_pool"`
+	Name            string             `json:"name"`
+	PoolName        string             `json:"pool_name"`
+	ID              string             `json:"id"`
+	Size            int64              `json:"size"`
+	ObjSize         int64              `json:"obj_size"`
+	NumObjs         int64              `json:"num_objs"`
+	BlockNamePrefix string             `json:"block_name_prefix"`
+	FeaturesName    []string           `json:"features_name"`
+	DataPool        *string            `json:"data_pool"`
+	Snapshots       []RBDImageSnapshot `json:"snapshots"`
+}
+
+type RBDImageSnapshot struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+	Size int64  `json:"size"`
+	// null for mirror snapshots, which this provider does not manage.
+	IsProtected *bool  `json:"is_protected"`
+	Timestamp   string `json:"timestamp"`
 }
 
 func (c *Client) rbdImageURL(poolName, imageName string) *url.URL {
