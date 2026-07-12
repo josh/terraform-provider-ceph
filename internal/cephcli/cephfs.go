@@ -115,6 +115,58 @@ func (c *CLI) CephFSSubvolumeExists(ctx context.Context, volName string, subvolN
 	return false, nil
 }
 
+func (c *CLI) CephFSSubvolumeSnapshotCreate(ctx context.Context, volName string, subvolName string, snapName string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "subvolume", "snapshot", "create", volName, subvolName, snapName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create CephFS subvolume snapshot %s/%s/%s: %w, output: %s", volName, subvolName, snapName, err, string(output))
+	}
+	return nil
+}
+
+func (c *CLI) CephFSSubvolumeSnapshotDelete(ctx context.Context, volName string, subvolName string, snapName string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "subvolume", "snapshot", "rm", volName, subvolName, snapName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to delete CephFS subvolume snapshot %s/%s/%s: %w, output: %s", volName, subvolName, snapName, err, string(output))
+	}
+	return nil
+}
+
+type CephFSSubvolumeSnapshotListEntry struct {
+	Name string `json:"name"`
+}
+
+func (c *CLI) CephFSSubvolumeSnapshotList(ctx context.Context, volName string, subvolName string) ([]CephFSSubvolumeSnapshotListEntry, error) {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "subvolume", "snapshot", "ls", volName, subvolName, "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list CephFS subvolume snapshots for %s/%s: %w", volName, subvolName, err)
+	}
+
+	var entries []CephFSSubvolumeSnapshotListEntry
+	if err := json.Unmarshal(output, &entries); err != nil {
+		return nil, fmt.Errorf("failed to parse CephFS subvolume snapshot list: %w", err)
+	}
+
+	return entries, nil
+}
+
+func (c *CLI) CephFSSubvolumeSnapshotExists(ctx context.Context, volName string, subvolName string, snapName string) (bool, error) {
+	entries, err := c.CephFSSubvolumeSnapshotList(ctx, volName, subvolName)
+	if err != nil {
+		return false, err
+	}
+
+	for _, entry := range entries {
+		if entry.Name == snapName {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 func (c *CLI) CephFSSubvolumeGroupCreate(ctx context.Context, volName string, groupName string) error {
 	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "subvolumegroup", "create", volName, groupName)
 	output, err := cmd.CombinedOutput()
