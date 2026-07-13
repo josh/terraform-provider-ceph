@@ -2809,3 +2809,76 @@ func TestAccCephPoolResource_pgNumWithClusterDefaultAutoscale(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephPoolResource_ECOverwrites(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-ec-pool")
+
+	config := func(ecOverwrites bool) string {
+		return testAccProviderConfigBlock + fmt.Sprintf(`
+			resource "ceph_pool" "test" {
+			  name                 = %q
+			  pool_type            = "erasure"
+			  pg_num               = 8
+			  pg_autoscale_mode    = "off"
+			  application_metadata = ["rbd"]
+			  ec_overwrites        = %t
+
+			  timeouts = {
+			    create = "5m"
+			    update = "5m"
+			    delete = "5m"
+			  }
+			}
+		`, poolName, ecOverwrites)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(false),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("ec_overwrites"),
+						knownvalue.Bool(false),
+					),
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(false),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			{
+				// The harness OSDs use memstore, which cannot enable
+				// ec_overwrites; the bluestore error proves the flag
+				// reaches the cluster through the update path.
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(true),
+				ExpectError:     regexp.MustCompile(`bluestore|memstore`),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(false),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}

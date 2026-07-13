@@ -29,6 +29,7 @@ type PoolDataSourceModel struct {
 	CrushRule                types.String  `tfsdk:"crush_rule"`
 	ApplicationMetadata      types.Set     `tfsdk:"application_metadata"`
 	Flags                    types.Int64   `tfsdk:"flags"`
+	FlagsNames               types.String  `tfsdk:"flags_names"`
 	ErasureCodeProfile       types.String  `tfsdk:"erasure_code_profile"`
 	AutoscaleMode            types.String  `tfsdk:"autoscale_mode"`
 	QuotaMaxObjects          types.Int64   `tfsdk:"quota_max_objects"`
@@ -76,6 +77,10 @@ func (d *PoolDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 				MarkdownDescription: "The list of applications enabled on the pool (e.g. 'rbd', 'rgw', 'cephfs').",
 				Computed:            true,
 				ElementType:         types.StringType,
+			},
+			"flags_names": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The names of the flags set on the pool, comma separated.",
+				Computed:            true,
 			},
 			"flags": dataSourceSchema.Int64Attribute{
 				MarkdownDescription: "The flags of the pool.",
@@ -173,6 +178,7 @@ func (d *PoolDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	data.CompressionMaxBlobSize = types.Int64Value(int64(pool.Options.CompressionMaxBlobSize))
 
 	data.Flags = types.Int64Value(int64(pool.Flags))
+	data.FlagsNames = types.StringValue(pool.FlagsNames)
 
 	appMetaStrings := pool.ApplicationMetadata
 	appMeta, diags := types.SetValueFrom(ctx, types.StringType, appMetaStrings)
