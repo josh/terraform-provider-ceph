@@ -203,6 +203,7 @@ func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource
 	return []func() resource.Resource{
 		newAuthResource,
 		newCephFSResource,
+		newCephFSQuotaResource,
 		newCephFSSubvolumeResource,
 		newCephFSSubvolumeGroupResource,
 		newCephFSSubvolumeSnapshotResource,
@@ -229,6 +230,7 @@ func (p *CephProvider) DataSources(ctx context.Context) []func() datasource.Data
 	return []func() datasource.DataSource{
 		newAuthDataSource,
 		newCephFSDataSource,
+		newCephFSQuotaDataSource,
 		newCephFSSubvolumeDataSource,
 		newCephFSSubvolumeGroupDataSource,
 		newCephFSSubvolumeSnapshotDataSource,

@@ -81,6 +81,44 @@ func (c *CLI) CephFSSubvolumeDelete(ctx context.Context, volName string, subvolN
 	return nil
 }
 
+type CephFSSubvolumeInfoEntry struct {
+	Path       string `json:"path"`
+	BytesQuota any    `json:"bytes_quota"`
+}
+
+func (e *CephFSSubvolumeInfoEntry) BytesQuotaInt64() (int64, bool) {
+	switch v := e.BytesQuota.(type) {
+	case float64:
+		return int64(v), true
+	default:
+		return 0, false
+	}
+}
+
+func (c *CLI) CephFSSubvolumeInfo(ctx context.Context, volName string, subvolName string) (*CephFSSubvolumeInfoEntry, error) {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "subvolume", "info", volName, subvolName, "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get CephFS subvolume info for %s/%s: %w", volName, subvolName, err)
+	}
+
+	var info CephFSSubvolumeInfoEntry
+	if err := json.Unmarshal(output, &info); err != nil {
+		return nil, fmt.Errorf("failed to parse CephFS subvolume info: %w", err)
+	}
+
+	return &info, nil
+}
+
+func (c *CLI) CephFSSubvolumeResize(ctx context.Context, volName string, subvolName string, newSize string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "subvolume", "resize", volName, subvolName, newSize)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to resize CephFS subvolume %s/%s: %w, output: %s", volName, subvolName, err, string(output))
+	}
+	return nil
+}
+
 type CephFSSubvolumeListEntry struct {
 	Name string `json:"name"`
 }
