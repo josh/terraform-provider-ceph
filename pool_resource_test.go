@@ -3,9 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/url"
 	"regexp"
 	"slices"
+	"strconv"
 	"testing"
 	"time"
 
@@ -2808,6 +2810,431 @@ func TestAccCephPoolResource_pgNumWithClusterDefaultAutoscale(t *testing.T) {
 			},
 		},
 	})
+}
+
+func TestAccCephPoolResource_Tuning(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-tuning")
+
+	config := func(targetSizeRatio string, fastRead bool, pgNumMax int) string {
+		return testAccProviderConfigBlock + fmt.Sprintf(`
+			resource "ceph_pool" "test" {
+			  name              = %q
+			  pool_type         = "erasure"
+			  pg_num            = 16
+			  pg_autoscale_mode = "off"
+			  pg_num_min        = 8
+			  pg_num_max        = %d
+			  target_size_ratio = %s
+			  fast_read         = %t
+
+			  timeouts = {
+			    create = "5m"
+			    update = "5m"
+			    delete = "5m"
+			  }
+			}
+		`, poolName, pgNumMax, targetSizeRatio, fastRead)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config("0.2", true, 32),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("pg_num_min"),
+						knownvalue.Int64Exact(8),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("pg_num_max"),
+						knownvalue.Int64Exact(32),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("target_size_ratio"),
+						knownvalue.Float64Exact(0.2),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("fast_read"),
+						knownvalue.Bool(true),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephPoolGetValue(t, poolName, "pg_num_min", "8"),
+					checkCephPoolGetValue(t, poolName, "pg_num_max", "32"),
+					checkCephPoolGetValue(t, poolName, "fast_read", "1"),
+					checkCephPoolGetFloat(t, poolName, "target_size_ratio", 0.2),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config("0.4", false, 64),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephPoolGetValue(t, poolName, "pg_num_max", "64"),
+					checkCephPoolGetValue(t, poolName, "fast_read", "0"),
+					checkCephPoolGetFloat(t, poolName, "target_size_ratio", 0.4),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config("0.4", false, 64),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			{
+				// Removing the attributes must unset the options in Ceph.
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_pool" "test" {
+					  name              = %q
+					  pool_type         = "erasure"
+					  pg_num            = 16
+					  pg_autoscale_mode = "off"
+
+					  timeouts = {
+					    create = "5m"
+					    update = "5m"
+					    delete = "5m"
+					  }
+					}
+				`, poolName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("pg_num_min"),
+						knownvalue.Null(),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("target_size_ratio"),
+						knownvalue.Null(),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephPoolGetUnset(t, poolName, "pg_num_min"),
+					checkCephPoolGetUnset(t, poolName, "pg_num_max"),
+					checkCephPoolGetUnset(t, poolName, "target_size_ratio"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccCephPoolResource_TuningWithAutoscaler(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-tuning-auto")
+
+	// The autoscaler owns pg_num here and resizes the pool toward
+	// target_size_ratio; the sizing hints must still read back unchanged
+	// and produce an empty plan.
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_pool" "test" {
+		  name              = %q
+		  pool_type         = "replicated"
+		  size              = 2
+		  pg_autoscale_mode = "on"
+		  pg_num_min        = 8
+		  pg_num_max        = 64
+		  target_size_ratio = 0.2
+
+		  timeouts = {
+		    create = "5m"
+		    update = "5m"
+		    delete = "5m"
+		  }
+		}
+	`, poolName)
+
+	raisedFloor := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_pool" "test" {
+		  name              = %q
+		  pool_type         = "replicated"
+		  size              = 2
+		  pg_autoscale_mode = "on"
+		  pg_num_min        = 32
+		  pg_num_max        = 64
+		  target_size_ratio = 0.2
+
+		  timeouts = {
+		    create = "5m"
+		    update = "5m"
+		    delete = "5m"
+		  }
+		}
+	`, poolName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+
+			if err := cephTestClusterCLI.ConfigSet(t.Context(), "mgr", "mgr/pg_autoscaler/sleep_interval", "5"); err != nil {
+				t.Fatalf("Failed to speed up autoscaler ticks: %v", err)
+			}
+			t.Cleanup(func() {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+				defer cancel()
+				if err := cephTestClusterCLI.ConfigRemove(ctx, "mgr", "mgr/pg_autoscaler/sleep_interval"); err != nil {
+					t.Errorf("Failed to restore autoscaler tick interval: %v", err)
+				}
+			})
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("pg_num_min"),
+						knownvalue.Int64Exact(8),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("pg_num_max"),
+						knownvalue.Int64Exact(64),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("target_size_ratio"),
+						knownvalue.Float64Exact(0.2),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephPoolGetValue(t, poolName, "pg_num_min", "8"),
+					checkCephPoolGetFloat(t, poolName, "target_size_ratio", 0.2),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			{
+				// Give the autoscaler a couple of (shortened) ticks to
+				// resize the pool, then confirm the sizing hints still
+				// converge to an empty plan.
+				PreConfig: func() {
+					time.Sleep(15 * time.Second)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			{
+				// Raising the floor above the autoscaler's current pg_num
+				// exercises the compensating pg_num raise in Update.
+				ConfigVariables: testAccProviderConfig(),
+				Config:          raisedFloor,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("pg_num_min"),
+						knownvalue.Int64Exact(32),
+					),
+				},
+				Check: checkCephPoolGetValue(t, poolName, "pg_num_min", "32"),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          raisedFloor,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+func TestAccCephPoolResource_TargetSizeBytes(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-target-bytes")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_pool" "test" {
+					  name              = %q
+					  pool_type         = "replicated"
+					  size              = 2
+					  pg_num            = 32
+					  pg_autoscale_mode = "off"
+					  target_size_bytes = 1073741824
+					  fast_read         = false
+
+					  timeouts = {
+					    create = "5m"
+					    update = "5m"
+					    delete = "5m"
+					  }
+					}
+				`, poolName),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("target_size_bytes"),
+						knownvalue.Int64Exact(1073741824),
+					),
+				},
+				Check: checkCephPoolGetValue(t, poolName, "target_size_bytes", "1073741824"),
+			},
+		},
+	})
+}
+
+func TestAccCephPoolResource_FastReadOnReplicatedRejected(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_pool" "test" {
+					  name      = "fast-read-replicated-test"
+					  pool_type = "replicated"
+					  size      = 2
+					  pg_num    = 32
+					  fast_read = true
+					}
+				`,
+				ExpectError: regexp.MustCompile(`only be enabled on erasure pools`),
+			},
+		},
+	})
+}
+
+func TestAccCephPoolResource_ZeroTuningValuesRejected(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_pool" "test" {
+					  name              = "zero-ratio-test"
+					  pool_type         = "replicated"
+					  size              = 2
+					  pg_num            = 32
+					  target_size_ratio = 0
+					}
+				`,
+				ExpectError: regexp.MustCompile(`must be greater than 0`),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + `
+					resource "ceph_pool" "test" {
+					  name       = "zero-min-test"
+					  pool_type  = "replicated"
+					  size       = 2
+					  pg_num     = 32
+					  pg_num_min = 0
+					}
+				`,
+				ExpectError: regexp.MustCompile(`must be at least 1`),
+			},
+		},
+	})
+}
+
+func checkCephPoolGetValue(t *testing.T, poolName, key, want string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		value, err := cephTestClusterCLI.PoolGet(t.Context(), poolName, key)
+		if err != nil {
+			return fmt.Errorf("failed to get pool %s: %w", key, err)
+		}
+		if value != want {
+			return fmt.Errorf("pool %s: expected %q, got %q", key, want, value)
+		}
+		return nil
+	}
+}
+
+func checkCephPoolGetUnset(t *testing.T, poolName, key string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		value, err := cephTestClusterCLI.PoolGet(t.Context(), poolName, key)
+		if err == nil {
+			return fmt.Errorf("pool option %s still set to %q", key, value)
+		}
+		return nil
+	}
+}
+
+func checkCephPoolGetFloat(t *testing.T, poolName, key string, want float64) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		value, err := cephTestClusterCLI.PoolGet(t.Context(), poolName, key)
+		if err != nil {
+			return fmt.Errorf("failed to get pool %s: %w", key, err)
+		}
+		got, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return fmt.Errorf("failed to parse pool %s value %q: %w", key, value, err)
+		}
+		if math.Abs(got-want) > 1e-9 {
+			return fmt.Errorf("pool %s: expected %v, got %v", key, want, got)
+		}
+		return nil
+	}
 }
 
 func TestAccCephPoolResource_Configuration(t *testing.T) {

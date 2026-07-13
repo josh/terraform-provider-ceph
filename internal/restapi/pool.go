@@ -19,6 +19,22 @@ type PoolOptions struct {
 	CompressionRequiredRatio float64 `json:"compression_required_ratio"`
 	CompressionMinBlobSize   int     `json:"compression_min_blob_size"`
 	CompressionMaxBlobSize   int     `json:"compression_max_blob_size"`
+	PgNumMin                 int     `json:"pg_num_min"`
+	PgNumMax                 int     `json:"pg_num_max"`
+	TargetSizeRatio          float64 `json:"target_size_ratio"`
+	TargetSizeBytes          int64   `json:"target_size_bytes"`
+}
+
+// FastRead marshals to the "true"/"false" strings the mon requires;
+// the dashboard stringifies a JSON bool as "True", which the mon
+// rejects.
+type FastRead bool
+
+func (f FastRead) MarshalJSON() ([]byte, error) {
+	if f {
+		return []byte(`"true"`), nil
+	}
+	return []byte(`"false"`), nil
 }
 
 type Pool struct {
@@ -39,6 +55,7 @@ type Pool struct {
 	PGAutoscaleMode      string      `json:"pg_autoscale_mode"`
 	QuotaMaxObjects      int         `json:"quota_max_objects"`
 	QuotaMaxBytes        int         `json:"quota_max_bytes"`
+	FastRead             bool        `json:"fast_read"`
 	Options              PoolOptions `json:"options"`
 	// Only populated by GetPool; the pool list omits configuration.
 	Configuration []RBDImageConfigOption `json:"configuration"`
@@ -65,6 +82,12 @@ type PoolCreateRequest struct {
 	CompressionRequiredRatio *float64 `json:"compression_required_ratio,omitempty"`
 	CompressionMinBlobSize   *int     `json:"compression_min_blob_size,omitempty"`
 	CompressionMaxBlobSize   *int     `json:"compression_max_blob_size,omitempty"`
+	// A zero value unsets the option.
+	PgNumMin        *int      `json:"pg_num_min,omitempty"`
+	PgNumMax        *int      `json:"pg_num_max,omitempty"`
+	TargetSizeRatio *float64  `json:"target_size_ratio,omitempty"`
+	TargetSizeBytes *int64    `json:"target_size_bytes,omitempty"`
+	FastRead        *FastRead `json:"fast_read,omitempty"`
 	// Additive: present keys are set, null values are removed, absent
 	// keys are left untouched.
 	Configuration map[string]*string `json:"configuration,omitempty"`
@@ -260,8 +283,16 @@ type PoolUpdateRequest struct {
 	CompressionRequiredRatio *float64 `json:"compression_required_ratio,omitempty"`
 	CompressionMinBlobSize   *int     `json:"compression_min_blob_size,omitempty"`
 	CompressionMaxBlobSize   *int     `json:"compression_max_blob_size,omitempty"`
-	ApplicationMetadata      []string `json:"application_metadata,omitempty"`
-	Flags                    []string `json:"flags,omitempty"`
+	// A zero value unsets the option. The dashboard applies keys in
+	// this field order, so pg_num precedes the bound options and bound
+	// loosening must be sent in a separate preceding request.
+	PgNumMin            *int      `json:"pg_num_min,omitempty"`
+	PgNumMax            *int      `json:"pg_num_max,omitempty"`
+	TargetSizeRatio     *float64  `json:"target_size_ratio,omitempty"`
+	TargetSizeBytes     *int64    `json:"target_size_bytes,omitempty"`
+	FastRead            *FastRead `json:"fast_read,omitempty"`
+	ApplicationMetadata []string  `json:"application_metadata,omitempty"`
+	Flags               []string  `json:"flags,omitempty"`
 	// Additive: present keys are set, null values are removed, absent
 	// keys are left untouched.
 	Configuration map[string]*string `json:"configuration,omitempty"`

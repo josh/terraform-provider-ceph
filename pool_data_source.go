@@ -39,6 +39,11 @@ type PoolDataSourceModel struct {
 	CompressionRequiredRatio types.Float64 `tfsdk:"compression_required_ratio"`
 	CompressionMinBlobSize   types.Int64   `tfsdk:"compression_min_blob_size"`
 	CompressionMaxBlobSize   types.Int64   `tfsdk:"compression_max_blob_size"`
+	PgNumMin                 types.Int64   `tfsdk:"pg_num_min"`
+	PgNumMax                 types.Int64   `tfsdk:"pg_num_max"`
+	TargetSizeRatio          types.Float64 `tfsdk:"target_size_ratio"`
+	TargetSizeBytes          types.Int64   `tfsdk:"target_size_bytes"`
+	FastRead                 types.Bool    `tfsdk:"fast_read"`
 	Configuration            types.Map     `tfsdk:"configuration"`
 }
 
@@ -123,6 +128,26 @@ func (d *PoolDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 				MarkdownDescription: "The compression maximum blob size of the pool.",
 				Computed:            true,
 			},
+			"pg_num_min": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "The minimum number of placement groups the autoscaler may shrink the pool to.",
+				Computed:            true,
+			},
+			"pg_num_max": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "The maximum number of placement groups the autoscaler may grow the pool to.",
+				Computed:            true,
+			},
+			"target_size_ratio": dataSourceSchema.Float64Attribute{
+				MarkdownDescription: "The expected share of total cluster capacity this pool will consume.",
+				Computed:            true,
+			},
+			"target_size_bytes": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "The expected size of this pool in bytes.",
+				Computed:            true,
+			},
+			"fast_read": dataSourceSchema.BoolAttribute{
+				MarkdownDescription: "Whether reads issue parallel requests to all shards and reconstruct from the first arrivals. Always false for replicated pools.",
+				Computed:            true,
+			},
 			"configuration": dataSourceSchema.MapAttribute{
 				MarkdownDescription: "Pool-level RBD configuration overrides.",
 				Computed:            true,
@@ -182,6 +207,27 @@ func (d *PoolDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	data.CompressionRequiredRatio = types.Float64Value(pool.Options.CompressionRequiredRatio)
 	data.CompressionMinBlobSize = types.Int64Value(int64(pool.Options.CompressionMinBlobSize))
 	data.CompressionMaxBlobSize = types.Int64Value(int64(pool.Options.CompressionMaxBlobSize))
+	if pool.Options.PgNumMin > 0 {
+		data.PgNumMin = types.Int64Value(int64(pool.Options.PgNumMin))
+	} else {
+		data.PgNumMin = types.Int64Null()
+	}
+	if pool.Options.PgNumMax > 0 {
+		data.PgNumMax = types.Int64Value(int64(pool.Options.PgNumMax))
+	} else {
+		data.PgNumMax = types.Int64Null()
+	}
+	if pool.Options.TargetSizeRatio > 0 {
+		data.TargetSizeRatio = types.Float64Value(pool.Options.TargetSizeRatio)
+	} else {
+		data.TargetSizeRatio = types.Float64Null()
+	}
+	if pool.Options.TargetSizeBytes > 0 {
+		data.TargetSizeBytes = types.Int64Value(pool.Options.TargetSizeBytes)
+	} else {
+		data.TargetSizeBytes = types.Int64Null()
+	}
+	data.FastRead = types.BoolValue(pool.FastRead)
 
 	data.Flags = types.Int64Value(int64(pool.Flags))
 	data.FlagsNames = types.StringValue(pool.FlagsNames)

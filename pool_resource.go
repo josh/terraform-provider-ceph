@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -58,6 +59,11 @@ type PoolResourceModel struct {
 	CompressionRequiredRatio types.Float64  `tfsdk:"compression_required_ratio"`
 	CompressionMinBlobSize   types.Int64    `tfsdk:"compression_min_blob_size"`
 	CompressionMaxBlobSize   types.Int64    `tfsdk:"compression_max_blob_size"`
+	PgNumMin                 types.Int64    `tfsdk:"pg_num_min"`
+	PgNumMax                 types.Int64    `tfsdk:"pg_num_max"`
+	TargetSizeRatio          types.Float64  `tfsdk:"target_size_ratio"`
+	TargetSizeBytes          types.Int64    `tfsdk:"target_size_bytes"`
+	FastRead                 types.Bool     `tfsdk:"fast_read"`
 	ECOverwrites             types.Bool     `tfsdk:"ec_overwrites"`
 	Configuration            types.Map      `tfsdk:"configuration"`
 	PoolID                   types.Int64    `tfsdk:"pool_id"`
@@ -172,6 +178,39 @@ func (r *PoolResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				MarkdownDescription: "The compression maximum blob size of the pool.",
 				Optional:            true,
 				Computed:            true,
+			},
+			"pg_num_min": resourceSchema.Int64Attribute{
+				MarkdownDescription: "The minimum number of placement groups the autoscaler may shrink the pool to. Removing the attribute clears the floor.",
+				Optional:            true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+				},
+			},
+			"pg_num_max": resourceSchema.Int64Attribute{
+				MarkdownDescription: "The maximum number of placement groups the autoscaler may grow the pool to. Removing the attribute clears the ceiling.",
+				Optional:            true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+				},
+			},
+			"target_size_ratio": resourceSchema.Float64Attribute{
+				MarkdownDescription: "The expected share of total cluster capacity this pool will consume, used by the placement group autoscaler to size the pool. Must be greater than 0. Removing the attribute clears the hint.",
+				Optional:            true,
+			},
+			"target_size_bytes": resourceSchema.Int64Attribute{
+				MarkdownDescription: "The expected size of this pool in bytes, used by the placement group autoscaler to size the pool. Removing the attribute clears the hint.",
+				Optional:            true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+				},
+			},
+			"fast_read": resourceSchema.BoolAttribute{
+				MarkdownDescription: "Whether reads issue parallel requests to all shards and reconstruct from the first arrivals. Can only be enabled on erasure coded pools; replicated pools always report false.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.UseStateForUnknown(),
+				},
 			},
 			"ec_overwrites": resourceSchema.BoolAttribute{
 				MarkdownDescription: "Whether overwrites are allowed on the erasure coded pool, required to run RBD or CephFS on it. Defaults to false. Ceph cannot unset the flag, so disabling requires destroying and recreating the pool.",
@@ -341,6 +380,32 @@ func (r *PoolResource) updateModelFromAPI(ctx context.Context, data *PoolResourc
 		data.CompressionMaxBlobSize = types.Int64Null()
 	}
 
+	if pool.Options.PgNumMin > 0 {
+		data.PgNumMin = types.Int64Value(int64(pool.Options.PgNumMin))
+	} else {
+		data.PgNumMin = types.Int64Null()
+	}
+
+	if pool.Options.PgNumMax > 0 {
+		data.PgNumMax = types.Int64Value(int64(pool.Options.PgNumMax))
+	} else {
+		data.PgNumMax = types.Int64Null()
+	}
+
+	if pool.Options.TargetSizeRatio > 0 {
+		data.TargetSizeRatio = types.Float64Value(pool.Options.TargetSizeRatio)
+	} else {
+		data.TargetSizeRatio = types.Float64Null()
+	}
+
+	if pool.Options.TargetSizeBytes > 0 {
+		data.TargetSizeBytes = types.Int64Value(pool.Options.TargetSizeBytes)
+	} else {
+		data.TargetSizeBytes = types.Int64Null()
+	}
+
+	data.FastRead = types.BoolValue(pool.FastRead)
+
 	if len(pool.ApplicationMetadata) > 0 {
 		apps, d := types.SetValueFrom(ctx, types.StringType, pool.ApplicationMetadata)
 		diags.Append(d...)
@@ -396,7 +461,13 @@ func (r *PoolResource) Create(ctx context.Context, req resource.CreateRequest, r
 		v := int(data.PgNum.ValueInt64())
 		createReq.PgNum = &v
 	} else if !data.PgAutoscaleMode.IsNull() && !data.PgAutoscaleMode.IsUnknown() && data.PgAutoscaleMode.ValueString() == "on" {
+		// Seed from pg_num_min when set: the dashboard applies pg_num_min
+		// via `osd pool set` after creation, and the mon rejects a floor
+		// above the pool's current pg_num.
 		defaultPgNum := 1
+		if !data.PgNumMin.IsNull() && !data.PgNumMin.IsUnknown() {
+			defaultPgNum = int(data.PgNumMin.ValueInt64())
+		}
 		createReq.PgNum = &defaultPgNum
 	}
 
@@ -463,6 +534,33 @@ func (r *PoolResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if !data.CompressionMaxBlobSize.IsNull() && !data.CompressionMaxBlobSize.IsUnknown() {
 		v := int(data.CompressionMaxBlobSize.ValueInt64())
 		createReq.CompressionMaxBlobSize = &v
+	}
+
+	if !data.PgNumMin.IsNull() && !data.PgNumMin.IsUnknown() {
+		v := int(data.PgNumMin.ValueInt64())
+		createReq.PgNumMin = &v
+	}
+
+	if !data.PgNumMax.IsNull() && !data.PgNumMax.IsUnknown() {
+		v := int(data.PgNumMax.ValueInt64())
+		createReq.PgNumMax = &v
+	}
+
+	if !data.TargetSizeRatio.IsNull() && !data.TargetSizeRatio.IsUnknown() {
+		v := data.TargetSizeRatio.ValueFloat64()
+		createReq.TargetSizeRatio = &v
+	}
+
+	if !data.TargetSizeBytes.IsNull() && !data.TargetSizeBytes.IsUnknown() {
+		v := data.TargetSizeBytes.ValueInt64()
+		createReq.TargetSizeBytes = &v
+	}
+
+	// Only send fast_read when enabling it: the mon rejects the key on
+	// replicated pools even when false, and false is the default.
+	if data.FastRead.ValueBool() {
+		v := restapi.FastRead(true)
+		createReq.FastRead = &v
 	}
 
 	if !data.ApplicationMetadata.IsNull() && !data.ApplicationMetadata.IsUnknown() {
@@ -786,6 +884,60 @@ func (r *PoolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		updateReq.CompressionMaxBlobSize = &v
 	}
 
+	// The mon validates pg_num against the pool's current bounds and the
+	// dashboard applies keys in request field order (pg_num first), so
+	// bound loosening (lowering or clearing the floor, raising or
+	// clearing the ceiling) must land in a separate request before the
+	// main one; tightening rides the main request after pg_num.
+	preReq := restapi.PoolUpdateRequest{}
+
+	if !data.PgNumMin.IsUnknown() && !data.PgNumMin.Equal(state.PgNumMin) {
+		v := 0
+		if !data.PgNumMin.IsNull() {
+			v = int(data.PgNumMin.ValueInt64())
+		}
+		if v == 0 || (!state.PgNumMin.IsNull() && int64(v) < state.PgNumMin.ValueInt64()) {
+			preReq.PgNumMin = &v
+		} else {
+			updateReq.PgNumMin = &v
+		}
+	}
+
+	if !data.PgNumMax.IsUnknown() && !data.PgNumMax.Equal(state.PgNumMax) {
+		v := 0
+		if !data.PgNumMax.IsNull() {
+			v = int(data.PgNumMax.ValueInt64())
+		}
+		if v == 0 || (!state.PgNumMax.IsNull() && int64(v) > state.PgNumMax.ValueInt64()) {
+			preReq.PgNumMax = &v
+		} else {
+			updateReq.PgNumMax = &v
+		}
+	}
+
+	if !data.TargetSizeRatio.IsUnknown() && !data.TargetSizeRatio.Equal(state.TargetSizeRatio) {
+		v := 0.0
+		if !data.TargetSizeRatio.IsNull() {
+			v = data.TargetSizeRatio.ValueFloat64()
+		}
+		updateReq.TargetSizeRatio = &v
+	}
+
+	if !data.TargetSizeBytes.IsUnknown() && !data.TargetSizeBytes.Equal(state.TargetSizeBytes) {
+		v := int64(0)
+		if !data.TargetSizeBytes.IsNull() {
+			v = data.TargetSizeBytes.ValueInt64()
+		}
+		updateReq.TargetSizeBytes = &v
+	}
+
+	// Only send fast_read when it changed: the mon rejects setting it on
+	// replicated pools even to false.
+	if !data.FastRead.IsNull() && !data.FastRead.IsUnknown() && !data.FastRead.Equal(state.FastRead) {
+		v := restapi.FastRead(data.FastRead.ValueBool())
+		updateReq.FastRead = &v
+	}
+
 	if !data.ApplicationMetadata.IsNull() && !data.ApplicationMetadata.IsUnknown() {
 		var apps []string
 		data.ApplicationMetadata.ElementsAs(ctx, &apps, false)
@@ -805,10 +957,57 @@ func (r *PoolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		updateReq.Pool = nil
 	}
 
+	// A raised floor is rejected by the mon when it exceeds the pool's
+	// current pg_num. When the autoscaler owns pg_num (nothing planned
+	// for it), raise pg_num to the new floor alongside it; the floor
+	// then keeps the autoscaler from shrinking below it again.
+	if updateReq.PgNumMin != nil && data.PgNum.IsNull() {
+		current, err := r.client.GetPool(ctx, originalPoolName)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"API Request Error",
+				fmt.Sprintf("Unable to read pool '%s' before update: %s", originalPoolName, err),
+			)
+			return
+		}
+		if pgNumForState(current.PGNumTarget, current.PGNum) < *updateReq.PgNumMin {
+			v := *updateReq.PgNumMin
+			updateReq.PgNum = &v
+		}
+	}
+
 	tflog.Debug(ctx, "Updating pool", map[string]interface{}{
 		"original_name": originalPoolName,
 		"new_name":      newPoolName,
 	})
+
+	if preReq.PgNumMin != nil || preReq.PgNumMax != nil {
+		if err := r.waitForNoPoolEditTask(ctx, originalPoolName); err != nil {
+			resp.Diagnostics.AddError(
+				"Task Wait Failed",
+				fmt.Sprintf("Unable to update pool '%s' while an earlier edit is still running: %s", originalPoolName, err),
+			)
+			return
+		}
+
+		taskInfo, err := r.client.UpdatePool(ctx, originalPoolName, preReq)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"API Request Error",
+				fmt.Sprintf("Unable to loosen placement group bounds for pool '%s': %s", originalPoolName, err),
+			)
+			return
+		}
+		if taskInfo != nil {
+			if err := r.client.WaitForTask(ctx, taskInfo); err != nil {
+				resp.Diagnostics.AddError(
+					"Task Wait Failed",
+					fmt.Sprintf("Failed waiting for pool bounds update task: %s", err),
+				)
+				return
+			}
+		}
+	}
 
 	// The dashboard deduplicates tasks by (name, metadata) and silently drops
 	// an edit that arrives while another edit on the same pool is executing,
@@ -944,6 +1143,61 @@ func (r *PoolResource) ValidateConfig(ctx context.Context, req resource.Validate
 				"erasure_code_profile is only valid for erasure pools, not replicated pools.",
 			)
 		}
+
+		if !data.FastRead.IsNull() && !data.FastRead.IsUnknown() && data.FastRead.ValueBool() {
+			resp.Diagnostics.AddAttributeError(
+				path.Root("fast_read"),
+				"Invalid Attribute Combination",
+				"fast_read can only be enabled on erasure pools, not replicated pools.",
+			)
+		}
+	}
+
+	if !data.TargetSizeBytes.IsNull() && !data.TargetSizeBytes.IsUnknown() &&
+		!data.TargetSizeRatio.IsNull() && !data.TargetSizeRatio.IsUnknown() {
+		resp.Diagnostics.AddAttributeWarning(
+			path.Root("target_size_bytes"),
+			"Conflicting Autoscaler Size Hints",
+			"Setting both target_size_bytes and target_size_ratio raises a POOL_HAS_TARGET_SIZE_BYTES_AND_RATIO health warning in Ceph; the autoscaler ignores target_size_bytes when a ratio is set.",
+		)
+	}
+
+	// Zero is Ceph's unset sentinel for these options; removing the
+	// attribute is how a hint is cleared.
+	if !data.TargetSizeRatio.IsNull() && !data.TargetSizeRatio.IsUnknown() && data.TargetSizeRatio.ValueFloat64() <= 0 {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("target_size_ratio"),
+			"Invalid Attribute Value",
+			"target_size_ratio must be greater than 0; remove the attribute to clear the hint.",
+		)
+	}
+
+	pgNumMinSet := !data.PgNumMin.IsNull() && !data.PgNumMin.IsUnknown()
+	pgNumMaxSet := !data.PgNumMax.IsNull() && !data.PgNumMax.IsUnknown()
+	pgNumSet := !data.PgNum.IsNull() && !data.PgNum.IsUnknown()
+
+	if pgNumMinSet && pgNumMaxSet && data.PgNumMin.ValueInt64() > data.PgNumMax.ValueInt64() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("pg_num_min"),
+			"Invalid Attribute Combination",
+			fmt.Sprintf("pg_num_min (%d) must not exceed pg_num_max (%d).", data.PgNumMin.ValueInt64(), data.PgNumMax.ValueInt64()),
+		)
+	}
+
+	if pgNumSet && pgNumMinSet && data.PgNum.ValueInt64() < data.PgNumMin.ValueInt64() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("pg_num_min"),
+			"Invalid Attribute Combination",
+			fmt.Sprintf("pg_num_min (%d) must not exceed pg_num (%d); Ceph rejects a floor above the pool's placement group count.", data.PgNumMin.ValueInt64(), data.PgNum.ValueInt64()),
+		)
+	}
+
+	if pgNumSet && pgNumMaxSet && data.PgNum.ValueInt64() > data.PgNumMax.ValueInt64() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("pg_num_max"),
+			"Invalid Attribute Combination",
+			fmt.Sprintf("pg_num_max (%d) must not be below pg_num (%d); Ceph rejects a ceiling under the pool's placement group count.", data.PgNumMax.ValueInt64(), data.PgNum.ValueInt64()),
+		)
 	}
 
 	if poolType == "erasure" {
