@@ -22,6 +22,7 @@ type CephFSSubvolumeSnapshotDataSource struct {
 
 type CephFSSubvolumeSnapshotDataSourceModel struct {
 	VolName          types.String `tfsdk:"vol_name"`
+	GroupName        types.String `tfsdk:"group_name"`
 	SubvolName       types.String `tfsdk:"subvol_name"`
 	Name             types.String `tfsdk:"name"`
 	CreatedAt        types.String `tfsdk:"created_at"`
@@ -40,6 +41,10 @@ func (d *CephFSSubvolumeSnapshotDataSource) Schema(ctx context.Context, req data
 			"vol_name": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The name of the CephFS filesystem.",
 				Required:            true,
+			},
+			"group_name": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The subvolume group holding the subvolume.",
+				Optional:            true,
 			},
 			"subvol_name": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The name of the subvolume.",
@@ -92,7 +97,7 @@ func (d *CephFSSubvolumeSnapshotDataSource) Read(ctx context.Context, req dataso
 		return
 	}
 
-	info, err := d.client.CephFSSubvolumeSnapshotInfo(ctx, data.VolName.ValueString(), data.SubvolName.ValueString(), data.Name.ValueString())
+	info, err := d.client.CephFSSubvolumeSnapshotInfo(ctx, data.VolName.ValueString(), data.SubvolName.ValueString(), data.Name.ValueString(), data.GroupName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",

@@ -171,7 +171,7 @@ func TestAccCephFSQuotaResource_Drift(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					if err := cephTestClusterCLI.CephFSSubvolumeResize(t.Context(), fsName, subvolName, "31457280"); err != nil {
+					if err := cephTestClusterCLI.CephFSSubvolumeResize(t.Context(), fsName, subvolName, "31457280", ""); err != nil {
 						t.Fatalf("Failed to resize subvolume out of band: %v", err)
 					}
 				},
@@ -221,7 +221,7 @@ func TestAccCephFSQuotaResource_OutOfBandPathRemoval(t *testing.T) {
 				// 500-with-ObjectNotFound mapping) and plan re-creation of
 				// both resources.
 				PreConfig: func() {
-					if err := cephTestClusterCLI.CephFSSubvolumeDelete(t.Context(), fsName, subvolName); err != nil {
+					if err := cephTestClusterCLI.CephFSSubvolumeDelete(t.Context(), fsName, subvolName, ""); err != nil {
 						t.Fatalf("Failed to delete subvolume out of band: %v", err)
 					}
 				},
@@ -301,7 +301,7 @@ func TestAccCephFSQuotaResource_Import(t *testing.T) {
 
 func checkCephFSSubvolumeBytesQuota(t *testing.T, fsName, subvolName string, want int64) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		info, err := cephTestClusterCLI.CephFSSubvolumeInfo(t.Context(), fsName, subvolName)
+		info, err := cephTestClusterCLI.CephFSSubvolumeInfo(t.Context(), fsName, subvolName, "")
 		if err != nil {
 			return fmt.Errorf("failed to get subvolume info: %w", err)
 		}
@@ -318,7 +318,7 @@ func checkCephFSSubvolumeBytesQuota(t *testing.T, fsName, subvolName string, wan
 
 func checkCephFSSubvolumeBytesQuotaUnset(t *testing.T, fsName, subvolName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		info, err := cephTestClusterCLI.CephFSSubvolumeInfo(t.Context(), fsName, subvolName)
+		info, err := cephTestClusterCLI.CephFSSubvolumeInfo(t.Context(), fsName, subvolName, "")
 		if err != nil {
 			return fmt.Errorf("failed to get subvolume info: %w", err)
 		}

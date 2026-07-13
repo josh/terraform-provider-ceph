@@ -4,14 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -34,13 +38,17 @@ type CephFSSubvolumeResource struct {
 }
 
 type CephFSSubvolumeResourceModel struct {
-	Name     types.String   `tfsdk:"name"`
-	VolName  types.String   `tfsdk:"vol_name"`
-	Size     types.Int64    `tfsdk:"size"`
-	Path     types.String   `tfsdk:"path"`
-	DataPool types.String   `tfsdk:"data_pool"`
-	State    types.String   `tfsdk:"state"`
-	Timeouts timeouts.Value `tfsdk:"timeouts"`
+	Name      types.String   `tfsdk:"name"`
+	VolName   types.String   `tfsdk:"vol_name"`
+	GroupName types.String   `tfsdk:"group_name"`
+	Size      types.Int64    `tfsdk:"size"`
+	Mode      types.String   `tfsdk:"mode"`
+	UID       types.Int64    `tfsdk:"uid"`
+	GID       types.Int64    `tfsdk:"gid"`
+	Path      types.String   `tfsdk:"path"`
+	DataPool  types.String   `tfsdk:"data_pool"`
+	State     types.String   `tfsdk:"state"`
+	Timeouts  timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (r *CephFSSubvolumeResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -65,12 +73,56 @@ func (r *CephFSSubvolumeResource) Schema(ctx context.Context, req resource.Schem
 					stringplanmodifier.RequiresReplace(),
 				},
 			},
+			"group_name": resourceSchema.StringAttribute{
+				MarkdownDescription: "The subvolume group holding the subvolume. When not set, the subvolume lives in the default group. Changing requires destroying and recreating the subvolume.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+					noSlashValidator,
+				},
+			},
 			"size": resourceSchema.Int64Attribute{
 				MarkdownDescription: "The quota size in bytes. When not set, the subvolume has no quota.",
 				Optional:            true,
 				Computed:            true,
 				Validators: []validator.Int64{
 					int64validator.AtLeast(1),
+				},
+			},
+			"mode": resourceSchema.StringAttribute{
+				MarkdownDescription: "The permissions of the subvolume directory as an octal string without a leading zero, e.g. `755`. Defaults to `755`. Changing requires destroying and recreating the subvolume.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^[1-7][0-7]{2,3}$`),
+						"must be an octal permission string without a leading zero, e.g. 755",
+					),
+				},
+			},
+			"uid": resourceSchema.Int64Attribute{
+				MarkdownDescription: "The owner uid of the subvolume directory. Changing requires destroying and recreating the subvolume.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"gid": resourceSchema.Int64Attribute{
+				MarkdownDescription: "The owner gid of the subvolume directory. Changing requires destroying and recreating the subvolume.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
+					int64planmodifier.UseStateForUnknown(),
 				},
 			},
 			"path": resourceSchema.StringAttribute{
@@ -122,6 +174,11 @@ func (r *CephFSSubvolumeResource) updateModelFromAPI(data *CephFSSubvolumeResour
 	data.Path = types.StringValue(info.Path)
 	data.DataPool = types.StringValue(info.DataPool)
 	data.State = types.StringValue(info.State)
+	// Info returns the full st_mode; only the permission bits are the
+	// configured mode.
+	data.Mode = types.StringValue(strconv.FormatInt(int64(info.Mode)&0o7777, 8))
+	data.UID = types.Int64Value(int64(info.UID))
+	data.GID = types.Int64Value(int64(info.GID))
 
 	if quota, ok := info.BytesQuotaInt64(); ok && quota > 0 {
 		data.Size = types.Int64Value(quota)
@@ -150,10 +207,20 @@ func (r *CephFSSubvolumeResource) Create(ctx context.Context, req resource.Creat
 	createReq := restapi.SubvolumeCreateRequest{
 		VolName:    data.VolName.ValueString(),
 		SubvolName: data.Name.ValueString(),
+		GroupName:  data.GroupName.ValueString(),
 	}
 
 	if !data.Size.IsNull() && !data.Size.IsUnknown() {
 		createReq.Size = data.Size.ValueInt64()
+	}
+	if !data.Mode.IsNull() && !data.Mode.IsUnknown() {
+		createReq.Mode = data.Mode.ValueString()
+	}
+	if !data.UID.IsNull() && !data.UID.IsUnknown() {
+		createReq.UID = data.UID.ValueInt64Pointer()
+	}
+	if !data.GID.IsNull() && !data.GID.IsUnknown() {
+		createReq.GID = data.GID.ValueInt64Pointer()
 	}
 
 	tflog.Debug(ctx, "Creating CephFS subvolume", map[string]interface{}{
@@ -170,7 +237,7 @@ func (r *CephFSSubvolumeResource) Create(ctx context.Context, req resource.Creat
 		return
 	}
 
-	info, err := r.client.CephFSSubvolumeInfo(ctx, data.VolName.ValueString(), data.Name.ValueString(), "")
+	info, err := r.client.CephFSSubvolumeInfo(ctx, data.VolName.ValueString(), data.Name.ValueString(), data.GroupName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
@@ -197,7 +264,7 @@ func (r *CephFSSubvolumeResource) Read(ctx context.Context, req resource.ReadReq
 		"subvol_name": data.Name.ValueString(),
 	})
 
-	info, err := r.client.CephFSSubvolumeInfo(ctx, data.VolName.ValueString(), data.Name.ValueString(), "")
+	info, err := r.client.CephFSSubvolumeInfo(ctx, data.VolName.ValueString(), data.Name.ValueString(), data.GroupName.ValueString())
 	if err != nil {
 		if errors.Is(err, restapi.ErrNotFound) {
 			tflog.Debug(ctx, "CephFS subvolume not found, removing from state", map[string]interface{}{
@@ -240,6 +307,7 @@ func (r *CephFSSubvolumeResource) Update(ctx context.Context, req resource.Updat
 		updateReq := restapi.SubvolumeUpdateRequest{
 			SubvolName: data.Name.ValueString(),
 			Size:       data.Size.ValueInt64(),
+			GroupName:  data.GroupName.ValueString(),
 		}
 
 		tflog.Debug(ctx, "Updating CephFS subvolume", map[string]interface{}{
@@ -258,7 +326,7 @@ func (r *CephFSSubvolumeResource) Update(ctx context.Context, req resource.Updat
 		}
 	}
 
-	info, err := r.client.CephFSSubvolumeInfo(ctx, data.VolName.ValueString(), data.Name.ValueString(), "")
+	info, err := r.client.CephFSSubvolumeInfo(ctx, data.VolName.ValueString(), data.Name.ValueString(), data.GroupName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
@@ -294,7 +362,7 @@ func (r *CephFSSubvolumeResource) Delete(ctx context.Context, req resource.Delet
 		"subvol_name": data.Name.ValueString(),
 	})
 
-	err := r.client.CephFSSubvolumeDelete(ctx, data.VolName.ValueString(), data.Name.ValueString(), "")
+	err := r.client.CephFSSubvolumeDelete(ctx, data.VolName.ValueString(), data.Name.ValueString(), data.GroupName.ValueString())
 	if err != nil {
 		if errors.Is(err, restapi.ErrNotFound) {
 			return
@@ -308,15 +376,24 @@ func (r *CephFSSubvolumeResource) Delete(ctx context.Context, req resource.Delet
 }
 
 func (r *CephFSSubvolumeResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	parts := strings.SplitN(req.ID, "/", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+	parts := strings.Split(req.ID, "/")
+	valid := len(parts) == 2 || len(parts) == 3
+	for _, part := range parts {
+		if part == "" {
+			valid = false
+		}
+	}
+	if !valid {
 		resp.Diagnostics.AddError(
 			"Invalid Import ID",
-			fmt.Sprintf("Expected format: vol_name/subvol_name, got: %s", req.ID),
+			fmt.Sprintf("Expected format: vol_name/subvol_name or vol_name/group_name/subvol_name, got: %s", req.ID),
 		)
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("vol_name"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), parts[1])...)
+	if len(parts) == 3 {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_name"), parts[1])...)
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), parts[len(parts)-1])...)
 }

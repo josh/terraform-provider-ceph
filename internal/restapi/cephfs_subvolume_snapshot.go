@@ -24,12 +24,16 @@ type SubvolumeSnapshotCreateRequest struct {
 	VolName    string `json:"vol_name"`
 	SubvolName string `json:"subvol_name"`
 	SnapName   string `json:"snap_name"`
+	GroupName  string `json:"group_name,omitempty"`
 }
 
-func (c *Client) CephFSSubvolumeSnapshotInfo(ctx context.Context, volName, subvolName, snapName string) (*SubvolumeSnapshotInfo, error) {
+func (c *Client) CephFSSubvolumeSnapshotInfo(ctx context.Context, volName, subvolName, snapName, groupName string) (*SubvolumeSnapshotInfo, error) {
 	endpoint := c.endpoint.JoinPath("/api/cephfs/subvolume/snapshot", volName, subvolName, "info")
 	query := url.Values{}
 	query.Add("snap_name", snapName)
+	if groupName != "" {
+		query.Add("group_name", groupName)
+	}
 	endpoint.RawQuery = query.Encode()
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", endpoint.String(), nil)
@@ -120,10 +124,13 @@ func (c *Client) CephFSSubvolumeSnapshotCreate(ctx context.Context, req Subvolum
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-cephfs-subvolume-snapshot--vol_name---subvol_name->
 
-func (c *Client) CephFSSubvolumeSnapshotDelete(ctx context.Context, volName, subvolName, snapName string) error {
+func (c *Client) CephFSSubvolumeSnapshotDelete(ctx context.Context, volName, subvolName, snapName, groupName string) error {
 	endpoint := c.endpoint.JoinPath("/api/cephfs/subvolume/snapshot", volName, subvolName)
 	query := url.Values{}
 	query.Add("snap_name", snapName)
+	if groupName != "" {
+		query.Add("group_name", groupName)
+	}
 	endpoint.RawQuery = query.Encode()
 
 	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", endpoint.String(), nil)

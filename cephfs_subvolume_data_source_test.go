@@ -26,7 +26,7 @@ func TestAccCephFSSubvolumeDataSource(t *testing.T) {
 			testAccPreCheckWaitForTasks(t)
 			testAccPreCheckWaitForPGsActiveClean(t)
 
-			if err := cephTestClusterCLI.CephFSSubvolumeCreate(t.Context(), fsName, subvolName); err != nil {
+			if err := cephTestClusterCLI.CephFSSubvolumeCreate(t.Context(), fsName, subvolName, ""); err != nil {
 				t.Fatalf("Failed to create CephFS subvolume: %v", err)
 			}
 		},
@@ -75,7 +75,7 @@ func TestAccCephFSSubvolumeDataSource(t *testing.T) {
 
 func testAccCleanupCephFSSubvolume(t *testing.T, fsName string, subvolName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		if err := cephTestClusterCLI.CephFSSubvolumeDelete(t.Context(), fsName, subvolName); err != nil {
+		if err := cephTestClusterCLI.CephFSSubvolumeDelete(t.Context(), fsName, subvolName, ""); err != nil {
 			t.Logf("Warning: failed to cleanup CephFS subvolume %s/%s: %v", fsName, subvolName, err)
 		}
 		return nil

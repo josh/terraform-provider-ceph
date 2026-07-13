@@ -43,6 +43,10 @@ type SubvolumeCreateRequest struct {
 	SubvolName string `json:"subvol_name"`
 	Size       int64  `json:"size,omitempty"`
 	GroupName  string `json:"group_name,omitempty"`
+	// The volumes module parses mode as an octal string.
+	Mode string `json:"mode,omitempty"`
+	UID  *int64 `json:"uid,omitempty"`
+	GID  *int64 `json:"gid,omitempty"`
 }
 
 type SubvolumeUpdateRequest struct {

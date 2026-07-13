@@ -354,3 +354,78 @@ func TestAccCephFSSubvolumeGroupResource_TimeoutsOnlyUpdate(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephFSSubvolumeGroupResource_ModeUidGidPath(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	fsName := testSharedCephFSName
+	groupName := acctest.RandomWithPrefix("test-group")
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_cephfs_subvolume_group" "test" {
+		  name     = %q
+		  vol_name = %q
+		  mode     = "770"
+		  uid      = 1000
+		  gid      = 1000
+		}
+	`, groupName, fsName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_cephfs_subvolume_group.test",
+						tfjsonpath.New("mode"),
+						knownvalue.StringExact("770"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_cephfs_subvolume_group.test",
+						tfjsonpath.New("uid"),
+						knownvalue.Int64Exact(1000),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_cephfs_subvolume_group.test",
+						tfjsonpath.New("path"),
+						knownvalue.StringExact("/volumes/"+groupName),
+					),
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_cephfs_subvolume_group" "test" {
+					  name     = %q
+					  vol_name = %q
+					  mode     = "750"
+					  uid      = 1000
+					  gid      = 1000
+					}
+				`, groupName, fsName),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_cephfs_subvolume_group.test", plancheck.ResourceActionReplace),
+					},
+				},
+			},
+		},
+	})
+}

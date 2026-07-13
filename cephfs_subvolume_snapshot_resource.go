@@ -33,6 +33,7 @@ type CephFSSubvolumeSnapshotResource struct {
 
 type CephFSSubvolumeSnapshotResourceModel struct {
 	VolName    types.String `tfsdk:"vol_name"`
+	GroupName  types.String `tfsdk:"group_name"`
 	SubvolName types.String `tfsdk:"subvol_name"`
 	Name       types.String `tfsdk:"name"`
 }
@@ -57,6 +58,17 @@ func (r *CephFSSubvolumeSnapshotResource) Schema(ctx context.Context, req resour
 					stringplanmodifier.RequiresReplace(),
 				},
 				Validators: []validator.String{noSlashValidator},
+			},
+			"group_name": resourceSchema.StringAttribute{
+				MarkdownDescription: "The subvolume group holding the subvolume. When not set, the default group is used.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+					noSlashValidator,
+				},
 			},
 			"subvol_name": resourceSchema.StringAttribute{
 				MarkdownDescription: "The name of the subvolume to snapshot.",
@@ -109,6 +121,7 @@ func (r *CephFSSubvolumeSnapshotResource) Create(ctx context.Context, req resour
 		VolName:    data.VolName.ValueString(),
 		SubvolName: data.SubvolName.ValueString(),
 		SnapName:   data.Name.ValueString(),
+		GroupName:  data.GroupName.ValueString(),
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(
@@ -130,7 +143,7 @@ func (r *CephFSSubvolumeSnapshotResource) Read(ctx context.Context, req resource
 		return
 	}
 
-	_, err := r.client.CephFSSubvolumeSnapshotInfo(ctx, data.VolName.ValueString(), data.SubvolName.ValueString(), data.Name.ValueString())
+	_, err := r.client.CephFSSubvolumeSnapshotInfo(ctx, data.VolName.ValueString(), data.SubvolName.ValueString(), data.Name.ValueString(), data.GroupName.ValueString())
 	if err != nil {
 		if errors.Is(err, restapi.ErrNotFound) {
 			resp.State.RemoveResource(ctx)
@@ -162,7 +175,7 @@ func (r *CephFSSubvolumeSnapshotResource) Delete(ctx context.Context, req resour
 		return
 	}
 
-	err := r.client.CephFSSubvolumeSnapshotDelete(ctx, data.VolName.ValueString(), data.SubvolName.ValueString(), data.Name.ValueString())
+	err := r.client.CephFSSubvolumeSnapshotDelete(ctx, data.VolName.ValueString(), data.SubvolName.ValueString(), data.Name.ValueString(), data.GroupName.ValueString())
 	if err != nil {
 		if errors.Is(err, restapi.ErrNotFound) {
 			return
@@ -176,16 +189,25 @@ func (r *CephFSSubvolumeSnapshotResource) Delete(ctx context.Context, req resour
 }
 
 func (r *CephFSSubvolumeSnapshotResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	parts := strings.SplitN(req.ID, "/", 3)
-	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
+	parts := strings.Split(req.ID, "/")
+	valid := len(parts) == 3 || len(parts) == 4
+	for _, part := range parts {
+		if part == "" {
+			valid = false
+		}
+	}
+	if !valid {
 		resp.Diagnostics.AddError(
 			"Invalid Import ID",
-			fmt.Sprintf("Expected format: vol_name/subvol_name/snap_name, got: %s", req.ID),
+			fmt.Sprintf("Expected format: vol_name/subvol_name/snap_name or vol_name/group_name/subvol_name/snap_name, got: %s", req.ID),
 		)
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("vol_name"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("subvol_name"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), parts[2])...)
+	if len(parts) == 4 {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("group_name"), parts[1])...)
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("subvol_name"), parts[len(parts)-2])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), parts[len(parts)-1])...)
 }
