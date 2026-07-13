@@ -22,6 +22,7 @@ type RBDImageDataSource struct {
 
 type RBDImageDataSourceModel struct {
 	PoolName        types.String `tfsdk:"pool_name"`
+	Namespace       types.String `tfsdk:"namespace"`
 	Name            types.String `tfsdk:"name"`
 	Size            types.Int64  `tfsdk:"size"`
 	DataPool        types.String `tfsdk:"data_pool"`
@@ -42,6 +43,10 @@ func (d *RBDImageDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 			"pool_name": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The name of the pool holding the image.",
 				Required:            true,
+			},
+			"namespace": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The RBD namespace holding the image.",
+				Optional:            true,
 			},
 			"name": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The name of the image.",
@@ -103,7 +108,7 @@ func (d *RBDImageDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 
-	image, err := d.client.GetRBDImage(ctx, data.PoolName.ValueString(), data.Name.ValueString())
+	image, err := d.client.GetRBDImage(ctx, data.PoolName.ValueString(), data.Namespace.ValueString(), data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",

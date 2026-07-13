@@ -388,7 +388,7 @@ func testAccRBDImageCLIFixture(t *testing.T, poolName, imageName string, removeI
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
 		if removeImage {
-			if err := cephTestClusterCLI.RBDRemove(cleanupCtx, poolName, imageName); err != nil {
+			if err := cephTestClusterCLI.RBDRemove(cleanupCtx, poolName, "", imageName); err != nil {
 				t.Errorf("Failed to remove rbd image: %v", err)
 			}
 		}
@@ -399,14 +399,14 @@ func testAccRBDImageCLIFixture(t *testing.T, poolName, imageName string, removeI
 	if err := cephTestClusterCLI.PoolApplicationEnable(ctx, poolName, "rbd"); err != nil {
 		t.Fatalf("Failed to enable rbd application: %v", err)
 	}
-	if err := cephTestClusterCLI.RBDCreate(ctx, poolName, imageName, 8); err != nil {
+	if err := cephTestClusterCLI.RBDCreate(ctx, poolName, "", imageName, 8); err != nil {
 		t.Fatalf("Failed to create rbd image: %v", err)
 	}
 }
 
 func checkRBDImageExists(t *testing.T, poolName, imageName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		exists, err := cephTestClusterCLI.RBDExists(t.Context(), poolName, imageName)
+		exists, err := cephTestClusterCLI.RBDExists(t.Context(), poolName, "", imageName)
 		if err != nil {
 			return fmt.Errorf("failed to check rbd image existence: %w", err)
 		}
@@ -421,7 +421,7 @@ func checkRBDImageExists(t *testing.T, poolName, imageName string) resource.Test
 
 func checkRBDImageAbsent(t *testing.T, poolName, imageName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		exists, err := cephTestClusterCLI.RBDExists(t.Context(), poolName, imageName)
+		exists, err := cephTestClusterCLI.RBDExists(t.Context(), poolName, "", imageName)
 		if err != nil {
 			return fmt.Errorf("failed to check rbd image existence: %w", err)
 		}
@@ -436,7 +436,7 @@ func checkRBDImageAbsent(t *testing.T, poolName, imageName string) resource.Test
 
 func checkRBDImageSize(t *testing.T, poolName, imageName string, size int64) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		info, err := cephTestClusterCLI.RBDInfo(t.Context(), poolName, imageName)
+		info, err := cephTestClusterCLI.RBDInfo(t.Context(), poolName, "", imageName)
 		if err != nil {
 			return fmt.Errorf("failed to get rbd image info: %w", err)
 		}
@@ -460,7 +460,7 @@ func testAccCheckRBDImageDestroy(t *testing.T, poolName string) resource.TestChe
 
 			imageName := rs.Primary.Attributes["name"]
 
-			exists, err := cephTestClusterCLI.RBDExists(ctx, poolName, imageName)
+			exists, err := cephTestClusterCLI.RBDExists(ctx, poolName, "", imageName)
 			if err != nil {
 				return fmt.Errorf("failed to check rbd image existence: %w", err)
 			}
@@ -472,4 +472,104 @@ func testAccCheckRBDImageDestroy(t *testing.T, poolName string) resource.TestChe
 
 		return nil
 	}
+}
+
+func TestAccCephRBDImageResource_InNamespace(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-rbd-pool")
+	namespaceName := acctest.RandomWithPrefix("test-namespace")
+	imageName := acctest.RandomWithPrefix("test-image")
+
+	imageConfig := func(size int64) string {
+		return testAccProviderConfigBlock + testAccRBDPoolConfig(poolName) + fmt.Sprintf(`
+			resource "ceph_rbd_namespace" "test" {
+			  pool_name = ceph_pool.test.name
+			  name      = %q
+			}
+
+			resource "ceph_rbd_image" "test" {
+			  pool_name = ceph_pool.test.name
+			  namespace = ceph_rbd_namespace.test.name
+			  name      = %q
+			  size      = %d
+
+			  timeouts = {
+			    create = "5m"
+			    update = "5m"
+			    delete = "5m"
+			  }
+			}
+		`, namespaceName, imageName, size)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          imageConfig(8388608),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rbd_image.test",
+						tfjsonpath.New("namespace"),
+						knownvalue.StringExact(namespaceName),
+					),
+				},
+				Check: func(s *terraform.State) error {
+					exists, err := cephTestClusterCLI.RBDExists(t.Context(), poolName, namespaceName, imageName)
+					if err != nil {
+						return fmt.Errorf("failed to check rbd image existence: %w", err)
+					}
+					if !exists {
+						return fmt.Errorf("rbd image %q not found in namespace %s/%s", imageName, poolName, namespaceName)
+					}
+					return nil
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          imageConfig(16777216),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_rbd_image.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: func(s *terraform.State) error {
+					info, err := cephTestClusterCLI.RBDInfo(t.Context(), poolName, namespaceName, imageName)
+					if err != nil {
+						return fmt.Errorf("failed to get rbd image info: %w", err)
+					}
+					if info.Size != 16777216 {
+						return fmt.Errorf("expected size 16777216, got %d", info.Size)
+					}
+					return nil
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          imageConfig(16777216),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			{
+				ConfigVariables:                      testAccProviderConfig(),
+				Config:                               imageConfig(16777216),
+				ResourceName:                         "ceph_rbd_image.test",
+				ImportState:                          true,
+				ImportStateId:                        poolName + "/" + namespaceName + "/" + imageName,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "name",
+				ImportStateVerifyIgnore:              []string{"timeouts", "features"},
+			},
+		},
+	})
 }

@@ -17,6 +17,7 @@ import (
 type RBDImage struct {
 	Name            string             `json:"name"`
 	PoolName        string             `json:"pool_name"`
+	Namespace       string             `json:"namespace"`
 	ID              string             `json:"id"`
 	Size            int64              `json:"size"`
 	ObjSize         int64              `json:"obj_size"`
@@ -36,12 +37,16 @@ type RBDImageSnapshot struct {
 	Timestamp   string `json:"timestamp"`
 }
 
-func (c *Client) rbdImageURL(poolName, imageName string) *url.URL {
-	return c.endpoint.JoinPath("/api/block/image", url.PathEscape(poolName+"/"+imageName))
+func (c *Client) rbdImageURL(poolName, namespace, imageName string) *url.URL {
+	spec := poolName + "/" + imageName
+	if namespace != "" {
+		spec = poolName + "/" + namespace + "/" + imageName
+	}
+	return c.endpoint.JoinPath("/api/block/image", url.PathEscape(spec))
 }
 
-func (c *Client) GetRBDImage(ctx context.Context, poolName, imageName string) (*RBDImage, error) {
-	endpoint := c.rbdImageURL(poolName, imageName)
+func (c *Client) GetRBDImage(ctx context.Context, poolName, namespace, imageName string) (*RBDImage, error) {
+	endpoint := c.rbdImageURL(poolName, namespace, imageName)
 	endpoint.RawQuery = "omit_usage=true"
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", endpoint.String(), nil)
@@ -92,12 +97,13 @@ func (c *Client) GetRBDImage(ctx context.Context, poolName, imageName string) (*
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-block-image>
 
 type RBDImageCreateRequest struct {
-	Name     string   `json:"name"`
-	PoolName string   `json:"pool_name"`
-	Size     int64    `json:"size"`
-	ObjSize  *int64   `json:"obj_size,omitempty"`
-	Features []string `json:"features"`
-	DataPool *string  `json:"data_pool,omitempty"`
+	Name      string   `json:"name"`
+	PoolName  string   `json:"pool_name"`
+	Namespace *string  `json:"namespace,omitempty"`
+	Size      int64    `json:"size"`
+	ObjSize   *int64   `json:"obj_size,omitempty"`
+	Features  []string `json:"features"`
+	DataPool  *string  `json:"data_pool,omitempty"`
 }
 
 func (c *Client) CreateRBDImage(ctx context.Context, req RBDImageCreateRequest) (*TaskInfo, error) {
@@ -161,7 +167,7 @@ type RBDImageUpdateRequest struct {
 	Features []string `json:"features"`
 }
 
-func (c *Client) UpdateRBDImage(ctx context.Context, poolName, imageName string, req RBDImageUpdateRequest) (*TaskInfo, error) {
+func (c *Client) UpdateRBDImage(ctx context.Context, poolName, namespace, imageName string, req RBDImageUpdateRequest) (*TaskInfo, error) {
 	jsonPayload, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("unable to encode request payload: %w", err)
@@ -171,7 +177,7 @@ func (c *Client) UpdateRBDImage(ctx context.Context, poolName, imageName string,
 		"request_body": string(jsonPayload),
 	})
 
-	url := c.rbdImageURL(poolName, imageName).String()
+	url := c.rbdImageURL(poolName, namespace, imageName).String()
 	httpReq, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return nil, fmt.Errorf("unable to create request: %w", err)
@@ -220,8 +226,8 @@ func (c *Client) UpdateRBDImage(ctx context.Context, poolName, imageName string,
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-block-image--image_spec>
 
-func (c *Client) DeleteRBDImage(ctx context.Context, poolName, imageName string) (*TaskInfo, error) {
-	url := c.rbdImageURL(poolName, imageName).String()
+func (c *Client) DeleteRBDImage(ctx context.Context, poolName, namespace, imageName string) (*TaskInfo, error) {
+	url := c.rbdImageURL(poolName, namespace, imageName).String()
 	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create request: %w", err)
