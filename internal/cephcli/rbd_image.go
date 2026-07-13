@@ -88,3 +88,55 @@ func (c *CLI) RBDRemove(ctx context.Context, pool, namespace, name string) error
 	}
 	return nil
 }
+
+type RBDConfigOption struct {
+	Name   string `json:"name"`
+	Value  string `json:"value"`
+	Source string `json:"source"`
+}
+
+func (c *CLI) RBDConfigImageList(ctx context.Context, pool, namespace, name string) ([]RBDConfigOption, error) {
+	cmd := exec.CommandContext(ctx, "rbd", "--conf", c.confPath, "config", "image", "list", rbdImageSpec(pool, namespace, name), "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list rbd image config for %s: %w", name, err)
+	}
+
+	var options []RBDConfigOption
+	if err := json.Unmarshal(output, &options); err != nil {
+		return nil, fmt.Errorf("failed to parse rbd image config list: %w", err)
+	}
+	return options, nil
+}
+
+func (c *CLI) RBDConfigImageSet(ctx context.Context, pool, namespace, name, key, value string) error {
+	cmd := exec.CommandContext(ctx, "rbd", "--conf", c.confPath, "config", "image", "set", rbdImageSpec(pool, namespace, name), key, value)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to set rbd image config %s: %w, output: %s", key, err, string(output))
+	}
+	return nil
+}
+
+func (c *CLI) RBDImageMetaList(ctx context.Context, pool, namespace, name string) (map[string]string, error) {
+	cmd := exec.CommandContext(ctx, "rbd", "--conf", c.confPath, "image-meta", "list", rbdImageSpec(pool, namespace, name), "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list rbd image metadata for %s: %w", name, err)
+	}
+
+	var metadata map[string]string
+	if err := json.Unmarshal(output, &metadata); err != nil {
+		return nil, fmt.Errorf("failed to parse rbd image metadata list: %w", err)
+	}
+	return metadata, nil
+}
+
+func (c *CLI) RBDImageMetaSet(ctx context.Context, pool, namespace, name, key, value string) error {
+	cmd := exec.CommandContext(ctx, "rbd", "--conf", c.confPath, "image-meta", "set", rbdImageSpec(pool, namespace, name), key, value)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to set rbd image metadata %s: %w, output: %s", key, err, string(output))
+	}
+	return nil
+}

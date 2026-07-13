@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/setplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -48,6 +49,8 @@ type RBDImageResourceModel struct {
 	ObjectSize      types.Int64    `tfsdk:"object_size"`
 	DataPool        types.String   `tfsdk:"data_pool"`
 	Features        types.Set      `tfsdk:"features"`
+	Configuration   types.Map      `tfsdk:"configuration"`
+	Metadata        types.Map      `tfsdk:"metadata"`
 	ID              types.String   `tfsdk:"id"`
 	BlockNamePrefix types.String   `tfsdk:"block_name_prefix"`
 	FeaturesName    types.Set      `tfsdk:"features_name"`
@@ -170,6 +173,24 @@ func (r *RBDImageResource) Schema(ctx context.Context, req resource.SchemaReques
 					),
 				},
 			},
+			"configuration": resourceSchema.MapAttribute{
+				MarkdownDescription: "Image-level RBD configuration overrides, e.g. QoS options like `rbd_qos_bps_limit`. Keys must be valid librbd option names; unknown keys are silently ignored by Ceph and would never converge.",
+				Optional:            true,
+				Computed:            true,
+				ElementType:         types.StringType,
+				PlanModifiers: []planmodifier.Map{
+					mapplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"metadata": resourceSchema.MapAttribute{
+				MarkdownDescription: "Arbitrary image metadata as key-value pairs.",
+				Optional:            true,
+				Computed:            true,
+				ElementType:         types.StringType,
+				PlanModifiers: []planmodifier.Map{
+					mapplanmodifier.UseStateForUnknown(),
+				},
+			},
 			"id": resourceSchema.StringAttribute{
 				MarkdownDescription: "The internal id of the image.",
 				Computed:            true,
@@ -232,7 +253,66 @@ func (r *RBDImageResource) updateModelFromAPI(ctx context.Context, data *RBDImag
 	diags.Append(d...)
 	data.FeaturesName = featuresName
 
+	imageConfig := map[string]string{}
+	for _, option := range image.Configuration {
+		// Source 2 marks image-level overrides.
+		if option.Source == 2 {
+			imageConfig[option.Name] = option.Value
+		}
+	}
+	if !data.Configuration.IsNull() || len(imageConfig) > 0 {
+		configuration, d := types.MapValueFrom(ctx, types.StringType, imageConfig)
+		diags.Append(d...)
+		data.Configuration = configuration
+	}
+
+	if !data.Metadata.IsNull() || len(image.Metadata) > 0 {
+		imageMetadata := image.Metadata
+		if imageMetadata == nil {
+			imageMetadata = map[string]string{}
+		}
+		metadata, d := types.MapValueFrom(ctx, types.StringType, imageMetadata)
+		diags.Append(d...)
+		data.Metadata = metadata
+	}
+
 	return diags
+}
+
+// mapWithRemovals renders a planned map into the additive request form:
+// planned keys carry their value and keys present only in the prior
+// state carry null so the server removes them.
+func mapWithRemovals(ctx context.Context, plan, state types.Map, diags *diag.Diagnostics) map[string]*string {
+	planMap := map[string]string{}
+	if !plan.IsNull() && !plan.IsUnknown() {
+		diags.Append(plan.ElementsAs(ctx, &planMap, false)...)
+	}
+	stateMap := map[string]string{}
+	if !state.IsNull() && !state.IsUnknown() {
+		diags.Append(state.ElementsAs(ctx, &stateMap, false)...)
+	}
+	if diags.HasError() {
+		return nil
+	}
+
+	if plan.IsNull() && state.IsNull() {
+		return nil
+	}
+
+	result := make(map[string]*string, len(planMap)+len(stateMap))
+	for key, value := range planMap {
+		v := value
+		result[key] = &v
+	}
+	for key := range stateMap {
+		if _, ok := planMap[key]; !ok {
+			result[key] = nil
+		}
+	}
+	if len(result) == 0 {
+		return nil
+	}
+	return result
 }
 
 func (r *RBDImageResource) waitForTask(ctx context.Context, taskInfo *restapi.TaskInfo, action string, diags *diag.Diagnostics) bool {
@@ -294,6 +374,12 @@ func (r *RBDImageResource) Create(ctx context.Context, req resource.CreateReques
 		}
 	}
 
+	createReq.Configuration = mapWithRemovals(ctx, data.Configuration, types.MapNull(types.StringType), &resp.Diagnostics)
+	createReq.Metadata = mapWithRemovals(ctx, data.Metadata, types.MapNull(types.StringType), &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	tflog.Debug(ctx, "Creating RBD image", map[string]interface{}{
 		"pool_name": data.PoolName.ValueString(),
 		"name":      data.Name.ValueString(),
@@ -321,6 +407,12 @@ func (r *RBDImageResource) Create(ctx context.Context, req resource.CreateReques
 	partial.ID = types.StringNull()
 	partial.BlockNamePrefix = types.StringNull()
 	partial.FeaturesName = types.SetNull(types.StringType)
+	if partial.Configuration.IsUnknown() {
+		partial.Configuration = types.MapNull(types.StringType)
+	}
+	if partial.Metadata.IsUnknown() {
+		partial.Metadata = types.MapNull(types.StringType)
+	}
 	resp.Diagnostics.Append(resp.State.Set(ctx, &partial)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -421,6 +513,16 @@ func (r *RBDImageResource) Update(ctx context.Context, req resource.UpdateReques
 		if resp.Diagnostics.HasError() {
 			return
 		}
+	}
+
+	if !data.Configuration.Equal(state.Configuration) {
+		updateReq.Configuration = mapWithRemovals(ctx, data.Configuration, state.Configuration, &resp.Diagnostics)
+	}
+	if !data.Metadata.Equal(state.Metadata) {
+		updateReq.Metadata = mapWithRemovals(ctx, data.Metadata, state.Metadata, &resp.Diagnostics)
+	}
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	tflog.Debug(ctx, "Updating RBD image", map[string]interface{}{

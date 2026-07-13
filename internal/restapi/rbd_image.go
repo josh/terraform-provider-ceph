@@ -15,17 +15,27 @@ import (
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-block-image--image_spec>
 
 type RBDImage struct {
-	Name            string             `json:"name"`
-	PoolName        string             `json:"pool_name"`
-	Namespace       string             `json:"namespace"`
-	ID              string             `json:"id"`
-	Size            int64              `json:"size"`
-	ObjSize         int64              `json:"obj_size"`
-	NumObjs         int64              `json:"num_objs"`
-	BlockNamePrefix string             `json:"block_name_prefix"`
-	FeaturesName    []string           `json:"features_name"`
-	DataPool        *string            `json:"data_pool"`
-	Snapshots       []RBDImageSnapshot `json:"snapshots"`
+	Name            string                 `json:"name"`
+	PoolName        string                 `json:"pool_name"`
+	Namespace       string                 `json:"namespace"`
+	ID              string                 `json:"id"`
+	Size            int64                  `json:"size"`
+	ObjSize         int64                  `json:"obj_size"`
+	NumObjs         int64                  `json:"num_objs"`
+	BlockNamePrefix string                 `json:"block_name_prefix"`
+	FeaturesName    []string               `json:"features_name"`
+	DataPool        *string                `json:"data_pool"`
+	Snapshots       []RBDImageSnapshot     `json:"snapshots"`
+	Configuration   []RBDImageConfigOption `json:"configuration"`
+	Metadata        map[string]string      `json:"metadata"`
+}
+
+// Source indicates where the effective value comes from: 0 global
+// config, 1 pool override, 2 image override.
+type RBDImageConfigOption struct {
+	Name   string `json:"name"`
+	Value  string `json:"value"`
+	Source int    `json:"source"`
 }
 
 type RBDImageSnapshot struct {
@@ -97,13 +107,15 @@ func (c *Client) GetRBDImage(ctx context.Context, poolName, namespace, imageName
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-block-image>
 
 type RBDImageCreateRequest struct {
-	Name      string   `json:"name"`
-	PoolName  string   `json:"pool_name"`
-	Namespace *string  `json:"namespace,omitempty"`
-	Size      int64    `json:"size"`
-	ObjSize   *int64   `json:"obj_size,omitempty"`
-	Features  []string `json:"features"`
-	DataPool  *string  `json:"data_pool,omitempty"`
+	Name          string             `json:"name"`
+	PoolName      string             `json:"pool_name"`
+	Namespace     *string            `json:"namespace,omitempty"`
+	Size          int64              `json:"size"`
+	ObjSize       *int64             `json:"obj_size,omitempty"`
+	Features      []string           `json:"features"`
+	DataPool      *string            `json:"data_pool,omitempty"`
+	Configuration map[string]*string `json:"configuration,omitempty"`
+	Metadata      map[string]*string `json:"metadata,omitempty"`
 }
 
 func (c *Client) CreateRBDImage(ctx context.Context, req RBDImageCreateRequest) (*TaskInfo, error) {
@@ -165,6 +177,10 @@ type RBDImageUpdateRequest struct {
 	Name     *string  `json:"name,omitempty"`
 	Size     *int64   `json:"size,omitempty"`
 	Features []string `json:"features"`
+	// The server applies these additively: present keys are set, keys
+	// with a null value are removed, absent keys are left untouched.
+	Configuration map[string]*string `json:"configuration,omitempty"`
+	Metadata      map[string]*string `json:"metadata,omitempty"`
 }
 
 func (c *Client) UpdateRBDImage(ctx context.Context, poolName, namespace, imageName string, req RBDImageUpdateRequest) (*TaskInfo, error) {

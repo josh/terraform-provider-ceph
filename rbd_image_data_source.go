@@ -30,6 +30,8 @@ type RBDImageDataSourceModel struct {
 	BlockNamePrefix types.String `tfsdk:"block_name_prefix"`
 	ObjectSize      types.Int64  `tfsdk:"object_size"`
 	FeaturesName    types.Set    `tfsdk:"features_name"`
+	Configuration   types.Map    `tfsdk:"configuration"`
+	Metadata        types.Map    `tfsdk:"metadata"`
 }
 
 func (d *RBDImageDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -74,6 +76,16 @@ func (d *RBDImageDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 			},
 			"features_name": dataSourceSchema.SetAttribute{
 				MarkdownDescription: "The features enabled on the image.",
+				Computed:            true,
+				ElementType:         types.StringType,
+			},
+			"configuration": dataSourceSchema.MapAttribute{
+				MarkdownDescription: "Image-level RBD configuration overrides.",
+				Computed:            true,
+				ElementType:         types.StringType,
+			},
+			"metadata": dataSourceSchema.MapAttribute{
+				MarkdownDescription: "Arbitrary image metadata.",
 				Computed:            true,
 				ElementType:         types.StringType,
 			},
@@ -129,6 +141,26 @@ func (d *RBDImageDataSource) Read(ctx context.Context, req datasource.ReadReques
 		return
 	}
 	data.FeaturesName = featuresName
+
+	imageConfig := map[string]string{}
+	for _, option := range image.Configuration {
+		if option.Source == 2 {
+			imageConfig[option.Name] = option.Value
+		}
+	}
+	configuration, diags2 := types.MapValueFrom(ctx, types.StringType, imageConfig)
+	resp.Diagnostics.Append(diags2...)
+	imageMetadata := image.Metadata
+	if imageMetadata == nil {
+		imageMetadata = map[string]string{}
+	}
+	metadata, diags3 := types.MapValueFrom(ctx, types.StringType, imageMetadata)
+	resp.Diagnostics.Append(diags3...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	data.Configuration = configuration
+	data.Metadata = metadata
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
