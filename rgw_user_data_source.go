@@ -29,6 +29,8 @@ type RGWUserDataSourceModel struct {
 	Suspended   types.Bool   `tfsdk:"suspended"`
 	Tenant      types.String `tfsdk:"tenant"`
 	Admin       types.Bool   `tfsdk:"admin"`
+	Caps        types.Map    `tfsdk:"caps"`
+	MfaIDs      types.List   `tfsdk:"mfa_ids"`
 }
 
 func (d *RGWUserDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -70,6 +72,16 @@ func (d *RGWUserDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 			"admin": dataSourceSchema.BoolAttribute{
 				MarkdownDescription: "Whether this user has admin privileges (can only be set via radosgw-admin CLI)",
 				Computed:            true,
+			},
+			"caps": dataSourceSchema.MapAttribute{
+				MarkdownDescription: "Administrative capabilities of the user",
+				Computed:            true,
+				ElementType:         types.StringType,
+			},
+			"mfa_ids": dataSourceSchema.ListAttribute{
+				MarkdownDescription: "MFA device ids registered for the user",
+				Computed:            true,
+				ElementType:         types.StringType,
 			},
 		},
 	}
@@ -121,6 +133,24 @@ func (d *RGWUserDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	data.Suspended = types.BoolValue(user.Suspended == 1)
 	data.Tenant = types.StringValue(user.Tenant)
 	data.Admin = types.BoolValue(user.Admin)
+
+	capsMap := make(map[string]string, len(user.Caps))
+	for _, c := range user.Caps {
+		capsMap[c.Type] = c.Perm
+	}
+	caps, diags := types.MapValueFrom(ctx, types.StringType, capsMap)
+	resp.Diagnostics.Append(diags...)
+	mfaIDs := user.MfaIDs
+	if mfaIDs == nil {
+		mfaIDs = []string{}
+	}
+	mfa, diags2 := types.ListValueFrom(ctx, types.StringType, mfaIDs)
+	resp.Diagnostics.Append(diags2...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	data.Caps = caps
+	data.MfaIDs = mfa
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

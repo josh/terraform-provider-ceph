@@ -46,6 +46,13 @@ type RGWUser struct {
 	SwiftKeys   []RGWSwiftKey `json:"swift_keys"`
 	System      bool          `json:"system"`
 	Admin       bool          `json:"admin"`
+	Caps        []RGWUserCap  `json:"caps"`
+	MfaIDs      []string      `json:"mfa_ids"`
+}
+
+type RGWUserCap struct {
+	Type string `json:"type"`
+	Perm string `json:"perm"`
 }
 
 func (c *Client) RGWGetUser(ctx context.Context, uid string) (*RGWUser, error) {
@@ -512,6 +519,103 @@ func (c *Client) RGWSetUserQuota(ctx context.Context, uid, quotaType string, ena
 	// The proxy responds with the raw admin op body, not JSON; only the
 	// status matters.
 	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(httpResp.Body)
+		if dashboardErr, err := parseDashboardError(body); err == nil {
+			if rgwErr, ok := dashboardErr.RGWError(); ok {
+				if rgwErr.Code == "NoSuchUser" {
+					return ErrNotFound
+				}
+			}
+		}
+		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-rgw-user--uid--capability>
+
+func (c *Client) RGWCreateUserCap(ctx context.Context, uid, capType, perm string) error {
+	jsonPayload, err := json.Marshal(map[string]string{
+		"type": capType,
+		"perm": perm,
+	})
+	if err != nil {
+		return fmt.Errorf("unable to encode request payload: %w", err)
+	}
+
+	tflog.Trace(ctx, "Ceph API request body", map[string]any{
+		"request_body": string(jsonPayload),
+	})
+
+	url := c.endpoint.JoinPath("/api/rgw/user", uid, "capability").String()
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	logRequest := logAPIRequest(ctx, httpReq)
+	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
+	if err != nil {
+		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode == http.StatusNotFound {
+		return ErrNotFound
+	}
+
+	if httpResp.StatusCode != http.StatusCreated && httpResp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(httpResp.Body)
+		if dashboardErr, err := parseDashboardError(body); err == nil {
+			if rgwErr, ok := dashboardErr.RGWError(); ok {
+				if rgwErr.Code == "NoSuchUser" {
+					return ErrNotFound
+				}
+			}
+		}
+		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-rgw-user--uid--capability>
+
+func (c *Client) RGWDeleteUserCap(ctx context.Context, uid, capType, perm string) error {
+	endpoint := c.endpoint.JoinPath("/api/rgw/user", uid, "capability")
+	query := url.Values{}
+	query.Add("type", capType)
+	query.Add("perm", perm)
+	endpoint.RawQuery = query.Encode()
+
+	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", endpoint.String(), nil)
+	if err != nil {
+		return fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	logRequest := logAPIRequest(ctx, httpReq)
+	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
+	if err != nil {
+		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode == http.StatusNotFound {
+		return ErrNotFound
+	}
+
+	if httpResp.StatusCode != http.StatusNoContent && httpResp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(httpResp.Body)
 		if dashboardErr, err := parseDashboardError(body); err == nil {
 			if rgwErr, ok := dashboardErr.RGWError(); ok {

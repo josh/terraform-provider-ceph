@@ -1255,3 +1255,102 @@ func TestAccCephRGWUserResource_emailRemoval(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephRGWUserResource_Caps(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-caps-user")
+
+	config := func(caps string) string {
+		return testAccProviderConfigBlock + fmt.Sprintf(`
+			resource "ceph_rgw_user" "test" {
+			  user_id      = %q
+			  display_name = "Caps Test User"
+			  caps         = %s
+			}
+		`, testUID, caps)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`{ usage = "read", buckets = "*" }`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_user.test",
+						tfjsonpath.New("caps"),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							"usage":   knownvalue.StringExact("read"),
+							"buckets": knownvalue.StringExact("*"),
+						}),
+					),
+				},
+				Check: checkRGWUserCaps(t, testUID, map[string]string{"usage": "read", "buckets": "*"}),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`{ usage = "write", metadata = "read" }`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_rgw_user.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: checkRGWUserCaps(t, testUID, map[string]string{"usage": "write", "metadata": "read"}),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`{ usage = "write", metadata = "read" }`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			{
+				PreConfig: func() {
+					if err := cephTestClusterCLI.RgwCapsAdd(t.Context(), testUID, "zone=read"); err != nil {
+						t.Fatalf("Failed to add caps out of band: %v", err)
+					}
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`{ usage = "write", metadata = "read" }`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_rgw_user.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: checkRGWUserCaps(t, testUID, map[string]string{"usage": "write", "metadata": "read"}),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`{}`),
+				Check:           checkRGWUserCaps(t, testUID, map[string]string{}),
+			},
+		},
+	})
+}
+
+func checkRGWUserCaps(t *testing.T, uid string, want map[string]string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		info, err := cephTestClusterCLI.RgwUserInfo(t.Context(), uid)
+		if err != nil {
+			return fmt.Errorf("failed to get rgw user info: %w", err)
+		}
+		got := make(map[string]string, len(info.Caps))
+		for _, c := range info.Caps {
+			got[c.Type] = c.Perm
+		}
+		if len(got) != len(want) {
+			return fmt.Errorf("caps mismatch: expected %v, got %v", want, got)
+		}
+		for k, v := range want {
+			if got[k] != v {
+				return fmt.Errorf("cap %q: expected %q, got %q", k, v, got[k])
+			}
+		}
+		return nil
+	}
+}

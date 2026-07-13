@@ -5,12 +5,16 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
@@ -35,6 +39,7 @@ type RGWUserResourceModel struct {
 	MaxBuckets  types.Int64  `tfsdk:"max_buckets"`
 	System      types.Bool   `tfsdk:"system"`
 	Suspended   types.Bool   `tfsdk:"suspended"`
+	Caps        types.Map    `tfsdk:"caps"`
 	Tenant      types.String `tfsdk:"tenant"`
 	Admin       types.Bool   `tfsdk:"admin"`
 }
@@ -78,6 +83,17 @@ func (r *RGWUserResource) Schema(ctx context.Context, req resource.SchemaRequest
 				Optional:            true,
 				Computed:            true,
 				Default:             booldefault.StaticBool(false),
+			},
+			"caps": resourceSchema.MapAttribute{
+				MarkdownDescription: "Administrative capabilities of the user, as a map from capability type (e.g. `usage`, `buckets`, `users`, `metadata`, `zone`) to permission. RGW reports combined read and write permissions as `*`, so only `read`, `write` and `*` are accepted.",
+				Optional:            true,
+				Computed:            true,
+				ElementType:         types.StringType,
+				Validators: []validator.Map{
+					mapvalidator.ValueStringsAre(
+						stringvalidator.OneOf("read", "write", "*"),
+					),
+				},
 			},
 			"tenant": resourceSchema.StringAttribute{
 				MarkdownDescription: "The tenant this user belongs to (empty string for default tenant in multi-tenancy configurations)",
@@ -157,7 +173,35 @@ func (r *RGWUserResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	updateModelFromAPIUser(&data, user)
+	if !data.Caps.IsNull() && !data.Caps.IsUnknown() {
+		var caps map[string]string
+		resp.Diagnostics.Append(data.Caps.ElementsAs(ctx, &caps, false)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		for capType, perm := range caps {
+			if err := r.client.RGWCreateUserCap(ctx, data.UserID.ValueString(), capType, perm); err != nil {
+				resp.Diagnostics.AddError(
+					"API Request Error",
+					fmt.Sprintf("Unable to add capability '%s=%s' to RGW user: %s", capType, perm, err),
+				)
+				return
+			}
+		}
+		user, err = r.client.RGWGetUser(ctx, data.UserID.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"API Request Error",
+				fmt.Sprintf("Unable to read RGW user after adding capabilities: %s", err),
+			)
+			return
+		}
+	}
+
+	resp.Diagnostics.Append(updateModelFromAPIUser(ctx, &data, user)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -185,7 +229,10 @@ func (r *RGWUserResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	updateModelFromAPIUser(&data, user)
+	resp.Diagnostics.Append(updateModelFromAPIUser(ctx, &data, user)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -244,7 +291,59 @@ func (r *RGWUserResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	updateModelFromAPIUser(&data, user)
+	if !data.Caps.Equal(state.Caps) {
+		var planCaps, stateCaps map[string]string
+		if !data.Caps.IsNull() && !data.Caps.IsUnknown() {
+			resp.Diagnostics.Append(data.Caps.ElementsAs(ctx, &planCaps, false)...)
+		}
+		if !state.Caps.IsNull() {
+			resp.Diagnostics.Append(state.Caps.ElementsAs(ctx, &stateCaps, false)...)
+		}
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		// A changed permission is a delete of the old capability followed
+		// by an add, since adding merges permission bits.
+		for capType, perm := range stateCaps {
+			if planPerm, ok := planCaps[capType]; ok && planPerm == perm {
+				continue
+			}
+			if err := r.client.RGWDeleteUserCap(ctx, userID, capType, perm); err != nil && !errors.Is(err, restapi.ErrNotFound) {
+				resp.Diagnostics.AddError(
+					"API Request Error",
+					fmt.Sprintf("Unable to remove capability '%s=%s' from RGW user: %s", capType, perm, err),
+				)
+				return
+			}
+		}
+		for capType, perm := range planCaps {
+			if statePerm, ok := stateCaps[capType]; ok && statePerm == perm {
+				continue
+			}
+			if err := r.client.RGWCreateUserCap(ctx, userID, capType, perm); err != nil {
+				resp.Diagnostics.AddError(
+					"API Request Error",
+					fmt.Sprintf("Unable to add capability '%s=%s' to RGW user: %s", capType, perm, err),
+				)
+				return
+			}
+		}
+
+		user, err = r.client.RGWGetUser(ctx, userID)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"API Request Error",
+				fmt.Sprintf("Unable to read RGW user after updating capabilities: %s", err),
+			)
+			return
+		}
+	}
+
+	resp.Diagnostics.Append(updateModelFromAPIUser(ctx, &data, user)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -276,7 +375,9 @@ func (r *RGWUserResource) ImportState(ctx context.Context, req resource.ImportSt
 	resource.ImportStatePassthroughID(ctx, path.Root("user_id"), req, resp)
 }
 
-func updateModelFromAPIUser(data *RGWUserResourceModel, user *restapi.RGWUser) {
+func updateModelFromAPIUser(ctx context.Context, data *RGWUserResourceModel, user *restapi.RGWUser) diag.Diagnostics {
+	var diags diag.Diagnostics
+
 	if user.Tenant != "" {
 		data.UserID = types.StringValue(user.Tenant + "$" + user.UserID)
 	} else {
@@ -296,4 +397,16 @@ func updateModelFromAPIUser(data *RGWUserResourceModel, user *restapi.RGWUser) {
 	data.Admin = types.BoolValue(user.Admin)
 	data.Suspended = types.BoolValue(user.Suspended == 1)
 	data.Tenant = types.StringValue(user.Tenant)
+
+	if !data.Caps.IsNull() || len(user.Caps) > 0 {
+		capsMap := make(map[string]string, len(user.Caps))
+		for _, c := range user.Caps {
+			capsMap[c.Type] = c.Perm
+		}
+		caps, d := types.MapValueFrom(ctx, types.StringType, capsMap)
+		diags.Append(d...)
+		data.Caps = caps
+	}
+
+	return diags
 }
