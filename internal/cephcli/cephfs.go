@@ -242,6 +242,49 @@ func (c *CLI) CephFSSubvolumeGroupList(ctx context.Context, volName string) ([]C
 	return entries, nil
 }
 
+type CephFSSubvolumeGroupSnapshotListEntry struct {
+	Name string `json:"name"`
+}
+
+func (c *CLI) CephFSSubvolumeGroupSnapshotList(ctx context.Context, volName string, groupName string) ([]CephFSSubvolumeGroupSnapshotListEntry, error) {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "subvolumegroup", "snapshot", "ls", volName, groupName, "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list CephFS subvolume group snapshots for %s/%s: %w", volName, groupName, err)
+	}
+
+	var entries []CephFSSubvolumeGroupSnapshotListEntry
+	if err := json.Unmarshal(output, &entries); err != nil {
+		return nil, fmt.Errorf("failed to parse CephFS subvolume group snapshot list: %w", err)
+	}
+
+	return entries, nil
+}
+
+func (c *CLI) CephFSSubvolumeGroupSnapshotExists(ctx context.Context, volName string, groupName string, snapName string) (bool, error) {
+	entries, err := c.CephFSSubvolumeGroupSnapshotList(ctx, volName, groupName)
+	if err != nil {
+		return false, err
+	}
+
+	for _, entry := range entries {
+		if entry.Name == snapName {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (c *CLI) CephFSSubvolumeGroupSnapshotDelete(ctx context.Context, volName string, groupName string, snapName string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "subvolumegroup", "snapshot", "rm", volName, groupName, snapName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to delete CephFS subvolume group snapshot %s/%s/%s: %w, output: %s", volName, groupName, snapName, err, string(output))
+	}
+	return nil
+}
+
 func (c *CLI) CephFSSubvolumeGroupExists(ctx context.Context, volName string, groupName string) (bool, error) {
 	entries, err := c.CephFSSubvolumeGroupList(ctx, volName)
 	if err != nil {
