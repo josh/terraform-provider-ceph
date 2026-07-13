@@ -26,6 +26,9 @@ type RBDImageInfo struct {
 	ObjectSize      int64    `json:"object_size"`
 	BlockNamePrefix string   `json:"block_name_prefix"`
 	Features        []string `json:"features"`
+	// Only dumped by rbd info when the image has STRIPINGV2.
+	StripeUnit  *int64 `json:"stripe_unit,omitempty"`
+	StripeCount *int64 `json:"stripe_count,omitempty"`
 }
 
 func (c *CLI) RBDCreate(ctx context.Context, pool, namespace, name string, sizeMB int64) error {

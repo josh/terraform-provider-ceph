@@ -47,6 +47,8 @@ type RBDImageResourceModel struct {
 	Name            types.String   `tfsdk:"name"`
 	Size            types.Int64    `tfsdk:"size"`
 	ObjectSize      types.Int64    `tfsdk:"object_size"`
+	StripeUnit      types.Int64    `tfsdk:"stripe_unit"`
+	StripeCount     types.Int64    `tfsdk:"stripe_count"`
 	DataPool        types.String   `tfsdk:"data_pool"`
 	Features        types.Set      `tfsdk:"features"`
 	Configuration   types.Map      `tfsdk:"configuration"`
@@ -148,6 +150,28 @@ func (r *RBDImageResource) Schema(ctx context.Context, req resource.SchemaReques
 					powerOfTwo(),
 				},
 			},
+			"stripe_unit": resourceSchema.Int64Attribute{
+				MarkdownDescription: "The stripe unit of the image in bytes. Must be a power of two no larger than the object size. When not set, Ceph uses the object size. Changing requires destroying and recreating the image.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplaceIfConfigured(),
+				},
+				Validators: []validator.Int64{
+					powerOfTwo(),
+				},
+			},
+			"stripe_count": resourceSchema.Int64Attribute{
+				MarkdownDescription: "The number of objects the image data is striped over. When not set, Ceph uses 1. Changing requires destroying and recreating the image.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplaceIfConfigured(),
+				},
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+				},
+			},
 			"data_pool": resourceSchema.StringAttribute{
 				MarkdownDescription: "The erasure coded pool holding the image data. Changing requires destroying and recreating the image.",
 				Optional:            true,
@@ -245,6 +269,8 @@ func (r *RBDImageResource) updateModelFromAPI(ctx context.Context, data *RBDImag
 	}
 	data.Size = types.Int64Value(image.Size)
 	data.ObjectSize = types.Int64Value(image.ObjSize)
+	data.StripeUnit = types.Int64Value(image.StripeUnit)
+	data.StripeCount = types.Int64Value(image.StripeCount)
 	data.DataPool = types.StringPointerValue(image.DataPool)
 	data.ID = types.StringValue(image.ID)
 	data.BlockNamePrefix = types.StringValue(image.BlockNamePrefix)
@@ -364,6 +390,12 @@ func (r *RBDImageResource) Create(ctx context.Context, req resource.CreateReques
 	if !data.ObjectSize.IsNull() && !data.ObjectSize.IsUnknown() {
 		createReq.ObjSize = data.ObjectSize.ValueInt64Pointer()
 	}
+	if !data.StripeUnit.IsNull() && !data.StripeUnit.IsUnknown() {
+		createReq.StripeUnit = data.StripeUnit.ValueInt64Pointer()
+	}
+	if !data.StripeCount.IsNull() && !data.StripeCount.IsUnknown() {
+		createReq.StripeCount = data.StripeCount.ValueInt64Pointer()
+	}
 	if !data.DataPool.IsNull() && !data.DataPool.IsUnknown() {
 		createReq.DataPool = data.DataPool.ValueStringPointer()
 	}
@@ -400,6 +432,12 @@ func (r *RBDImageResource) Create(ctx context.Context, req resource.CreateReques
 	partial := data
 	if partial.ObjectSize.IsUnknown() {
 		partial.ObjectSize = types.Int64Null()
+	}
+	if partial.StripeUnit.IsUnknown() {
+		partial.StripeUnit = types.Int64Null()
+	}
+	if partial.StripeCount.IsUnknown() {
+		partial.StripeCount = types.Int64Null()
 	}
 	if partial.DataPool.IsUnknown() {
 		partial.DataPool = types.StringNull()

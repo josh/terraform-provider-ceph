@@ -23,6 +23,8 @@ type RBDImage struct {
 	ObjSize         int64                  `json:"obj_size"`
 	NumObjs         int64                  `json:"num_objs"`
 	BlockNamePrefix string                 `json:"block_name_prefix"`
+	StripeUnit      int64                  `json:"stripe_unit"`
+	StripeCount     int64                  `json:"stripe_count"`
 	FeaturesName    []string               `json:"features_name"`
 	DataPool        *string                `json:"data_pool"`
 	Snapshots       []RBDImageSnapshot     `json:"snapshots"`
@@ -112,6 +114,8 @@ type RBDImageCreateRequest struct {
 	Namespace     *string            `json:"namespace,omitempty"`
 	Size          int64              `json:"size"`
 	ObjSize       *int64             `json:"obj_size,omitempty"`
+	StripeUnit    *int64             `json:"stripe_unit,omitempty"`
+	StripeCount   *int64             `json:"stripe_count,omitempty"`
 	Features      []string           `json:"features"`
 	DataPool      *string            `json:"data_pool,omitempty"`
 	Configuration map[string]*string `json:"configuration,omitempty"`
