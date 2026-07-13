@@ -21,9 +21,10 @@ type CephFSSubvolumeGroupDataSource struct {
 }
 
 type CephFSSubvolumeGroupDataSourceModel struct {
-	Name    types.String `tfsdk:"name"`
-	VolName types.String `tfsdk:"vol_name"`
-	Size    types.Int64  `tfsdk:"size"`
+	Name     types.String `tfsdk:"name"`
+	VolName  types.String `tfsdk:"vol_name"`
+	Size     types.Int64  `tfsdk:"size"`
+	DataPool types.String `tfsdk:"data_pool"`
 }
 
 func (d *CephFSSubvolumeGroupDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -44,6 +45,10 @@ func (d *CephFSSubvolumeGroupDataSource) Schema(ctx context.Context, req datasou
 			},
 			"size": dataSourceSchema.Int64Attribute{
 				MarkdownDescription: "The quota size in bytes.",
+				Computed:            true,
+			},
+			"data_pool": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The data pool used by the subvolume group.",
 				Computed:            true,
 			},
 		},
@@ -91,6 +96,8 @@ func (d *CephFSSubvolumeGroupDataSource) Read(ctx context.Context, req datasourc
 	} else {
 		data.Size = types.Int64Null()
 	}
+
+	data.DataPool = types.StringValue(info.DataPool)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

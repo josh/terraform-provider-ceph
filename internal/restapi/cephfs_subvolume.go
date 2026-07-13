@@ -47,6 +47,8 @@ type SubvolumeCreateRequest struct {
 	Mode string `json:"mode,omitempty"`
 	UID  *int64 `json:"uid,omitempty"`
 	GID  *int64 `json:"gid,omitempty"`
+	// Must name an existing data pool of the filesystem.
+	PoolLayout string `json:"pool_layout,omitempty"`
 }
 
 type SubvolumeUpdateRequest struct {
