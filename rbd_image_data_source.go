@@ -29,6 +29,8 @@ type RBDImageDataSourceModel struct {
 	ID              types.String `tfsdk:"id"`
 	BlockNamePrefix types.String `tfsdk:"block_name_prefix"`
 	ObjectSize      types.Int64  `tfsdk:"object_size"`
+	StripeUnit      types.Int64  `tfsdk:"stripe_unit"`
+	StripeCount     types.Int64  `tfsdk:"stripe_count"`
 	FeaturesName    types.Set    `tfsdk:"features_name"`
 	Configuration   types.Map    `tfsdk:"configuration"`
 	Metadata        types.Map    `tfsdk:"metadata"`
@@ -72,6 +74,14 @@ func (d *RBDImageDataSource) Schema(ctx context.Context, req datasource.SchemaRe
 			},
 			"object_size": dataSourceSchema.Int64Attribute{
 				MarkdownDescription: "The object size of the image in bytes.",
+				Computed:            true,
+			},
+			"stripe_unit": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "The stripe unit of the image in bytes.",
+				Computed:            true,
+			},
+			"stripe_count": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "The number of objects the image data is striped over.",
 				Computed:            true,
 			},
 			"features_name": dataSourceSchema.SetAttribute{
@@ -134,6 +144,8 @@ func (d *RBDImageDataSource) Read(ctx context.Context, req datasource.ReadReques
 	data.ID = types.StringValue(image.ID)
 	data.BlockNamePrefix = types.StringValue(image.BlockNamePrefix)
 	data.ObjectSize = types.Int64Value(image.ObjSize)
+	data.StripeUnit = types.Int64Value(image.StripeUnit)
+	data.StripeCount = types.Int64Value(image.StripeCount)
 
 	featuresName, diags := types.SetValueFrom(ctx, types.StringType, image.FeaturesName)
 	resp.Diagnostics.Append(diags...)

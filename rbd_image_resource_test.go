@@ -673,6 +673,130 @@ func TestAccCephRBDImageResource_ConfigurationMetadata(t *testing.T) {
 	})
 }
 
+func TestAccCephRBDImageResource_Striping(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-rbd-pool")
+	stripedName := acctest.RandomWithPrefix("test-image-striped")
+	defaultName := acctest.RandomWithPrefix("test-image-default")
+
+	config := testAccProviderConfigBlock + testAccRBDPoolConfig(poolName) + fmt.Sprintf(`
+		resource "ceph_rbd_image" "striped" {
+		  pool_name    = ceph_pool.test.name
+		  name         = %q
+		  size         = 8388608
+		  stripe_unit  = 65536
+		  stripe_count = 4
+
+		  timeouts = {
+		    create = "5m"
+		    update = "5m"
+		    delete = "5m"
+		  }
+		}
+
+		resource "ceph_rbd_image" "default" {
+		  pool_name = ceph_pool.test.name
+		  name      = %q
+		  size      = 8388608
+
+		  timeouts = {
+		    create = "5m"
+		    update = "5m"
+		    delete = "5m"
+		  }
+		}
+	`, stripedName, defaultName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRBDImageDestroy(t, poolName),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rbd_image.striped",
+						tfjsonpath.New("stripe_unit"),
+						knownvalue.Int64Exact(65536),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rbd_image.striped",
+						tfjsonpath.New("stripe_count"),
+						knownvalue.Int64Exact(4),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rbd_image.default",
+						tfjsonpath.New("stripe_count"),
+						knownvalue.Int64Exact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rbd_image.default",
+						tfjsonpath.New("stripe_unit"),
+						knownvalue.Int64Exact(4194304),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rbd_image.default",
+						tfjsonpath.New("object_size"),
+						knownvalue.Int64Exact(4194304),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkRBDImageStriping(t, poolName, stripedName, 65536, 4),
+					checkRBDImageStripingAbsent(t, poolName, defaultName),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+func checkRBDImageStriping(t *testing.T, poolName, imageName string, wantUnit, wantCount int64) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		info, err := cephTestClusterCLI.RBDInfo(t.Context(), poolName, "", imageName)
+		if err != nil {
+			return fmt.Errorf("failed to get image info: %w", err)
+		}
+		if info.StripeUnit == nil || info.StripeCount == nil {
+			return fmt.Errorf("expected striping fields in rbd info, got unit=%v count=%v", info.StripeUnit, info.StripeCount)
+		}
+		if *info.StripeUnit != wantUnit {
+			return fmt.Errorf("stripe unit: expected %d, got %d", wantUnit, *info.StripeUnit)
+		}
+		if *info.StripeCount != wantCount {
+			return fmt.Errorf("stripe count: expected %d, got %d", wantCount, *info.StripeCount)
+		}
+		return nil
+	}
+}
+
+func checkRBDImageStripingAbsent(t *testing.T, poolName, imageName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		info, err := cephTestClusterCLI.RBDInfo(t.Context(), poolName, "", imageName)
+		if err != nil {
+			return fmt.Errorf("failed to get image info: %w", err)
+		}
+		if info.StripeUnit != nil || info.StripeCount != nil {
+			return fmt.Errorf("expected no STRIPINGV2 striping fields, got unit=%v count=%v", info.StripeUnit, info.StripeCount)
+		}
+		return nil
+	}
+}
+
 func checkRBDImageConfigOption(t *testing.T, poolName, imageName, key, want string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
 		options, err := cephTestClusterCLI.RBDConfigImageList(t.Context(), poolName, "", imageName)
