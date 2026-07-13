@@ -37,6 +37,8 @@ func TestAccCephRGWRoleDataSource(t *testing.T) {
 					resource.TestCheckResourceAttrSet("data.ceph_rgw_role.test", "arn"),
 					resource.TestCheckResourceAttrSet("data.ceph_rgw_role.test", "role_id"),
 					resource.TestCheckResourceAttrSet("data.ceph_rgw_role.test", "assume_role_policy_document"),
+					resource.TestCheckResourceAttr("data.ceph_rgw_role.test", "permission_policies", "[]"),
+					resource.TestCheckResourceAttr("data.ceph_rgw_role.test", "description", ""),
 				),
 			},
 		},

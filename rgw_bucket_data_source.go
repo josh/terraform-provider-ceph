@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -21,14 +22,17 @@ type RGWBucketDataSource struct {
 }
 
 type RGWBucketDataSourceModel struct {
-	Bucket        types.String `tfsdk:"bucket"`
-	Zonegroup     types.String `tfsdk:"zonegroup"`
-	PlacementRule types.String `tfsdk:"placement_rule"`
-	ID            types.String `tfsdk:"id"`
-	Owner         types.String `tfsdk:"owner"`
-	CreationTime  types.String `tfsdk:"creation_time"`
-	ACL           types.String `tfsdk:"acl"`
-	Bid           types.String `tfsdk:"bid"`
+	Bucket          types.String         `tfsdk:"bucket"`
+	Zonegroup       types.String         `tfsdk:"zonegroup"`
+	PlacementRule   types.String         `tfsdk:"placement_rule"`
+	ID              types.String         `tfsdk:"id"`
+	Owner           types.String         `tfsdk:"owner"`
+	CreationTime    types.String         `tfsdk:"creation_time"`
+	ACL             types.String         `tfsdk:"acl"`
+	Bid             types.String         `tfsdk:"bid"`
+	VersioningState types.String         `tfsdk:"versioning_state"`
+	Tags            types.Map            `tfsdk:"tags"`
+	BucketPolicy    jsontypes.Normalized `tfsdk:"bucket_policy"`
 }
 
 func (d *RGWBucketDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -70,6 +74,20 @@ func (d *RGWBucketDataSource) Schema(ctx context.Context, req datasource.SchemaR
 			"bid": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The bucket ID (alternate field)",
 				Computed:            true,
+			},
+			"versioning_state": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The S3 versioning state of the bucket",
+				Computed:            true,
+			},
+			"tags": dataSourceSchema.MapAttribute{
+				MarkdownDescription: "The S3 tags of the bucket",
+				Computed:            true,
+				ElementType:         types.StringType,
+			},
+			"bucket_policy": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The S3 bucket policy as a JSON document",
+				Computed:            true,
+				CustomType:          jsontypes.NormalizedType{},
 			},
 		},
 	}
@@ -121,6 +139,24 @@ func (d *RGWBucketDataSource) Read(ctx context.Context, req datasource.ReadReque
 	data.CreationTime = types.StringValue(bucket.CreationTime)
 	data.ACL = types.StringValue(bucket.ACL)
 	data.Bid = types.StringValue(bucket.Bid)
+	data.VersioningState = types.StringValue(bucket.Versioning)
+
+	tagset := bucket.Tagset
+	if tagset == nil {
+		tagset = map[string]string{}
+	}
+	tags, diags := types.MapValueFrom(ctx, types.StringType, tagset)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	data.Tags = tags
+
+	if policy := string(bucket.BucketPolicy); policy != "" && policy != "null" {
+		data.BucketPolicy = jsontypes.NewNormalizedValue(policy)
+	} else {
+		data.BucketPolicy = jsontypes.NewNormalizedNull()
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
