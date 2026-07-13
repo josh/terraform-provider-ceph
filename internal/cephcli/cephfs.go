@@ -107,12 +107,14 @@ func (c *CLI) CephFSSubvolumeDelete(ctx context.Context, volName string, subvolN
 }
 
 type CephFSSubvolumeInfoEntry struct {
-	Path       string `json:"path"`
-	BytesQuota any    `json:"bytes_quota"`
-	Mode       int    `json:"mode"`
-	UID        int    `json:"uid"`
-	GID        int    `json:"gid"`
-	DataPool   string `json:"data_pool"`
+	Path          string `json:"path"`
+	BytesQuota    any    `json:"bytes_quota"`
+	Mode          int    `json:"mode"`
+	UID           int    `json:"uid"`
+	GID           int    `json:"gid"`
+	DataPool      string `json:"data_pool"`
+	PoolNamespace string `json:"pool_namespace"`
+	Earmark       string `json:"earmark"`
 }
 
 func (e *CephFSSubvolumeInfoEntry) BytesQuotaInt64() (int64, bool) {

@@ -15,6 +15,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -38,18 +39,21 @@ type CephFSSubvolumeResource struct {
 }
 
 type CephFSSubvolumeResourceModel struct {
-	Name       types.String   `tfsdk:"name"`
-	VolName    types.String   `tfsdk:"vol_name"`
-	GroupName  types.String   `tfsdk:"group_name"`
-	Size       types.Int64    `tfsdk:"size"`
-	Mode       types.String   `tfsdk:"mode"`
-	UID        types.Int64    `tfsdk:"uid"`
-	GID        types.Int64    `tfsdk:"gid"`
-	PoolLayout types.String   `tfsdk:"pool_layout"`
-	Path       types.String   `tfsdk:"path"`
-	DataPool   types.String   `tfsdk:"data_pool"`
-	State      types.String   `tfsdk:"state"`
-	Timeouts   timeouts.Value `tfsdk:"timeouts"`
+	Name              types.String   `tfsdk:"name"`
+	VolName           types.String   `tfsdk:"vol_name"`
+	GroupName         types.String   `tfsdk:"group_name"`
+	Size              types.Int64    `tfsdk:"size"`
+	Mode              types.String   `tfsdk:"mode"`
+	UID               types.Int64    `tfsdk:"uid"`
+	GID               types.Int64    `tfsdk:"gid"`
+	PoolLayout        types.String   `tfsdk:"pool_layout"`
+	NamespaceIsolated types.Bool     `tfsdk:"namespace_isolated"`
+	Earmark           types.String   `tfsdk:"earmark"`
+	Path              types.String   `tfsdk:"path"`
+	DataPool          types.String   `tfsdk:"data_pool"`
+	PoolNamespace     types.String   `tfsdk:"pool_namespace"`
+	State             types.String   `tfsdk:"state"`
+	Timeouts          timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (r *CephFSSubvolumeResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -136,8 +140,40 @@ func (r *CephFSSubvolumeResource) Schema(ctx context.Context, req resource.Schem
 					stringvalidator.LengthAtLeast(1),
 				},
 			},
+			"namespace_isolated": resourceSchema.BoolAttribute{
+				MarkdownDescription: "Whether the subvolume stores its data in a dedicated RADOS namespace, reported by `pool_namespace`. Changing requires destroying and recreating the subvolume.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+					boolplanmodifier.UseStateForUnknown(),
+				},
+			},
+			// The dashboard only accepts earmark at creation time; the
+			// `ceph fs subvolume earmark set` CLI can still change it out
+			// of band.
+			"earmark": resourceSchema.StringAttribute{
+				MarkdownDescription: "The earmark tagging the subvolume for a consumer, scoped under `nfs` or `smb` (e.g. `smb` or `smb.cluster.mycluster`). Changing requires destroying and recreating the subvolume.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^(nfs|smb)(\..+)?$`),
+						"must be nfs or smb, optionally followed by dot-separated subparts",
+					),
+				},
+			},
 			"path": resourceSchema.StringAttribute{
 				MarkdownDescription: "The path of the subvolume within the filesystem.",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"pool_namespace": resourceSchema.StringAttribute{
+				MarkdownDescription: "The RADOS namespace holding the subvolume data when the subvolume is namespace isolated.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -185,6 +221,15 @@ func (r *CephFSSubvolumeResource) updateModelFromAPI(data *CephFSSubvolumeResour
 	data.Path = types.StringValue(info.Path)
 	data.DataPool = types.StringValue(info.DataPool)
 	data.State = types.StringValue(info.State)
+	data.NamespaceIsolated = types.BoolValue(info.PoolNamespace != "")
+	if info.PoolNamespace != "" {
+		data.PoolNamespace = types.StringValue(info.PoolNamespace)
+	} else {
+		data.PoolNamespace = types.StringNull()
+	}
+	if !data.Earmark.IsNull() || info.Earmark != "" {
+		data.Earmark = types.StringValue(info.Earmark)
+	}
 	// Info returns the full st_mode; only the permission bits are the
 	// configured mode.
 	data.Mode = types.StringValue(strconv.FormatInt(int64(info.Mode)&0o7777, 8))
@@ -235,6 +280,12 @@ func (r *CephFSSubvolumeResource) Create(ctx context.Context, req resource.Creat
 	}
 	if !data.PoolLayout.IsNull() && !data.PoolLayout.IsUnknown() {
 		createReq.PoolLayout = data.PoolLayout.ValueString()
+	}
+	if !data.NamespaceIsolated.IsNull() && !data.NamespaceIsolated.IsUnknown() && data.NamespaceIsolated.ValueBool() {
+		createReq.NamespaceIsolated = data.NamespaceIsolated.ValueBoolPointer()
+	}
+	if !data.Earmark.IsNull() && !data.Earmark.IsUnknown() {
+		createReq.Earmark = data.Earmark.ValueString()
 	}
 
 	tflog.Debug(ctx, "Creating CephFS subvolume", map[string]interface{}{

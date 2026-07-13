@@ -765,3 +765,131 @@ func checkCephFSSubvolumeDataPool(t *testing.T, fsName, subvolName, want string)
 		return nil
 	}
 }
+
+func TestAccCephFSSubvolumeResource_NamespaceIsolationEarmark(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	fsName := testSharedCephFSName
+	isolatedName := acctest.RandomWithPrefix("test-subvol-isolated")
+	plainName := acctest.RandomWithPrefix("test-subvol-plain")
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_cephfs_subvolume" "isolated" {
+		  name               = %q
+		  vol_name           = %q
+		  namespace_isolated = true
+		  earmark            = "smb.cluster.testcluster"
+
+		  timeouts = {
+		    create = "5m"
+		    delete = "5m"
+		  }
+		}
+
+		resource "ceph_cephfs_subvolume" "plain" {
+		  name     = %q
+		  vol_name = %q
+
+		  timeouts = {
+		    create = "5m"
+		    delete = "5m"
+		  }
+		}
+	`, isolatedName, fsName, plainName, fsName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephFSSubvolumeDestroy(t, fsName),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_cephfs_subvolume.isolated",
+						tfjsonpath.New("namespace_isolated"),
+						knownvalue.Bool(true),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_cephfs_subvolume.isolated",
+						tfjsonpath.New("pool_namespace"),
+						knownvalue.NotNull(),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_cephfs_subvolume.isolated",
+						tfjsonpath.New("earmark"),
+						knownvalue.StringExact("smb.cluster.testcluster"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_cephfs_subvolume.plain",
+						tfjsonpath.New("namespace_isolated"),
+						knownvalue.Bool(false),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_cephfs_subvolume.plain",
+						tfjsonpath.New("pool_namespace"),
+						knownvalue.Null(),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_cephfs_subvolume.plain",
+						tfjsonpath.New("earmark"),
+						knownvalue.Null(),
+					),
+				},
+				Check: checkCephFSSubvolumeIsolation(t, fsName, isolatedName, "smb.cluster.testcluster"),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+func TestAccCephFSSubvolumeResource_InvalidEarmark(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_cephfs_subvolume" "test" {
+					  name     = "invalid-earmark-test"
+					  vol_name = %q
+					  earmark  = "backup"
+					}
+				`, testSharedCephFSName),
+				ExpectError: regexp.MustCompile(`must be nfs or smb`),
+			},
+		},
+	})
+}
+
+func checkCephFSSubvolumeIsolation(t *testing.T, fsName, subvolName, wantEarmark string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		info, err := cephTestClusterCLI.CephFSSubvolumeInfo(t.Context(), fsName, subvolName, "")
+		if err != nil {
+			return fmt.Errorf("failed to get subvolume info: %w", err)
+		}
+		if info.PoolNamespace == "" {
+			return fmt.Errorf("expected a dedicated pool namespace, got empty")
+		}
+		if info.Earmark != wantEarmark {
+			return fmt.Errorf("earmark: expected %q, got %q", wantEarmark, info.Earmark)
+		}
+		return nil
+	}
+}

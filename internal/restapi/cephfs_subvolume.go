@@ -48,7 +48,10 @@ type SubvolumeCreateRequest struct {
 	UID  *int64 `json:"uid,omitempty"`
 	GID  *int64 `json:"gid,omitempty"`
 	// Must name an existing data pool of the filesystem.
-	PoolLayout string `json:"pool_layout,omitempty"`
+	PoolLayout        string `json:"pool_layout,omitempty"`
+	NamespaceIsolated *bool  `json:"namespace_isolated,omitempty"`
+	// Must start with the nfs or smb top-level scope.
+	Earmark string `json:"earmark,omitempty"`
 }
 
 type SubvolumeUpdateRequest struct {

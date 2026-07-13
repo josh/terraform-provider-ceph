@@ -21,12 +21,14 @@ type CephFSSubvolumeDataSource struct {
 }
 
 type CephFSSubvolumeDataSourceModel struct {
-	Name     types.String `tfsdk:"name"`
-	VolName  types.String `tfsdk:"vol_name"`
-	Size     types.Int64  `tfsdk:"size"`
-	Path     types.String `tfsdk:"path"`
-	DataPool types.String `tfsdk:"data_pool"`
-	State    types.String `tfsdk:"state"`
+	Name          types.String `tfsdk:"name"`
+	VolName       types.String `tfsdk:"vol_name"`
+	Size          types.Int64  `tfsdk:"size"`
+	Path          types.String `tfsdk:"path"`
+	DataPool      types.String `tfsdk:"data_pool"`
+	PoolNamespace types.String `tfsdk:"pool_namespace"`
+	Earmark       types.String `tfsdk:"earmark"`
+	State         types.String `tfsdk:"state"`
 }
 
 func (d *CephFSSubvolumeDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -55,6 +57,14 @@ func (d *CephFSSubvolumeDataSource) Schema(ctx context.Context, req datasource.S
 			},
 			"data_pool": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The data pool used by the subvolume.",
+				Computed:            true,
+			},
+			"pool_namespace": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The RADOS namespace holding the subvolume data when the subvolume is namespace isolated.",
+				Computed:            true,
+			},
+			"earmark": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The earmark tagging the subvolume for a consumer.",
 				Computed:            true,
 			},
 			"state": dataSourceSchema.StringAttribute{
@@ -104,6 +114,17 @@ func (d *CephFSSubvolumeDataSource) Read(ctx context.Context, req datasource.Rea
 	data.Path = types.StringValue(info.Path)
 	data.DataPool = types.StringValue(info.DataPool)
 	data.State = types.StringValue(info.State)
+
+	if info.PoolNamespace != "" {
+		data.PoolNamespace = types.StringValue(info.PoolNamespace)
+	} else {
+		data.PoolNamespace = types.StringNull()
+	}
+	if info.Earmark != "" {
+		data.Earmark = types.StringValue(info.Earmark)
+	} else {
+		data.Earmark = types.StringNull()
+	}
 
 	if quota, ok := info.BytesQuotaInt64(); ok && quota > 0 {
 		data.Size = types.Int64Value(quota)
