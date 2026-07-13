@@ -50,53 +50,6 @@ func (c *Client) cephFSQuotaPathMissing(ctx context.Context, fsID int, fsPath st
 	return true
 }
 
-type cephFSDirEntry struct {
-	Path string `json:"path"`
-}
-
-func (c *Client) cephFSListDir(ctx context.Context, fsID int, dirPath string) ([]cephFSDirEntry, error) {
-	endpoint := c.endpoint.JoinPath("/api/cephfs", strconv.Itoa(fsID), "ls_dir")
-	query := url.Values{}
-	query.Add("path", dirPath)
-	query.Add("depth", "1")
-	endpoint.RawQuery = query.Encode()
-
-	httpReq, err := http.NewRequestWithContext(ctx, "GET", endpoint.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
-
-	logRequest := logAPIRequest(ctx, httpReq)
-	httpResp, err := c.client.Do(httpReq)
-	logRequest(httpResp, err)
-	if err != nil {
-		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
-	}
-	defer httpResp.Body.Close() //nolint:errcheck
-
-	if httpResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(httpResp.Body)
-		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
-	}
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read response body: %w", err)
-	}
-
-	var entries []cephFSDirEntry
-	err = json.Unmarshal(body, &entries)
-	if err != nil {
-		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
-	}
-
-	return entries, nil
-}
-
 func (c *Client) GetCephFSQuota(ctx context.Context, fsID int, fsPath string) (*CephFSQuota, error) {
 	endpoint := c.endpoint.JoinPath("/api/cephfs", strconv.Itoa(fsID), "quota")
 	query := url.Values{}
