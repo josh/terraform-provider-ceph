@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 )
 
 type RBDMirrorPoolStatus struct {
-	Mode     string `json:"mode"`
-	SiteName string `json:"site_name,omitempty"`
+	Mode     string          `json:"mode"`
+	SiteName string          `json:"site_name,omitempty"`
+	Peers    []RBDMirrorPeer `json:"peers"`
 }
 
 func (c *CLI) RBDMirrorPoolInfo(ctx context.Context, pool string) (*RBDMirrorPoolStatus, error) {
@@ -65,6 +67,35 @@ func (c *CLI) RBDMirrorPoolDisable(ctx context.Context, pool string) error {
 	}
 	if current != "disabled" {
 		return fmt.Errorf("rbd mirroring mode on pool %s is %q after disabling", pool, current)
+	}
+	return nil
+}
+
+type RBDMirrorPeer struct {
+	UUID       string `json:"uuid"`
+	Direction  string `json:"direction"`
+	SiteName   string `json:"site_name"`
+	MirrorUUID string `json:"mirror_uuid"`
+	ClientName string `json:"client_name"`
+}
+
+func (c *CLI) RBDMirrorPoolPeerAdd(ctx context.Context, pool, clientName, clusterName string) (string, error) {
+	cmd := exec.CommandContext(ctx, "rbd", "--conf", c.confPath, "mirror", "pool", "peer", "add", pool, clientName+"@"+clusterName)
+	output, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return "", fmt.Errorf("failed to add rbd mirror peer on pool %s: %w, stderr: %s", pool, err, string(exitErr.Stderr))
+		}
+		return "", fmt.Errorf("failed to add rbd mirror peer on pool %s: %w", pool, err)
+	}
+	return strings.TrimSpace(string(output)), nil
+}
+
+func (c *CLI) RBDMirrorPoolPeerRemove(ctx context.Context, pool, uuid string) error {
+	cmd := exec.CommandContext(ctx, "rbd", "--conf", c.confPath, "mirror", "pool", "peer", "remove", pool, uuid)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to remove rbd mirror peer %s on pool %s: %w, output: %s", uuid, pool, err, string(output))
 	}
 	return nil
 }
