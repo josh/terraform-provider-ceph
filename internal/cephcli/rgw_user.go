@@ -25,6 +25,12 @@ type RgwUserInfo struct {
 	Admin       bool         `json:"admin"`
 	UserQuota   RgwQuotaInfo `json:"user_quota"`
 	BucketQuota RgwQuotaInfo `json:"bucket_quota"`
+	Caps        []RgwUserCap `json:"caps"`
+}
+
+type RgwUserCap struct {
+	Type string `json:"type"`
+	Perm string `json:"perm"`
 }
 
 type RgwQuotaInfo struct {
@@ -334,6 +340,24 @@ func (c *CLI) RgwQuotaSet(ctx context.Context, uid, scope string, maxSizeBytes, 
 	output, err = cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to enable rgw quota for %s: %w, output: %s", uid, err, string(output))
+	}
+	return nil
+}
+
+func (c *CLI) RgwCapsAdd(ctx context.Context, uid, caps string) error {
+	cmd := exec.CommandContext(ctx, "radosgw-admin", "--conf", c.confPath, "caps", "add", "--uid="+uid, "--caps="+caps)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to add rgw caps for %s: %w, output: %s", uid, err, string(output))
+	}
+	return nil
+}
+
+func (c *CLI) RgwCapsRm(ctx context.Context, uid, caps string) error {
+	cmd := exec.CommandContext(ctx, "radosgw-admin", "--conf", c.confPath, "caps", "rm", "--uid="+uid, "--caps="+caps)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to remove rgw caps for %s: %w, output: %s", uid, err, string(output))
 	}
 	return nil
 }
