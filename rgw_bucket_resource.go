@@ -7,11 +7,15 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
+	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -21,8 +25,9 @@ import (
 )
 
 var (
-	_ resource.Resource                = &RGWBucketResource{}
-	_ resource.ResourceWithImportState = &RGWBucketResource{}
+	_ resource.Resource                   = &RGWBucketResource{}
+	_ resource.ResourceWithImportState    = &RGWBucketResource{}
+	_ resource.ResourceWithValidateConfig = &RGWBucketResource{}
 )
 
 func newRGWBucketResource() resource.Resource {
@@ -34,17 +39,21 @@ type RGWBucketResource struct {
 }
 
 type RGWBucketResourceModel struct {
-	Bucket          types.String         `tfsdk:"bucket"`
-	Owner           types.String         `tfsdk:"owner"`
-	VersioningState types.String         `tfsdk:"versioning_state"`
-	Tags            types.Map            `tfsdk:"tags"`
-	BucketPolicy    jsontypes.Normalized `tfsdk:"bucket_policy"`
-	Zonegroup       types.String         `tfsdk:"zonegroup"`
-	PlacementRule   types.String         `tfsdk:"placement_rule"`
-	ID              types.String         `tfsdk:"id"`
-	CreationTime    types.String         `tfsdk:"creation_time"`
-	ACL             types.String         `tfsdk:"acl"`
-	Bid             types.String         `tfsdk:"bid"`
+	Bucket                   types.String         `tfsdk:"bucket"`
+	Owner                    types.String         `tfsdk:"owner"`
+	VersioningState          types.String         `tfsdk:"versioning_state"`
+	Tags                     types.Map            `tfsdk:"tags"`
+	BucketPolicy             jsontypes.Normalized `tfsdk:"bucket_policy"`
+	LockEnabled              types.Bool           `tfsdk:"lock_enabled"`
+	LockMode                 types.String         `tfsdk:"lock_mode"`
+	LockRetentionPeriodDays  types.Int64          `tfsdk:"lock_retention_period_days"`
+	LockRetentionPeriodYears types.Int64          `tfsdk:"lock_retention_period_years"`
+	Zonegroup                types.String         `tfsdk:"zonegroup"`
+	PlacementRule            types.String         `tfsdk:"placement_rule"`
+	ID                       types.String         `tfsdk:"id"`
+	CreationTime             types.String         `tfsdk:"creation_time"`
+	ACL                      types.String         `tfsdk:"acl"`
+	Bid                      types.String         `tfsdk:"bid"`
 }
 
 func (r *RGWBucketResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -93,6 +102,48 @@ func (r *RGWBucketResource) Schema(ctx context.Context, req resource.SchemaReque
 				CustomType:          jsontypes.NormalizedType{},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"lock_enabled": resourceSchema.BoolAttribute{
+				MarkdownDescription: "Whether S3 object lock is enabled on the bucket. Enabling it also enables versioning, which can then never be suspended. Object lock can only be set at creation time, so changing requires destroying and recreating the bucket. Defaults to false.",
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(false),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplace(),
+				},
+			},
+			"lock_mode": resourceSchema.StringAttribute{
+				MarkdownDescription: "The default object lock retention mode: `COMPLIANCE` or `GOVERNANCE`. Requires `lock_enabled = true`.",
+				Optional:            true,
+				Computed:            true,
+				Validators: []validator.String{
+					stringvalidator.OneOf("COMPLIANCE", "GOVERNANCE"),
+				},
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"lock_retention_period_days": resourceSchema.Int64Attribute{
+				MarkdownDescription: "The default object lock retention period in days. Exactly one of `lock_retention_period_days` and `lock_retention_period_years` must be set. Requires `lock_enabled = true`.",
+				Optional:            true,
+				Computed:            true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+				},
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"lock_retention_period_years": resourceSchema.Int64Attribute{
+				MarkdownDescription: "The default object lock retention period in years. Exactly one of `lock_retention_period_days` and `lock_retention_period_years` must be set. Requires `lock_enabled = true`.",
+				Optional:            true,
+				Computed:            true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+				},
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
 				},
 			},
 			"zonegroup": resourceSchema.StringAttribute{
@@ -164,6 +215,19 @@ func (r *RGWBucketResource) Create(ctx context.Context, req resource.CreateReque
 	}
 	if !data.BucketPolicy.IsNull() && !data.BucketPolicy.IsUnknown() {
 		createReq.BucketPolicy = data.BucketPolicy.ValueStringPointer()
+	}
+	if data.LockEnabled.ValueBool() {
+		lockEnabled := true
+		createReq.LockEnabled = &lockEnabled
+		if !data.LockMode.IsNull() && !data.LockMode.IsUnknown() {
+			createReq.LockMode = data.LockMode.ValueStringPointer()
+		}
+		if !data.LockRetentionPeriodDays.IsNull() && !data.LockRetentionPeriodDays.IsUnknown() {
+			createReq.LockRetentionPeriodDays = data.LockRetentionPeriodDays.ValueInt64Pointer()
+		}
+		if !data.LockRetentionPeriodYears.IsNull() && !data.LockRetentionPeriodYears.IsUnknown() {
+			createReq.LockRetentionPeriodYears = data.LockRetentionPeriodYears.ValueInt64Pointer()
+		}
 	}
 
 	_, err := r.client.RGWCreateBucket(ctx, createReq)
@@ -295,6 +359,18 @@ func (r *RGWBucketResource) Update(ctx context.Context, req resource.UpdateReque
 	if lifecycle := string(current.Lifecycle); lifecycle != "" && lifecycle != "null" && lifecycle != "{}" {
 		updateReq.Lifecycle = &lifecycle
 	}
+	// The server only applies lock settings on lock-enabled buckets.
+	if current.LockEnabled {
+		if !data.LockMode.IsNull() && !data.LockMode.IsUnknown() {
+			updateReq.LockMode = data.LockMode.ValueStringPointer()
+		}
+		if !data.LockRetentionPeriodDays.IsNull() && !data.LockRetentionPeriodDays.IsUnknown() {
+			updateReq.LockRetentionPeriodDays = data.LockRetentionPeriodDays.ValueInt64Pointer()
+		}
+		if !data.LockRetentionPeriodYears.IsNull() && !data.LockRetentionPeriodYears.IsUnknown() {
+			updateReq.LockRetentionPeriodYears = data.LockRetentionPeriodYears.ValueInt64Pointer()
+		}
+	}
 
 	err = r.client.RGWUpdateBucket(ctx, bucketName, updateReq)
 	if err != nil {
@@ -349,6 +425,70 @@ func (r *RGWBucketResource) ImportState(ctx context.Context, req resource.Import
 	resource.ImportStatePassthroughID(ctx, path.Root("bucket"), req, resp)
 }
 
+// The dashboard creates the bucket before validating the lock
+// parameters, so a rejected combination would orphan a half-created
+// locked bucket outside of state. Catching them at plan time avoids
+// ever sending one.
+func (r *RGWBucketResource) ValidateConfig(ctx context.Context, req resource.ValidateConfigRequest, resp *resource.ValidateConfigResponse) {
+	var data RGWBucketResourceModel
+
+	resp.Diagnostics.Append(req.Config.Get(ctx, &data)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
+	if data.LockEnabled.IsUnknown() {
+		return
+	}
+
+	daysSet := !data.LockRetentionPeriodDays.IsNull() && !data.LockRetentionPeriodDays.IsUnknown()
+	yearsSet := !data.LockRetentionPeriodYears.IsNull() && !data.LockRetentionPeriodYears.IsUnknown()
+	modeSet := !data.LockMode.IsNull() && !data.LockMode.IsUnknown()
+
+	if !data.LockEnabled.ValueBool() {
+		for _, attr := range []struct {
+			name  string
+			isSet bool
+		}{
+			{"lock_mode", modeSet},
+			{"lock_retention_period_days", daysSet},
+			{"lock_retention_period_years", yearsSet},
+		} {
+			if attr.isSet {
+				resp.Diagnostics.AddAttributeError(
+					path.Root(attr.name),
+					"Invalid Attribute Combination",
+					fmt.Sprintf("%s requires lock_enabled to be true.", attr.name),
+				)
+			}
+		}
+		return
+	}
+
+	if !modeSet && !data.LockMode.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("lock_mode"),
+			"Missing Attribute Configuration",
+			"lock_mode must be set when lock_enabled is true.",
+		)
+	}
+
+	if daysSet && yearsSet {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("lock_retention_period_days"),
+			"Invalid Attribute Combination",
+			"Exactly one of lock_retention_period_days and lock_retention_period_years must be set, not both.",
+		)
+	}
+	if !daysSet && !yearsSet && !data.LockRetentionPeriodDays.IsUnknown() && !data.LockRetentionPeriodYears.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("lock_retention_period_days"),
+			"Missing Attribute Configuration",
+			"Exactly one of lock_retention_period_days and lock_retention_period_years must be set when lock_enabled is true.",
+		)
+	}
+}
+
 func updateModelFromAPIBucket(ctx context.Context, data *RGWBucketResourceModel, bucket *restapi.RGWBucket) diag.Diagnostics {
 	var diags diag.Diagnostics
 
@@ -376,7 +516,27 @@ func updateModelFromAPIBucket(ctx context.Context, data *RGWBucketResourceModel,
 		data.BucketPolicy = jsontypes.NewNormalizedNull()
 	}
 
+	data.LockEnabled = types.BoolValue(bucket.LockEnabled)
+	if bucket.LockEnabled {
+		data.LockMode = types.StringValue(bucket.LockMode)
+		data.LockRetentionPeriodDays = types.Int64Value(int64FromPointer(bucket.LockRetentionPeriodDays))
+		data.LockRetentionPeriodYears = types.Int64Value(int64FromPointer(bucket.LockRetentionPeriodYears))
+	} else {
+		// Never-locked buckets report placeholder lock values, so
+		// keep the attributes null instead of tracking them.
+		data.LockMode = types.StringNull()
+		data.LockRetentionPeriodDays = types.Int64Null()
+		data.LockRetentionPeriodYears = types.Int64Null()
+	}
+
 	return diags
+}
+
+func int64FromPointer(value *int64) int64 {
+	if value == nil {
+		return 0
+	}
+	return *value
 }
 
 // tagsXMLFromModel renders a planned tags map into the S3 tagging XML

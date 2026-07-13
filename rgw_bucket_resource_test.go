@@ -474,6 +474,174 @@ func TestAccCephRGWBucketResource_Versioning(t *testing.T) {
 	})
 }
 
+func TestAccCephRGWBucketResource_ObjectLock(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-bucket-lock-owner")
+	lockedBucket := acctest.RandomWithPrefix("test-bucket-locked")
+	unlockedBucket := acctest.RandomWithPrefix("test-bucket-unlocked")
+
+	userConfig := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_rgw_user" "test" {
+		  user_id      = %q
+		  display_name = "Object Lock Test User"
+		}
+
+		resource "ceph_rgw_s3_key" "test" {
+		  user_id = ceph_rgw_user.test.user_id
+		}
+	`, testUID)
+
+	config := func(days int64) string {
+		return userConfig + fmt.Sprintf(`
+			resource "ceph_rgw_bucket" "locked" {
+			  bucket                     = %q
+			  owner                      = ceph_rgw_user.test.user_id
+			  lock_enabled               = true
+			  lock_mode                  = "GOVERNANCE"
+			  lock_retention_period_days = %d
+			  depends_on                 = [ceph_rgw_s3_key.test]
+			}
+
+			resource "ceph_rgw_bucket" "unlocked" {
+			  bucket     = %q
+			  owner      = ceph_rgw_user.test.user_id
+			  depends_on = [ceph_rgw_s3_key.test]
+			}
+		`, lockedBucket, days, unlockedBucket)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWBucketDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(1),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_bucket.locked",
+						tfjsonpath.New("lock_enabled"),
+						knownvalue.Bool(true),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_bucket.locked",
+						tfjsonpath.New("lock_mode"),
+						knownvalue.StringExact("GOVERNANCE"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_bucket.locked",
+						tfjsonpath.New("lock_retention_period_days"),
+						knownvalue.Int64Exact(1),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_bucket.locked",
+						tfjsonpath.New("lock_retention_period_years"),
+						knownvalue.Int64Exact(0),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_bucket.locked",
+						tfjsonpath.New("versioning_state"),
+						knownvalue.StringExact("Enabled"),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_bucket.unlocked",
+						tfjsonpath.New("lock_enabled"),
+						knownvalue.Bool(false),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_bucket.unlocked",
+						tfjsonpath.New("lock_mode"),
+						knownvalue.Null(),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_bucket.unlocked",
+						tfjsonpath.New("lock_retention_period_days"),
+						knownvalue.Null(),
+					),
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(2),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_rgw_bucket.locked", plancheck.ResourceActionUpdate),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_bucket.locked",
+						tfjsonpath.New("lock_retention_period_days"),
+						knownvalue.Int64Exact(2),
+					),
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(2),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: userConfig + fmt.Sprintf(`
+					resource "ceph_rgw_bucket" "both_periods" {
+					  bucket                      = "%s-both"
+					  owner                       = ceph_rgw_user.test.user_id
+					  lock_enabled                = true
+					  lock_mode                   = "GOVERNANCE"
+					  lock_retention_period_days  = 1
+					  lock_retention_period_years = 1
+					  depends_on                  = [ceph_rgw_s3_key.test]
+					}
+				`, lockedBucket),
+				ExpectError: regexp.MustCompile(`must be set, not both`),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: userConfig + fmt.Sprintf(`
+					resource "ceph_rgw_bucket" "no_period" {
+					  bucket       = "%s-none"
+					  owner        = ceph_rgw_user.test.user_id
+					  lock_enabled = true
+					  lock_mode    = "GOVERNANCE"
+					  depends_on   = [ceph_rgw_s3_key.test]
+					}
+				`, lockedBucket),
+				ExpectError: regexp.MustCompile(`must be set when lock_enabled is true`),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: userConfig + fmt.Sprintf(`
+					resource "ceph_rgw_bucket" "mode_only" {
+					  bucket     = "%s-mode"
+					  owner      = ceph_rgw_user.test.user_id
+					  lock_mode  = "GOVERNANCE"
+					  depends_on = [ceph_rgw_s3_key.test]
+					}
+				`, lockedBucket),
+				ExpectError: regexp.MustCompile(`requires lock_enabled`),
+			},
+			{
+				// The destroy after the last step reuses its config, so
+				// it must be a valid one.
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(2),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
 func TestAccCephRGWBucketResource_Tags(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
