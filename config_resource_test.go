@@ -1253,3 +1253,46 @@ func TestAccCephConfigResource_maskSectionRejected(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephConfigResource_RGWStartupOption(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	config := testAccProviderConfigBlock + `
+		resource "ceph_config" "test" {
+		  section = "global"
+		  config = {
+		    rgw_numa_node = "0"
+		  }
+		}
+	`
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				Check: func(s *terraform.State) error {
+					value, err := cephTestClusterCLI.ConfigGetFromDump(t.Context(), "global", "rgw_numa_node")
+					if err != nil {
+						return fmt.Errorf("failed to get config: %w", err)
+					}
+					if value != "0" {
+						return fmt.Errorf("expected rgw_numa_node 0, got %q", value)
+					}
+					return nil
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
