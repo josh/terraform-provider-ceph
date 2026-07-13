@@ -32,6 +32,8 @@ type ErasureCodeProfileDataSourceModel struct {
 	Technique                 types.String `tfsdk:"technique"`
 	CrushRoot                 types.String `tfsdk:"crush_root"`
 	CrushDeviceClass          types.String `tfsdk:"crush_device_class"`
+	Packetsize                types.Int64  `tfsdk:"packetsize"`
+	W                         types.Int64  `tfsdk:"w"`
 	Directory                 types.String `tfsdk:"directory"`
 }
 
@@ -81,6 +83,14 @@ func (d *ErasureCodeProfileDataSource) Schema(ctx context.Context, req datasourc
 			},
 			"crush_device_class": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The device class for placement",
+				Computed:            true,
+			},
+			"packetsize": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "The number of bytes encoded at a time by the jerasure and isa plugins",
+				Computed:            true,
+			},
+			"w": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "The word size in bits used by the Galois Field arithmetic of the jerasure plugin",
 				Computed:            true,
 			},
 			"directory": dataSourceSchema.StringAttribute{
@@ -166,6 +176,8 @@ func (d *ErasureCodeProfileDataSource) Read(ctx context.Context, req datasource.
 	} else {
 		data.CrushDeviceClass = types.StringNull()
 	}
+	data.Packetsize = int64FromProfileValue(profile.Packetsize)
+	data.W = int64FromProfileValue(profile.W)
 	data.Directory = types.StringValue(profile.Directory)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

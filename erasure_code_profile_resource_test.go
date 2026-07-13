@@ -702,3 +702,72 @@ func TestAccCephErasureCodeProfileResource_FailureDomainParams(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephErasureCodeProfileResource_Tuning(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	profileName := fmt.Sprintf("test-profile-%s", acctest.RandStringFromCharSet(10, acctest.CharSetAlphaNum))
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_erasure_code_profile" "test" {
+		  name                 = %q
+		  k                    = 2
+		  m                    = 1
+		  plugin               = "jerasure"
+		  crush_failure_domain = "osd"
+		  packetsize           = 3072
+		  w                    = 8
+		}
+	`, profileName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephErasureCodeProfileDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_erasure_code_profile.test",
+						tfjsonpath.New("packetsize"),
+						knownvalue.Int64Exact(3072),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_erasure_code_profile.test",
+						tfjsonpath.New("w"),
+						knownvalue.Int64Exact(8),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephErasureCodeProfileExists(t, profileName),
+					checkCephErasureCodeProfileParam(t, profileName, "packetsize", "3072"),
+					checkCephErasureCodeProfileParam(t, profileName, "w", "8"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+func checkCephErasureCodeProfileParam(t *testing.T, profileName, key, want string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		params, err := cephTestClusterCLI.ErasureCodeProfileGet(t.Context(), profileName)
+		if err != nil {
+			return fmt.Errorf("failed to get erasure code profile: %w", err)
+		}
+		if params[key] != want {
+			return fmt.Errorf("profile %s: expected %q, got %q", key, want, params[key])
+		}
+		return nil
+	}
+}

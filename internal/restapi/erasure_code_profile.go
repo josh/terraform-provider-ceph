@@ -25,6 +25,9 @@ type ErasureCodeProfile struct {
 	CrushRoot                 string `json:"crush-root,omitempty"`
 	CrushDeviceClass          string `json:"crush-device-class,omitempty"`
 	Directory                 string `json:"directory,omitempty"`
+	// Stored as strings; the dashboard only int-converts k and m.
+	Packetsize string `json:"packetsize,omitempty"`
+	W          string `json:"w,omitempty"`
 }
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-erasure_code_profile>
@@ -41,6 +44,8 @@ type ErasureCodeProfileCreateRequest struct {
 	CrushRoot                 *string `json:"crush-root,omitempty"`
 	CrushDeviceClass          *string `json:"crush-device-class,omitempty"`
 	Directory                 *string `json:"directory,omitempty"`
+	Packetsize                *string `json:"packetsize,omitempty"`
+	W                         *string `json:"w,omitempty"`
 }
 
 func (c *Client) CreateErasureCodeProfile(ctx context.Context, req ErasureCodeProfileCreateRequest) error {
