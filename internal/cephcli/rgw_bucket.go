@@ -8,7 +8,9 @@ import (
 )
 
 type RgwBucketInfo struct {
-	Owner string `json:"owner"`
+	Owner  string            `json:"owner"`
+	ID     string            `json:"id"`
+	Tagset map[string]string `json:"tagset"`
 }
 
 func (c *CLI) RgwBucketInfo(ctx context.Context, bucket string) (*RgwBucketInfo, error) {
