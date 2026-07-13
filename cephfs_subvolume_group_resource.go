@@ -4,14 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -37,6 +41,10 @@ type CephFSSubvolumeGroupResourceModel struct {
 	Name     types.String   `tfsdk:"name"`
 	VolName  types.String   `tfsdk:"vol_name"`
 	Size     types.Int64    `tfsdk:"size"`
+	Mode     types.String   `tfsdk:"mode"`
+	UID      types.Int64    `tfsdk:"uid"`
+	GID      types.Int64    `tfsdk:"gid"`
+	Path     types.String   `tfsdk:"path"`
 	Timeouts timeouts.Value `tfsdk:"timeouts"`
 }
 
@@ -68,6 +76,46 @@ func (r *CephFSSubvolumeGroupResource) Schema(ctx context.Context, req resource.
 				Computed:            true,
 				Validators: []validator.Int64{
 					int64validator.AtLeast(1),
+				},
+			},
+			"mode": resourceSchema.StringAttribute{
+				MarkdownDescription: "The permissions of the group directory as an octal string without a leading zero, e.g. `755`. Defaults to `755`. Changing requires destroying and recreating the subvolume group.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+					stringplanmodifier.UseStateForUnknown(),
+				},
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^[1-7][0-7]{2,3}$`),
+						"must be an octal permission string without a leading zero, e.g. 755",
+					),
+				},
+			},
+			"uid": resourceSchema.Int64Attribute{
+				MarkdownDescription: "The owner uid of the group directory. Changing requires destroying and recreating the subvolume group.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"gid": resourceSchema.Int64Attribute{
+				MarkdownDescription: "The owner gid of the group directory. Changing requires destroying and recreating the subvolume group.",
+				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"path": resourceSchema.StringAttribute{
+				MarkdownDescription: "The path of the subvolume group within the filesystem.",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"timeouts": timeouts.Attributes(ctx, timeouts.Opts{
@@ -103,6 +151,12 @@ func (r *CephFSSubvolumeGroupResource) updateModelFromAPI(data *CephFSSubvolumeG
 	} else {
 		data.Size = types.Int64Null()
 	}
+	// Info returns the full st_mode; only the permission bits are the
+	// configured mode.
+	data.Mode = types.StringValue(strconv.FormatInt(int64(info.Mode)&0o7777, 8))
+	data.UID = types.Int64Value(int64(info.UID))
+	data.GID = types.Int64Value(int64(info.GID))
+	data.Path = types.StringValue(info.Path)
 }
 
 func (r *CephFSSubvolumeGroupResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -125,6 +179,16 @@ func (r *CephFSSubvolumeGroupResource) Create(ctx context.Context, req resource.
 	createReq := restapi.SubvolumeGroupCreateRequest{
 		VolName:   data.VolName.ValueString(),
 		GroupName: data.Name.ValueString(),
+	}
+
+	if !data.Mode.IsNull() && !data.Mode.IsUnknown() {
+		createReq.Mode = data.Mode.ValueString()
+	}
+	if !data.UID.IsNull() && !data.UID.IsUnknown() {
+		createReq.UID = data.UID.ValueInt64Pointer()
+	}
+	if !data.GID.IsNull() && !data.GID.IsUnknown() {
+		createReq.GID = data.GID.ValueInt64Pointer()
 	}
 
 	tflog.Debug(ctx, "Creating CephFS subvolume group", map[string]interface{}{

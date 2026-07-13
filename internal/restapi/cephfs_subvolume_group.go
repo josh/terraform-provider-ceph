@@ -17,6 +17,10 @@ import (
 type SubvolumeGroupCreateRequest struct {
 	VolName   string `json:"vol_name"`
 	GroupName string `json:"group_name"`
+	// The volumes module parses mode as an octal string.
+	Mode string `json:"mode,omitempty"`
+	UID  *int64 `json:"uid,omitempty"`
+	GID  *int64 `json:"gid,omitempty"`
 }
 
 type SubvolumeGroupUpdateRequest struct {

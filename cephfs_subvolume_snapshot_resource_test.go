@@ -202,7 +202,7 @@ func TestAccCephFSSubvolumeSnapshotResource_OutOfBandDeletion(t *testing.T) {
 			},
 			{
 				PreConfig: func() {
-					if err := cephTestClusterCLI.CephFSSubvolumeSnapshotDelete(t.Context(), fsName, subvolName, snapName); err != nil {
+					if err := cephTestClusterCLI.CephFSSubvolumeSnapshotDelete(t.Context(), fsName, subvolName, snapName, ""); err != nil {
 						t.Fatalf("Failed to delete snapshot out of band: %v", err)
 					}
 				},
@@ -221,27 +221,27 @@ func TestAccCephFSSubvolumeSnapshotResource_OutOfBandDeletion(t *testing.T) {
 
 func testAccCephFSSubvolumeSnapshotCLIFixture(t *testing.T, fsName, subvolName, snapName string) {
 	ctx := t.Context()
-	if err := cephTestClusterCLI.CephFSSubvolumeCreate(ctx, fsName, subvolName); err != nil {
+	if err := cephTestClusterCLI.CephFSSubvolumeCreate(ctx, fsName, subvolName, ""); err != nil {
 		t.Fatalf("Failed to create CephFS subvolume: %v", err)
 	}
 	t.Cleanup(func() {
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		defer cancel()
-		if err := cephTestClusterCLI.CephFSSubvolumeSnapshotDelete(cleanupCtx, fsName, subvolName, snapName); err != nil {
+		if err := cephTestClusterCLI.CephFSSubvolumeSnapshotDelete(cleanupCtx, fsName, subvolName, snapName, ""); err != nil {
 			t.Errorf("Failed to delete CephFS subvolume snapshot: %v", err)
 		}
-		if err := cephTestClusterCLI.CephFSSubvolumeDelete(cleanupCtx, fsName, subvolName); err != nil {
+		if err := cephTestClusterCLI.CephFSSubvolumeDelete(cleanupCtx, fsName, subvolName, ""); err != nil {
 			t.Errorf("Failed to delete CephFS subvolume: %v", err)
 		}
 	})
-	if err := cephTestClusterCLI.CephFSSubvolumeSnapshotCreate(ctx, fsName, subvolName, snapName); err != nil {
+	if err := cephTestClusterCLI.CephFSSubvolumeSnapshotCreate(ctx, fsName, subvolName, snapName, ""); err != nil {
 		t.Fatalf("Failed to create CephFS subvolume snapshot: %v", err)
 	}
 }
 
 func checkCephFSSubvolumeSnapshotExists(t *testing.T, fsName, subvolName, snapName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		exists, err := cephTestClusterCLI.CephFSSubvolumeSnapshotExists(t.Context(), fsName, subvolName, snapName)
+		exists, err := cephTestClusterCLI.CephFSSubvolumeSnapshotExists(t.Context(), fsName, subvolName, snapName, "")
 		if err != nil {
 			return fmt.Errorf("failed to check CephFS subvolume snapshot existence: %w", err)
 		}
@@ -256,7 +256,7 @@ func checkCephFSSubvolumeSnapshotExists(t *testing.T, fsName, subvolName, snapNa
 
 func checkCephFSSubvolumeSnapshotAbsent(t *testing.T, fsName, subvolName, snapName string) resource.TestCheckFunc {
 	return func(s *terraform.State) error {
-		exists, err := cephTestClusterCLI.CephFSSubvolumeSnapshotExists(t.Context(), fsName, subvolName, snapName)
+		exists, err := cephTestClusterCLI.CephFSSubvolumeSnapshotExists(t.Context(), fsName, subvolName, snapName, "")
 		if err != nil {
 			return fmt.Errorf("failed to check CephFS subvolume snapshot existence: %w", err)
 		}
@@ -273,7 +273,7 @@ func testAccCheckCephFSSubvolumeSnapshotDestroy(t *testing.T, fsName, subvolName
 	return func(s *terraform.State) error {
 		ctx := t.Context()
 
-		subvolExists, err := cephTestClusterCLI.CephFSSubvolumeExists(ctx, fsName, subvolName)
+		subvolExists, err := cephTestClusterCLI.CephFSSubvolumeExists(ctx, fsName, subvolName, "")
 		if err != nil {
 			return fmt.Errorf("failed to check CephFS subvolume existence: %w", err)
 		}
@@ -288,7 +288,7 @@ func testAccCheckCephFSSubvolumeSnapshotDestroy(t *testing.T, fsName, subvolName
 
 			snapName := rs.Primary.Attributes["name"]
 
-			exists, err := cephTestClusterCLI.CephFSSubvolumeSnapshotExists(ctx, fsName, subvolName, snapName)
+			exists, err := cephTestClusterCLI.CephFSSubvolumeSnapshotExists(ctx, fsName, subvolName, snapName, "")
 			if err != nil {
 				return fmt.Errorf("failed to check CephFS subvolume snapshot existence: %w", err)
 			}
@@ -300,4 +300,97 @@ func testAccCheckCephFSSubvolumeSnapshotDestroy(t *testing.T, fsName, subvolName
 
 		return nil
 	}
+}
+
+func TestAccCephFSSubvolumeSnapshotResource_InGroup(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	fsName := testSharedCephFSName
+	groupName := acctest.RandomWithPrefix("test-group")
+	subvolName := acctest.RandomWithPrefix("test-subvol")
+	snapName := acctest.RandomWithPrefix("test-snap")
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_cephfs_subvolume_snapshot" "test" {
+		  vol_name    = %q
+		  group_name  = %q
+		  subvol_name = %q
+		  name        = %q
+		}
+	`, fsName, groupName, subvolName, snapName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+
+			ctx := t.Context()
+			if err := cephTestClusterCLI.CephFSSubvolumeGroupCreate(ctx, fsName, groupName); err != nil {
+				t.Fatalf("Failed to create subvolume group: %v", err)
+			}
+			if err := cephTestClusterCLI.CephFSSubvolumeCreate(ctx, fsName, subvolName, groupName); err != nil {
+				t.Fatalf("Failed to create subvolume in group: %v", err)
+			}
+			t.Cleanup(func() {
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), time.Minute)
+				defer cancel()
+				if err := cephTestClusterCLI.CephFSSubvolumeDelete(cleanupCtx, fsName, subvolName, groupName); err != nil {
+					t.Errorf("Failed to delete subvolume: %v", err)
+				}
+				if err := cephTestClusterCLI.CephFSSubvolumeGroupDelete(cleanupCtx, fsName, groupName); err != nil {
+					t.Errorf("Failed to delete subvolume group: %v", err)
+				}
+			})
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				Check: func(s *terraform.State) error {
+					exists, err := cephTestClusterCLI.CephFSSubvolumeSnapshotExists(t.Context(), fsName, subvolName, snapName, groupName)
+					if err != nil {
+						return fmt.Errorf("failed to check snapshot existence: %w", err)
+					}
+					if !exists {
+						return fmt.Errorf("snapshot %q not found on %s/%s in group %s", snapName, fsName, subvolName, groupName)
+					}
+					return nil
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ResourceName:    "ceph_cephfs_subvolume_snapshot.test",
+				ImportState:     true,
+				ImportStateId:   fsName + "/" + groupName + "/" + subvolName + "/" + snapName,
+				ImportStateCheck: func(states []*terraform.InstanceState) error {
+					if len(states) != 1 {
+						return fmt.Errorf("expected 1 state, got %d", len(states))
+					}
+					attrs := states[0].Attributes
+					if attrs["group_name"] != groupName {
+						return fmt.Errorf("expected group_name %q, got %q", groupName, attrs["group_name"])
+					}
+					if attrs["subvol_name"] != subvolName {
+						return fmt.Errorf("expected subvol_name %q, got %q", subvolName, attrs["subvol_name"])
+					}
+					if attrs["name"] != snapName {
+						return fmt.Errorf("expected name %q, got %q", snapName, attrs["name"])
+					}
+					return nil
+				},
+			},
+		},
+	})
 }
