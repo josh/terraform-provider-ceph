@@ -34,6 +34,7 @@ type Pool struct {
 	CrushRule            string      `json:"crush_rule"`
 	ApplicationMetadata  []string    `json:"application_metadata"`
 	Flags                int         `json:"flags"`
+	FlagsNames           string      `json:"flags_names"`
 	ErasureCodeProfile   string      `json:"erasure_code_profile"`
 	PGAutoscaleMode      string      `json:"pg_autoscale_mode"`
 	QuotaMaxObjects      int         `json:"quota_max_objects"`

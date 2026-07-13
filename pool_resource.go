@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"math/bits"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-framework-timeouts/resource/timeouts"
@@ -13,6 +15,8 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
@@ -53,6 +57,7 @@ type PoolResourceModel struct {
 	CompressionRequiredRatio types.Float64  `tfsdk:"compression_required_ratio"`
 	CompressionMinBlobSize   types.Int64    `tfsdk:"compression_min_blob_size"`
 	CompressionMaxBlobSize   types.Int64    `tfsdk:"compression_max_blob_size"`
+	ECOverwrites             types.Bool     `tfsdk:"ec_overwrites"`
 	PoolID                   types.Int64    `tfsdk:"pool_id"`
 	ApplicationMetadata      types.Set      `tfsdk:"application_metadata"`
 	Timeouts                 timeouts.Value `tfsdk:"timeouts"`
@@ -166,6 +171,21 @@ func (r *PoolResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				Optional:            true,
 				Computed:            true,
 			},
+			"ec_overwrites": resourceSchema.BoolAttribute{
+				MarkdownDescription: "Whether overwrites are allowed on the erasure coded pool, required to run RBD or CephFS on it. Defaults to false. Ceph cannot unset the flag, so disabling requires destroying and recreating the pool.",
+				Optional:            true,
+				Computed:            true,
+				Default:             booldefault.StaticBool(false),
+				PlanModifiers: []planmodifier.Bool{
+					boolplanmodifier.RequiresReplaceIf(
+						func(ctx context.Context, req planmodifier.BoolRequest, resp *boolplanmodifier.RequiresReplaceIfFuncResponse) {
+							resp.RequiresReplace = req.StateValue.ValueBool() && !req.PlanValue.ValueBool()
+						},
+						"Disabling ec_overwrites requires replacing the pool.",
+						"Disabling ec_overwrites requires replacing the pool.",
+					),
+				},
+			},
 			"pool_id": resourceSchema.Int64Attribute{
 				MarkdownDescription: "The ID of the pool.",
 				Computed:            true,
@@ -209,6 +229,7 @@ func (r *PoolResource) updateModelFromAPI(ctx context.Context, data *PoolResourc
 	data.Name = types.StringValue(pool.PoolName)
 	data.PoolType = types.StringValue(pool.Type)
 	data.PoolID = types.Int64Value(int64(pool.PoolID))
+	data.ECOverwrites = types.BoolValue(slices.Contains(strings.Split(pool.FlagsNames, ","), "ec_overwrites"))
 
 	if pool.Size > 0 {
 		data.Size = types.Int64Value(int64(pool.Size))
@@ -341,6 +362,10 @@ func (r *PoolResource) Create(ctx context.Context, req resource.CreateRequest, r
 	createReq := restapi.PoolCreateRequest{
 		Pool:     data.Name.ValueString(),
 		PoolType: &poolType,
+	}
+
+	if data.ECOverwrites.ValueBool() {
+		createReq.Flags = []string{"ec_overwrites"}
 	}
 
 	if !data.PgNum.IsNull() && !data.PgNum.IsUnknown() {
@@ -658,6 +683,10 @@ func (r *PoolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	newPoolName := data.Name.ValueString()
 
 	updateReq := restapi.PoolUpdateRequest{}
+
+	if data.ECOverwrites.ValueBool() && !state.ECOverwrites.ValueBool() {
+		updateReq.Flags = []string{"ec_overwrites"}
+	}
 
 	// Only send pg counts that actually changed, so updates to unrelated
 	// attributes never reset a value the autoscaler has since adjusted.
