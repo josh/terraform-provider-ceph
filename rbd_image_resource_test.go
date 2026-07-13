@@ -573,3 +573,151 @@ func TestAccCephRBDImageResource_InNamespace(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephRBDImageResource_ConfigurationMetadata(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-rbd-pool")
+	imageName := acctest.RandomWithPrefix("test-image")
+
+	config := func(configuration, metadata string) string {
+		return testAccProviderConfigBlock + testAccRBDPoolConfig(poolName) + fmt.Sprintf(`
+			resource "ceph_rbd_image" "test" {
+			  pool_name     = ceph_pool.test.name
+			  name          = %q
+			  size          = 8388608
+			  configuration = %s
+			  metadata      = %s
+
+			  timeouts = {
+			    create = "5m"
+			    update = "5m"
+			    delete = "5m"
+			  }
+			}
+		`, imageName, configuration, metadata)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRBDImageDestroy(t, poolName),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`{ rbd_qos_bps_limit = "10485760" }`, `{ owner = "terraform" }`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rbd_image.test",
+						tfjsonpath.New("configuration"),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							"rbd_qos_bps_limit": knownvalue.StringExact("10485760"),
+						}),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_rbd_image.test",
+						tfjsonpath.New("metadata"),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							"owner": knownvalue.StringExact("terraform"),
+						}),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkRBDImageConfigOption(t, poolName, imageName, "rbd_qos_bps_limit", "10485760"),
+					checkRBDImageMeta(t, poolName, imageName, "owner", "terraform"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`{ rbd_qos_iops_limit = "500" }`, `{ owner = "terraform", env = "test" }`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_rbd_image.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkRBDImageConfigOption(t, poolName, imageName, "rbd_qos_iops_limit", "500"),
+					checkRBDImageConfigOptionAbsent(t, poolName, imageName, "rbd_qos_bps_limit"),
+					checkRBDImageMeta(t, poolName, imageName, "env", "test"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`{ rbd_qos_iops_limit = "500" }`, `{ owner = "terraform", env = "test" }`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			{
+				PreConfig: func() {
+					if err := cephTestClusterCLI.RBDConfigImageSet(t.Context(), poolName, "", imageName, "rbd_qos_iops_limit", "999"); err != nil {
+						t.Fatalf("Failed to set config out of band: %v", err)
+					}
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`{ rbd_qos_iops_limit = "500" }`, `{ owner = "terraform", env = "test" }`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_rbd_image.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: checkRBDImageConfigOption(t, poolName, imageName, "rbd_qos_iops_limit", "500"),
+			},
+		},
+	})
+}
+
+func checkRBDImageConfigOption(t *testing.T, poolName, imageName, key, want string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		options, err := cephTestClusterCLI.RBDConfigImageList(t.Context(), poolName, "", imageName)
+		if err != nil {
+			return fmt.Errorf("failed to list image config: %w", err)
+		}
+		for _, option := range options {
+			if option.Name == key {
+				if option.Source != "image" {
+					return fmt.Errorf("config %q: expected source image, got %q", key, option.Source)
+				}
+				if option.Value != want {
+					return fmt.Errorf("config %q: expected %q, got %q", key, want, option.Value)
+				}
+				return nil
+			}
+		}
+		return fmt.Errorf("config option %q not found", key)
+	}
+}
+
+func checkRBDImageConfigOptionAbsent(t *testing.T, poolName, imageName, key string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		options, err := cephTestClusterCLI.RBDConfigImageList(t.Context(), poolName, "", imageName)
+		if err != nil {
+			return fmt.Errorf("failed to list image config: %w", err)
+		}
+		for _, option := range options {
+			if option.Name == key && option.Source == "image" {
+				return fmt.Errorf("config option %q still set at image level", key)
+			}
+		}
+		return nil
+	}
+}
+
+func checkRBDImageMeta(t *testing.T, poolName, imageName, key, want string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		metadata, err := cephTestClusterCLI.RBDImageMetaList(t.Context(), poolName, "", imageName)
+		if err != nil {
+			return fmt.Errorf("failed to list image metadata: %w", err)
+		}
+		if metadata[key] != want {
+			return fmt.Errorf("metadata %q: expected %q, got %q", key, want, metadata[key])
+		}
+		return nil
+	}
+}
