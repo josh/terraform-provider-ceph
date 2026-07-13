@@ -134,6 +134,10 @@ func (c *Client) ClusterUpdateConf(ctx context.Context, name string, section str
 				"value":   value,
 			},
 		},
+		// Without the force flag the dashboard rejects rgw options that
+		// are not updatable at runtime; the flag has no effect on
+		// anything else.
+		"force_update": true,
 	}
 
 	jsonPayload, err := json.Marshal(requestBody)
