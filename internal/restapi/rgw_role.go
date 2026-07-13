@@ -20,6 +20,9 @@ type RGWRole struct {
 	MaxSessionDuration       int64  `json:"MaxSessionDuration"`
 	AssumeRolePolicyDocument string `json:"AssumeRolePolicyDocument"`
 	AccountID                string `json:"AccountId"`
+	// Read-only fields with no management endpoints.
+	PermissionPolicies json.RawMessage `json:"PermissionPolicies"`
+	Description        string          `json:"Description"`
 }
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-rgw-roles>

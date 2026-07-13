@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -21,15 +22,17 @@ type RGWRoleDataSource struct {
 }
 
 type RGWRoleDataSourceModel struct {
-	Name                     types.String `tfsdk:"name"`
-	Path                     types.String `tfsdk:"path"`
-	AssumeRolePolicyDocument types.String `tfsdk:"assume_role_policy_document"`
-	MaxSessionDuration       types.Int64  `tfsdk:"max_session_duration"`
-	ID                       types.String `tfsdk:"id"`
-	RoleID                   types.String `tfsdk:"role_id"`
-	Arn                      types.String `tfsdk:"arn"`
-	CreateDate               types.String `tfsdk:"create_date"`
-	AccountID                types.String `tfsdk:"account_id"`
+	Name                     types.String         `tfsdk:"name"`
+	Path                     types.String         `tfsdk:"path"`
+	AssumeRolePolicyDocument types.String         `tfsdk:"assume_role_policy_document"`
+	MaxSessionDuration       types.Int64          `tfsdk:"max_session_duration"`
+	ID                       types.String         `tfsdk:"id"`
+	RoleID                   types.String         `tfsdk:"role_id"`
+	Arn                      types.String         `tfsdk:"arn"`
+	CreateDate               types.String         `tfsdk:"create_date"`
+	AccountID                types.String         `tfsdk:"account_id"`
+	Description              types.String         `tfsdk:"description"`
+	PermissionPolicies       jsontypes.Normalized `tfsdk:"permission_policies"`
 }
 
 func (d *RGWRoleDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -75,6 +78,15 @@ func (d *RGWRoleDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 			"account_id": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The account id the role belongs to.",
 				Computed:            true,
+			},
+			"description": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The description of the role. Not settable through the dashboard API.",
+				Computed:            true,
+			},
+			"permission_policies": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The permission policies attached to the role as a JSON list. Read-only; no dashboard endpoint manages them.",
+				Computed:            true,
+				CustomType:          jsontypes.NormalizedType{},
 			},
 		},
 	}
@@ -126,6 +138,12 @@ func (d *RGWRoleDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	data.Arn = types.StringValue(role.Arn)
 	data.CreateDate = types.StringValue(role.CreateDate)
 	data.AccountID = types.StringValue(role.AccountID)
+	data.Description = types.StringValue(role.Description)
+	if policies := string(role.PermissionPolicies); policies != "" && policies != "null" {
+		data.PermissionPolicies = jsontypes.NewNormalizedValue(policies)
+	} else {
+		data.PermissionPolicies = jsontypes.NewNormalizedValue("[]")
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
