@@ -31,6 +31,12 @@ type RGWBucket struct {
 	BucketPolicy  json.RawMessage   `json:"bucket_policy"`
 	Encryption    json.RawMessage   `json:"encryption"`
 	Lifecycle     json.RawMessage   `json:"lifecycle"`
+	LockEnabled   bool              `json:"lock_enabled"`
+	// Placeholder values on never-locked buckets: lock_mode is a
+	// lowercase "compliance" and the periods are null.
+	LockMode                 string `json:"lock_mode"`
+	LockRetentionPeriodDays  *int64 `json:"lock_retention_period_days"`
+	LockRetentionPeriodYears *int64 `json:"lock_retention_period_years"`
 }
 
 // The S3 tagging API takes an XML document while reads return a plain
@@ -206,10 +212,14 @@ func (c *Client) RGWGetBucketWithRetry(ctx context.Context, bucketName string) (
 }
 
 type RGWBucketCreateRequest struct {
-	Bucket       string  `json:"bucket"`
-	UID          string  `json:"uid"`
-	Tags         *string `json:"tags,omitempty"`
-	BucketPolicy *string `json:"bucket_policy,omitempty"`
+	Bucket                   string  `json:"bucket"`
+	UID                      string  `json:"uid"`
+	Tags                     *string `json:"tags,omitempty"`
+	BucketPolicy             *string `json:"bucket_policy,omitempty"`
+	LockEnabled              *bool   `json:"lock_enabled,omitempty"`
+	LockMode                 *string `json:"lock_mode,omitempty"`
+	LockRetentionPeriodDays  *int64  `json:"lock_retention_period_days,omitempty"`
+	LockRetentionPeriodYears *int64  `json:"lock_retention_period_years,omitempty"`
 }
 
 func (c *Client) RGWCreateBucket(ctx context.Context, req RGWBucketCreateRequest) (*RGWBucket, error) {
@@ -280,6 +290,11 @@ type RGWBucketUpdateRequest struct {
 	BucketPolicy    *string `json:"bucket_policy,omitempty"`
 	EncryptionState *string `json:"encryption_state,omitempty"`
 	Lifecycle       *string `json:"lifecycle,omitempty"`
+	// Only applied by the server when the bucket was created with
+	// object lock enabled.
+	LockMode                 *string `json:"lock_mode,omitempty"`
+	LockRetentionPeriodDays  *int64  `json:"lock_retention_period_days,omitempty"`
+	LockRetentionPeriodYears *int64  `json:"lock_retention_period_years,omitempty"`
 }
 
 func (c *Client) RGWUpdateBucket(ctx context.Context, bucketName string, req RGWBucketUpdateRequest) error {

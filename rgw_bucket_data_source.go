@@ -33,6 +33,11 @@ type RGWBucketDataSourceModel struct {
 	VersioningState types.String         `tfsdk:"versioning_state"`
 	Tags            types.Map            `tfsdk:"tags"`
 	BucketPolicy    jsontypes.Normalized `tfsdk:"bucket_policy"`
+
+	LockEnabled              types.Bool   `tfsdk:"lock_enabled"`
+	LockMode                 types.String `tfsdk:"lock_mode"`
+	LockRetentionPeriodDays  types.Int64  `tfsdk:"lock_retention_period_days"`
+	LockRetentionPeriodYears types.Int64  `tfsdk:"lock_retention_period_years"`
 }
 
 func (d *RGWBucketDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -88,6 +93,22 @@ func (d *RGWBucketDataSource) Schema(ctx context.Context, req datasource.SchemaR
 				MarkdownDescription: "The S3 bucket policy as a JSON document",
 				Computed:            true,
 				CustomType:          jsontypes.NormalizedType{},
+			},
+			"lock_enabled": dataSourceSchema.BoolAttribute{
+				MarkdownDescription: "Whether S3 object lock is enabled on the bucket",
+				Computed:            true,
+			},
+			"lock_mode": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The default object lock retention mode",
+				Computed:            true,
+			},
+			"lock_retention_period_days": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "The default object lock retention period in days",
+				Computed:            true,
+			},
+			"lock_retention_period_years": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "The default object lock retention period in years",
+				Computed:            true,
 			},
 		},
 	}
@@ -156,6 +177,17 @@ func (d *RGWBucketDataSource) Read(ctx context.Context, req datasource.ReadReque
 		data.BucketPolicy = jsontypes.NewNormalizedValue(policy)
 	} else {
 		data.BucketPolicy = jsontypes.NewNormalizedNull()
+	}
+
+	data.LockEnabled = types.BoolValue(bucket.LockEnabled)
+	if bucket.LockEnabled {
+		data.LockMode = types.StringValue(bucket.LockMode)
+		data.LockRetentionPeriodDays = types.Int64Value(int64FromPointer(bucket.LockRetentionPeriodDays))
+		data.LockRetentionPeriodYears = types.Int64Value(int64FromPointer(bucket.LockRetentionPeriodYears))
+	} else {
+		data.LockMode = types.StringNull()
+		data.LockRetentionPeriodDays = types.Int64Null()
+		data.LockRetentionPeriodYears = types.Int64Null()
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
