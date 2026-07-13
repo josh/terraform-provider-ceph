@@ -38,14 +38,16 @@ type CephFSSubvolumeGroupResource struct {
 }
 
 type CephFSSubvolumeGroupResourceModel struct {
-	Name     types.String   `tfsdk:"name"`
-	VolName  types.String   `tfsdk:"vol_name"`
-	Size     types.Int64    `tfsdk:"size"`
-	Mode     types.String   `tfsdk:"mode"`
-	UID      types.Int64    `tfsdk:"uid"`
-	GID      types.Int64    `tfsdk:"gid"`
-	Path     types.String   `tfsdk:"path"`
-	Timeouts timeouts.Value `tfsdk:"timeouts"`
+	Name       types.String   `tfsdk:"name"`
+	VolName    types.String   `tfsdk:"vol_name"`
+	Size       types.Int64    `tfsdk:"size"`
+	Mode       types.String   `tfsdk:"mode"`
+	UID        types.Int64    `tfsdk:"uid"`
+	GID        types.Int64    `tfsdk:"gid"`
+	PoolLayout types.String   `tfsdk:"pool_layout"`
+	Path       types.String   `tfsdk:"path"`
+	DataPool   types.String   `tfsdk:"data_pool"`
+	Timeouts   timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (r *CephFSSubvolumeGroupResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -111,8 +113,25 @@ func (r *CephFSSubvolumeGroupResource) Schema(ctx context.Context, req resource.
 					int64planmodifier.UseStateForUnknown(),
 				},
 			},
+			"pool_layout": resourceSchema.StringAttribute{
+				MarkdownDescription: "The data pool the subvolume group stores its data in. Must already be a data pool of the filesystem. When not set, the group inherits the filesystem's default layout; the effective pool is reported by `data_pool`. Changing requires destroying and recreating the subvolume group.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
+				},
+			},
 			"path": resourceSchema.StringAttribute{
 				MarkdownDescription: "The path of the subvolume group within the filesystem.",
+				Computed:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.UseStateForUnknown(),
+				},
+			},
+			"data_pool": resourceSchema.StringAttribute{
+				MarkdownDescription: "The data pool used by the subvolume group.",
 				Computed:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.UseStateForUnknown(),
@@ -157,6 +176,7 @@ func (r *CephFSSubvolumeGroupResource) updateModelFromAPI(data *CephFSSubvolumeG
 	data.UID = types.Int64Value(int64(info.UID))
 	data.GID = types.Int64Value(int64(info.GID))
 	data.Path = types.StringValue(info.Path)
+	data.DataPool = types.StringValue(info.DataPool)
 }
 
 func (r *CephFSSubvolumeGroupResource) Create(ctx context.Context, req resource.CreateRequest, resp *resource.CreateResponse) {
@@ -189,6 +209,9 @@ func (r *CephFSSubvolumeGroupResource) Create(ctx context.Context, req resource.
 	}
 	if !data.GID.IsNull() && !data.GID.IsUnknown() {
 		createReq.GID = data.GID.ValueInt64Pointer()
+	}
+	if !data.PoolLayout.IsNull() && !data.PoolLayout.IsUnknown() {
+		createReq.PoolLayout = data.PoolLayout.ValueString()
 	}
 
 	tflog.Debug(ctx, "Creating CephFS subvolume group", map[string]interface{}{

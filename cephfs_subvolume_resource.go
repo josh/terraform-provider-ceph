@@ -38,17 +38,18 @@ type CephFSSubvolumeResource struct {
 }
 
 type CephFSSubvolumeResourceModel struct {
-	Name      types.String   `tfsdk:"name"`
-	VolName   types.String   `tfsdk:"vol_name"`
-	GroupName types.String   `tfsdk:"group_name"`
-	Size      types.Int64    `tfsdk:"size"`
-	Mode      types.String   `tfsdk:"mode"`
-	UID       types.Int64    `tfsdk:"uid"`
-	GID       types.Int64    `tfsdk:"gid"`
-	Path      types.String   `tfsdk:"path"`
-	DataPool  types.String   `tfsdk:"data_pool"`
-	State     types.String   `tfsdk:"state"`
-	Timeouts  timeouts.Value `tfsdk:"timeouts"`
+	Name       types.String   `tfsdk:"name"`
+	VolName    types.String   `tfsdk:"vol_name"`
+	GroupName  types.String   `tfsdk:"group_name"`
+	Size       types.Int64    `tfsdk:"size"`
+	Mode       types.String   `tfsdk:"mode"`
+	UID        types.Int64    `tfsdk:"uid"`
+	GID        types.Int64    `tfsdk:"gid"`
+	PoolLayout types.String   `tfsdk:"pool_layout"`
+	Path       types.String   `tfsdk:"path"`
+	DataPool   types.String   `tfsdk:"data_pool"`
+	State      types.String   `tfsdk:"state"`
+	Timeouts   timeouts.Value `tfsdk:"timeouts"`
 }
 
 func (r *CephFSSubvolumeResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -123,6 +124,16 @@ func (r *CephFSSubvolumeResource) Schema(ctx context.Context, req resource.Schem
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.RequiresReplace(),
 					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"pool_layout": resourceSchema.StringAttribute{
+				MarkdownDescription: "The data pool the subvolume stores its data in. Must already be a data pool of the filesystem. When not set, the subvolume inherits its parent's layout; the effective pool is reported by `data_pool`. Changing requires destroying and recreating the subvolume.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.LengthAtLeast(1),
 				},
 			},
 			"path": resourceSchema.StringAttribute{
@@ -221,6 +232,9 @@ func (r *CephFSSubvolumeResource) Create(ctx context.Context, req resource.Creat
 	}
 	if !data.GID.IsNull() && !data.GID.IsUnknown() {
 		createReq.GID = data.GID.ValueInt64Pointer()
+	}
+	if !data.PoolLayout.IsNull() && !data.PoolLayout.IsUnknown() {
+		createReq.PoolLayout = data.PoolLayout.ValueString()
 	}
 
 	tflog.Debug(ctx, "Creating CephFS subvolume", map[string]interface{}{

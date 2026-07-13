@@ -635,3 +635,133 @@ func TestAccCephFSSubvolumeResource_InvalidMode(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephFSSubvolumeResource_PoolLayout(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	fsName := testSharedCephFSName
+	poolName := acctest.RandomWithPrefix("test-subvol-layout")
+	subvolName := acctest.RandomWithPrefix("test-subvol")
+	groupName := acctest.RandomWithPrefix("test-group")
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_cephfs_subvolume" "test" {
+		  name        = %q
+		  vol_name    = %q
+		  pool_layout = %q
+
+		  timeouts = {
+		    create = "5m"
+		    delete = "5m"
+		  }
+		}
+
+		resource "ceph_cephfs_subvolume_group" "test" {
+		  name        = %q
+		  vol_name    = %q
+		  pool_layout = %q
+
+		  timeouts = {
+		    create = "5m"
+		    delete = "5m"
+		  }
+		}
+	`, subvolName, fsName, poolName, groupName, fsName, poolName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephFSSubvolumeDestroy(t, fsName),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+
+			if err := cephTestClusterCLI.PoolCreate(t.Context(), poolName, 8, ""); err != nil {
+				t.Fatalf("Failed to create pool: %v", err)
+			}
+			// LIFO: the pool is removed from the filesystem before it is
+			// deleted, after terraform has destroyed the subvolumes on it.
+			t.Cleanup(func() {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+				defer cancel()
+				if err := cephTestClusterCLI.PoolDelete(ctx, poolName); err != nil {
+					t.Errorf("Failed to delete pool: %v", err)
+				}
+			})
+
+			if err := cephTestClusterCLI.CephFSAddDataPool(t.Context(), fsName, poolName); err != nil {
+				t.Fatalf("Failed to add data pool: %v", err)
+			}
+			t.Cleanup(func() {
+				ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+				defer cancel()
+				if err := cephTestClusterCLI.CephFSRemoveDataPool(ctx, fsName, poolName); err != nil {
+					t.Errorf("Failed to remove data pool: %v", err)
+				}
+			})
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_cephfs_subvolume.test",
+						tfjsonpath.New("data_pool"),
+						knownvalue.StringExact(poolName),
+					),
+					statecheck.ExpectKnownValue(
+						"ceph_cephfs_subvolume_group.test",
+						tfjsonpath.New("data_pool"),
+						knownvalue.StringExact(poolName),
+					),
+				},
+				Check: checkCephFSSubvolumeDataPool(t, fsName, subvolName, poolName),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
+func TestAccCephFSSubvolumeResource_InvalidPoolLayout(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_cephfs_subvolume" "test" {
+					  name        = "invalid-layout-test"
+					  vol_name    = %q
+					  pool_layout = "no-such-pool"
+					}
+				`, testSharedCephFSName),
+				ExpectError: regexp.MustCompile(`(?i)invalid pool layout`),
+			},
+		},
+	})
+}
+
+func checkCephFSSubvolumeDataPool(t *testing.T, fsName, subvolName, want string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		info, err := cephTestClusterCLI.CephFSSubvolumeInfo(t.Context(), fsName, subvolName, "")
+		if err != nil {
+			return fmt.Errorf("failed to get subvolume info: %w", err)
+		}
+		if info.DataPool != want {
+			return fmt.Errorf("data pool: expected %q, got %q", want, info.DataPool)
+		}
+		return nil
+	}
+}

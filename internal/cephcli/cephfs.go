@@ -63,6 +63,24 @@ func (c *CLI) CephFSVolumeDelete(ctx context.Context, name string) error {
 	return nil
 }
 
+func (c *CLI) CephFSAddDataPool(ctx context.Context, volName string, poolName string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "add_data_pool", volName, poolName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to add data pool %s to CephFS %s: %w, output: %s", poolName, volName, err, string(output))
+	}
+	return nil
+}
+
+func (c *CLI) CephFSRemoveDataPool(ctx context.Context, volName string, poolName string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "fs", "rm_data_pool", volName, poolName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to remove data pool %s from CephFS %s: %w, output: %s", poolName, volName, err, string(output))
+	}
+	return nil
+}
+
 func groupNameArgs(groupName string) []string {
 	if groupName == "" {
 		return nil
@@ -94,6 +112,7 @@ type CephFSSubvolumeInfoEntry struct {
 	Mode       int    `json:"mode"`
 	UID        int    `json:"uid"`
 	GID        int    `json:"gid"`
+	DataPool   string `json:"data_pool"`
 }
 
 func (e *CephFSSubvolumeInfoEntry) BytesQuotaInt64() (int64, bool) {
