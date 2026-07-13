@@ -40,6 +40,8 @@ type Pool struct {
 	QuotaMaxObjects      int         `json:"quota_max_objects"`
 	QuotaMaxBytes        int         `json:"quota_max_bytes"`
 	Options              PoolOptions `json:"options"`
+	// Only populated by GetPool; the pool list omits configuration.
+	Configuration []RBDImageConfigOption `json:"configuration"`
 }
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-pool>
@@ -63,6 +65,9 @@ type PoolCreateRequest struct {
 	CompressionRequiredRatio *float64 `json:"compression_required_ratio,omitempty"`
 	CompressionMinBlobSize   *int     `json:"compression_min_blob_size,omitempty"`
 	CompressionMaxBlobSize   *int     `json:"compression_max_blob_size,omitempty"`
+	// Additive: present keys are set, null values are removed, absent
+	// keys are left untouched.
+	Configuration map[string]*string `json:"configuration,omitempty"`
 }
 
 func (c *Client) CreatePool(ctx context.Context, req PoolCreateRequest) (*TaskInfo, error) {
@@ -257,6 +262,9 @@ type PoolUpdateRequest struct {
 	CompressionMaxBlobSize   *int     `json:"compression_max_blob_size,omitempty"`
 	ApplicationMetadata      []string `json:"application_metadata,omitempty"`
 	Flags                    []string `json:"flags,omitempty"`
+	// Additive: present keys are set, null values are removed, absent
+	// keys are left untouched.
+	Configuration map[string]*string `json:"configuration,omitempty"`
 }
 
 func (c *Client) UpdatePool(ctx context.Context, poolName string, req PoolUpdateRequest) (*TaskInfo, error) {

@@ -18,6 +18,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/boolplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
@@ -58,6 +59,7 @@ type PoolResourceModel struct {
 	CompressionMinBlobSize   types.Int64    `tfsdk:"compression_min_blob_size"`
 	CompressionMaxBlobSize   types.Int64    `tfsdk:"compression_max_blob_size"`
 	ECOverwrites             types.Bool     `tfsdk:"ec_overwrites"`
+	Configuration            types.Map      `tfsdk:"configuration"`
 	PoolID                   types.Int64    `tfsdk:"pool_id"`
 	ApplicationMetadata      types.Set      `tfsdk:"application_metadata"`
 	Timeouts                 timeouts.Value `tfsdk:"timeouts"`
@@ -184,6 +186,15 @@ func (r *PoolResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 						"Disabling ec_overwrites requires replacing the pool.",
 						"Disabling ec_overwrites requires replacing the pool.",
 					),
+				},
+			},
+			"configuration": resourceSchema.MapAttribute{
+				MarkdownDescription: "Pool-level RBD configuration overrides, e.g. QoS options like `rbd_qos_bps_limit`. Keys must be valid librbd option names; unknown keys are silently ignored by Ceph and would never converge.",
+				Optional:            true,
+				Computed:            true,
+				ElementType:         types.StringType,
+				PlanModifiers: []planmodifier.Map{
+					mapplanmodifier.UseStateForUnknown(),
 				},
 			},
 			"pool_id": resourceSchema.Int64Attribute{
@@ -338,6 +349,19 @@ func (r *PoolResource) updateModelFromAPI(ctx context.Context, data *PoolResourc
 		data.ApplicationMetadata = types.SetNull(types.StringType)
 	}
 
+	poolConfig := map[string]string{}
+	for _, option := range pool.Configuration {
+		// Source 1 marks pool-level overrides.
+		if option.Source == 1 {
+			poolConfig[option.Name] = option.Value
+		}
+	}
+	if !data.Configuration.IsNull() || len(poolConfig) > 0 {
+		configuration, d := types.MapValueFrom(ctx, types.StringType, poolConfig)
+		diags.Append(d...)
+		data.Configuration = configuration
+	}
+
 	return diags
 }
 
@@ -445,6 +469,11 @@ func (r *PoolResource) Create(ctx context.Context, req resource.CreateRequest, r
 		var apps []string
 		data.ApplicationMetadata.ElementsAs(ctx, &apps, false)
 		createReq.ApplicationMetadata = apps
+	}
+
+	createReq.Configuration = mapWithRemovals(ctx, data.Configuration, types.MapNull(types.StringType), &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
 	}
 
 	tflog.Debug(ctx, "Creating pool", map[string]interface{}{
@@ -761,6 +790,13 @@ func (r *PoolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 		var apps []string
 		data.ApplicationMetadata.ElementsAs(ctx, &apps, false)
 		updateReq.ApplicationMetadata = apps
+	}
+
+	if !data.Configuration.Equal(state.Configuration) {
+		updateReq.Configuration = mapWithRemovals(ctx, data.Configuration, state.Configuration, &resp.Diagnostics)
+		if resp.Diagnostics.HasError() {
+			return
+		}
 	}
 
 	if originalPoolName != newPoolName {

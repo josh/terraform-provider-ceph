@@ -2810,6 +2810,134 @@ func TestAccCephPoolResource_pgNumWithClusterDefaultAutoscale(t *testing.T) {
 	})
 }
 
+func TestAccCephPoolResource_Configuration(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-config")
+
+	config := func(configuration string) string {
+		return testAccProviderConfigBlock + fmt.Sprintf(`
+			resource "ceph_pool" "test" {
+			  name                 = %q
+			  pool_type            = "replicated"
+			  size                 = 2
+			  pg_num               = 32
+			  pg_autoscale_mode    = "off"
+			  application_metadata = ["rbd"]
+			  configuration        = %s
+
+			  timeouts = {
+			    create = "5m"
+			    update = "5m"
+			    delete = "5m"
+			  }
+			}
+		`, poolName, configuration)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`{ rbd_qos_bps_limit = "10485760" }`),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_pool.test",
+						tfjsonpath.New("configuration"),
+						knownvalue.MapExact(map[string]knownvalue.Check{
+							"rbd_qos_bps_limit": knownvalue.StringExact("10485760"),
+						}),
+					),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephPoolExists(t, poolName),
+					checkCephPoolConfigOption(t, poolName, "rbd_qos_bps_limit", "10485760"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`{ rbd_qos_iops_limit = "500" }`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephPoolConfigOption(t, poolName, "rbd_qos_iops_limit", "500"),
+					checkCephPoolConfigOptionAbsent(t, poolName, "rbd_qos_bps_limit"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`{ rbd_qos_iops_limit = "500" }`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			{
+				PreConfig: func() {
+					if err := cephTestClusterCLI.RBDConfigPoolSet(t.Context(), poolName, "rbd_qos_iops_limit", "999"); err != nil {
+						t.Fatalf("Failed to set pool config out of band: %v", err)
+					}
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`{ rbd_qos_iops_limit = "500" }`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: checkCephPoolConfigOption(t, poolName, "rbd_qos_iops_limit", "500"),
+			},
+		},
+	})
+}
+
+func checkCephPoolConfigOption(t *testing.T, poolName, key, want string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		options, err := cephTestClusterCLI.RBDConfigPoolList(t.Context(), poolName)
+		if err != nil {
+			return fmt.Errorf("failed to list pool config: %w", err)
+		}
+		for _, option := range options {
+			if option.Name == key {
+				if option.Source != "pool" {
+					return fmt.Errorf("config %q: expected source pool, got %q", key, option.Source)
+				}
+				if option.Value != want {
+					return fmt.Errorf("config %q: expected %q, got %q", key, want, option.Value)
+				}
+				return nil
+			}
+		}
+		return fmt.Errorf("config option %q not found", key)
+	}
+}
+
+func checkCephPoolConfigOptionAbsent(t *testing.T, poolName, key string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		options, err := cephTestClusterCLI.RBDConfigPoolList(t.Context(), poolName)
+		if err != nil {
+			return fmt.Errorf("failed to list pool config: %w", err)
+		}
+		for _, option := range options {
+			if option.Name == key && option.Source == "pool" {
+				return fmt.Errorf("config option %q still set at pool level", key)
+			}
+		}
+		return nil
+	}
+}
+
 func TestAccCephPoolResource_ECOverwrites(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
