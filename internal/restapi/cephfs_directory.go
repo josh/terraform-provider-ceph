@@ -22,8 +22,9 @@ type CephFSDirectory struct {
 }
 
 type cephFSDirEntry struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
+	Name      string               `json:"name"`
+	Path      string               `json:"path"`
+	Snapshots []CephFSSnapshotInfo `json:"snapshots"`
 }
 
 func (c *Client) cephFSListDir(ctx context.Context, fsID int, dirPath string) ([]cephFSDirEntry, error) {
