@@ -183,6 +183,29 @@ func (c *CLI) PoolApplicationEnable(ctx context.Context, poolName, application s
 	return fmt.Errorf("application %s not found in pool %s applications after enabling", application, poolName)
 }
 
+func (c *CLI) RBDConfigPoolList(ctx context.Context, pool string) ([]RBDConfigOption, error) {
+	cmd := exec.CommandContext(ctx, "rbd", "--conf", c.confPath, "config", "pool", "list", pool, "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list rbd pool config for %s: %w", pool, err)
+	}
+
+	var options []RBDConfigOption
+	if err := json.Unmarshal(output, &options); err != nil {
+		return nil, fmt.Errorf("failed to parse rbd pool config list: %w", err)
+	}
+	return options, nil
+}
+
+func (c *CLI) RBDConfigPoolSet(ctx context.Context, pool, key, value string) error {
+	cmd := exec.CommandContext(ctx, "rbd", "--conf", c.confPath, "config", "pool", "set", pool, key, value)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to set rbd pool config %s: %w, output: %s", key, err, string(output))
+	}
+	return nil
+}
+
 func (c *CLI) PoolExists(ctx context.Context, poolName string) (bool, error) {
 	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "pool", "get", poolName, "size")
 	output, err := cmd.CombinedOutput()

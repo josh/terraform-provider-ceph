@@ -449,6 +449,46 @@ func TestAccCephPoolDataSource_quota(t *testing.T) {
 	})
 }
 
+func TestAccCephPoolDataSource_rbdConfiguration(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandString(8)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCleanupPool(t, poolName),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+
+			if err := cephTestClusterCLI.PoolCreate(t.Context(), poolName, 8, ""); err != nil {
+				t.Fatalf("Failed to create pool: %v", err)
+			}
+
+			if err := cephTestClusterCLI.RBDConfigPoolSet(t.Context(), poolName, "rbd_qos_bps_limit", "10485760"); err != nil {
+				t.Fatalf("Failed to set pool config: %v", err)
+			}
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					data "ceph_pool" "test" {
+						name = "%s"
+					}
+				`, poolName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr(
+						"data.ceph_pool.test",
+						"configuration.rbd_qos_bps_limit",
+						"10485760",
+					),
+				),
+			},
+		},
+	})
+}
+
 func TestAccCephPoolDataSource_autoscaler(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()

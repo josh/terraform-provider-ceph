@@ -39,6 +39,7 @@ type PoolDataSourceModel struct {
 	CompressionRequiredRatio types.Float64 `tfsdk:"compression_required_ratio"`
 	CompressionMinBlobSize   types.Int64   `tfsdk:"compression_min_blob_size"`
 	CompressionMaxBlobSize   types.Int64   `tfsdk:"compression_max_blob_size"`
+	Configuration            types.Map     `tfsdk:"configuration"`
 }
 
 func (d *PoolDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -122,6 +123,11 @@ func (d *PoolDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 				MarkdownDescription: "The compression maximum blob size of the pool.",
 				Computed:            true,
 			},
+			"configuration": dataSourceSchema.MapAttribute{
+				MarkdownDescription: "Pool-level RBD configuration overrides.",
+				Computed:            true,
+				ElementType:         types.StringType,
+			},
 		},
 	}
 }
@@ -179,6 +185,20 @@ func (d *PoolDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 
 	data.Flags = types.Int64Value(int64(pool.Flags))
 	data.FlagsNames = types.StringValue(pool.FlagsNames)
+
+	poolConfig := map[string]string{}
+	for _, option := range pool.Configuration {
+		// Source 1 marks pool-level overrides.
+		if option.Source == 1 {
+			poolConfig[option.Name] = option.Value
+		}
+	}
+	configuration, diags := types.MapValueFrom(ctx, types.StringType, poolConfig)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	data.Configuration = configuration
 
 	appMetaStrings := pool.ApplicationMetadata
 	appMeta, diags := types.SetValueFrom(ctx, types.StringType, appMetaStrings)
