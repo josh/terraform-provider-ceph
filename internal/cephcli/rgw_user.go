@@ -17,12 +17,21 @@ type RgwS3Key struct {
 }
 
 type RgwUserInfo struct {
-	DisplayName string     `json:"display_name"`
-	Email       string     `json:"email"`
-	Suspended   int        `json:"suspended"`
-	MaxBuckets  int        `json:"max_buckets"`
-	Keys        []RgwS3Key `json:"keys"`
-	Admin       bool       `json:"admin"`
+	DisplayName string       `json:"display_name"`
+	Email       string       `json:"email"`
+	Suspended   int          `json:"suspended"`
+	MaxBuckets  int          `json:"max_buckets"`
+	Keys        []RgwS3Key   `json:"keys"`
+	Admin       bool         `json:"admin"`
+	UserQuota   RgwQuotaInfo `json:"user_quota"`
+	BucketQuota RgwQuotaInfo `json:"bucket_quota"`
+}
+
+type RgwQuotaInfo struct {
+	Enabled    bool  `json:"enabled"`
+	MaxSize    int64 `json:"max_size"`
+	MaxSizeKB  int64 `json:"max_size_kb"`
+	MaxObjects int64 `json:"max_objects"`
 }
 
 type RgwUserCreateOptions struct {
@@ -307,6 +316,24 @@ func (c *CLI) RgwKeyRemove(ctx context.Context, uid, accessKey string) error {
 		if key.AccessKey == accessKey {
 			return fmt.Errorf("key still exists after removal: %s", accessKey)
 		}
+	}
+	return nil
+}
+
+func (c *CLI) RgwQuotaSet(ctx context.Context, uid, scope string, maxSizeBytes, maxObjects int64) error {
+	cmd := exec.CommandContext(ctx, "radosgw-admin", "--conf", c.confPath, "quota", "set",
+		"--quota-scope="+scope, "--uid="+uid,
+		fmt.Sprintf("--max-size=%d", maxSizeBytes), fmt.Sprintf("--max-objects=%d", maxObjects))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to set rgw quota for %s: %w, output: %s", uid, err, string(output))
+	}
+
+	cmd = exec.CommandContext(ctx, "radosgw-admin", "--conf", c.confPath, "quota", "enable",
+		"--quota-scope="+scope, "--uid="+uid)
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to enable rgw quota for %s: %w, output: %s", uid, err, string(output))
 	}
 	return nil
 }
