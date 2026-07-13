@@ -46,6 +46,8 @@ type ErasureCodeProfileResourceModel struct {
 	Technique                 types.String `tfsdk:"technique"`
 	CrushRoot                 types.String `tfsdk:"crush_root"`
 	CrushDeviceClass          types.String `tfsdk:"crush_device_class"`
+	Packetsize                types.Int64  `tfsdk:"packetsize"`
+	W                         types.Int64  `tfsdk:"w"`
 	Directory                 types.String `tfsdk:"directory"`
 }
 
@@ -245,6 +247,30 @@ func (r *ErasureCodeProfileResource) Schema(ctx context.Context, req resource.Sc
 					stringplanmodifier.UseStateForUnknown(),
 				},
 			},
+			"packetsize": resourceSchema.Int64Attribute{
+				MarkdownDescription: "The number of bytes encoded at a time by the jerasure and isa plugins. Larger packets may encode faster at the cost of memory.",
+				Optional:            true,
+				Computed:            true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+				},
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"w": resourceSchema.Int64Attribute{
+				MarkdownDescription: "The word size in bits used by the Galois Field arithmetic of the jerasure plugin (typically 8, 16 or 32).",
+				Optional:            true,
+				Computed:            true,
+				Validators: []validator.Int64{
+					int64validator.AtLeast(1),
+				},
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.RequiresReplace(),
+					int64planmodifier.UseStateForUnknown(),
+				},
+			},
 			"directory": resourceSchema.StringAttribute{
 				MarkdownDescription: "The directory where the erasure code plugin is loaded from (computed by Ceph).",
 				Computed:            true,
@@ -330,6 +356,16 @@ func (r *ErasureCodeProfileResource) Create(ctx context.Context, req resource.Cr
 	if !data.CrushDeviceClass.IsNull() && !data.CrushDeviceClass.IsUnknown() {
 		val := data.CrushDeviceClass.ValueString()
 		createReq.CrushDeviceClass = &val
+	}
+
+	if !data.Packetsize.IsNull() && !data.Packetsize.IsUnknown() {
+		val := fmt.Sprintf("%d", data.Packetsize.ValueInt64())
+		createReq.Packetsize = &val
+	}
+
+	if !data.W.IsNull() && !data.W.IsUnknown() {
+		val := fmt.Sprintf("%d", data.W.ValueInt64())
+		createReq.W = &val
 	}
 
 	err := r.client.CreateErasureCodeProfile(ctx, createReq)
@@ -434,7 +470,9 @@ func (r *ErasureCodeProfileResource) ModifyPlan(ctx context.Context, req resourc
 		plan.CrushOSDsPerFailureDomain.Equal(state.CrushOSDsPerFailureDomain) &&
 		plan.Technique.Equal(state.Technique) &&
 		plan.CrushRoot.Equal(state.CrushRoot) &&
-		plan.CrushDeviceClass.Equal(state.CrushDeviceClass) {
+		plan.CrushDeviceClass.Equal(state.CrushDeviceClass) &&
+		plan.Packetsize.Equal(state.Packetsize) &&
+		plan.W.Equal(state.W) {
 		return
 	}
 
@@ -508,5 +546,17 @@ func (r *ErasureCodeProfileResource) updateModelFromAPI(data *ErasureCodeProfile
 	} else {
 		data.CrushDeviceClass = types.StringNull()
 	}
+	data.Packetsize = int64FromProfileValue(profile.Packetsize)
+	data.W = int64FromProfileValue(profile.W)
 	data.Directory = types.StringValue(profile.Directory)
+}
+
+func int64FromProfileValue(value string) types.Int64 {
+	if value == "" {
+		return types.Int64Null()
+	}
+	if parsed, err := strconv.ParseInt(value, 10, 64); err == nil {
+		return types.Int64Value(parsed)
+	}
+	return types.Int64Null()
 }
