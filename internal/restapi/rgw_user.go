@@ -400,3 +400,128 @@ func (c *Client) RGWDeleteS3Key(ctx context.Context, uid string, accessKey strin
 
 	return nil
 }
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#get--api-rgw-user--uid--quota>
+
+type RGWQuotaInfo struct {
+	Enabled    bool  `json:"enabled"`
+	CheckOnRaw bool  `json:"check_on_raw"`
+	MaxSize    int64 `json:"max_size"`
+	MaxSizeKB  int64 `json:"max_size_kb"`
+	MaxObjects int64 `json:"max_objects"`
+}
+
+type RGWUserQuotas struct {
+	UserQuota   RGWQuotaInfo `json:"user_quota"`
+	BucketQuota RGWQuotaInfo `json:"bucket_quota"`
+}
+
+func (c *Client) RGWGetUserQuota(ctx context.Context, uid string) (*RGWUserQuotas, error) {
+	url := c.endpoint.JoinPath("/api/rgw/user", uid, "quota").String()
+
+	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	logRequest := logAPIRequest(ctx, httpReq)
+	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
+	if err != nil {
+		return nil, fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode == http.StatusNotFound {
+		return nil, ErrNotFound
+	}
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read response body: %w", err)
+	}
+
+	tflog.Trace(ctx, "Ceph API response body", map[string]any{
+		"response_body": string(body),
+		"status_code":   httpResp.StatusCode,
+	})
+
+	if httpResp.StatusCode != http.StatusOK {
+		if dashboardErr, err := parseDashboardError(body); err == nil {
+			if rgwErr, ok := dashboardErr.RGWError(); ok {
+				if rgwErr.Code == "NoSuchUser" {
+					return nil, ErrNotFound
+				}
+			}
+		}
+		return nil, fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	var quotas RGWUserQuotas
+	err = json.Unmarshal(body, &quotas)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
+	}
+
+	return &quotas, nil
+}
+
+// <https://docs.ceph.com/en/latest/mgr/ceph_api/#put--api-rgw-user--uid--quota>
+
+func (c *Client) RGWSetUserQuota(ctx context.Context, uid, quotaType string, enabled bool, maxSizeKB, maxObjects int64) error {
+	jsonPayload, err := json.Marshal(map[string]any{
+		"quota_type":  quotaType,
+		"enabled":     enabled,
+		"max_size_kb": maxSizeKB,
+		"max_objects": maxObjects,
+	})
+	if err != nil {
+		return fmt.Errorf("unable to encode request payload: %w", err)
+	}
+
+	tflog.Trace(ctx, "Ceph API request body", map[string]any{
+		"request_body": string(jsonPayload),
+	})
+
+	url := c.endpoint.JoinPath("/api/rgw/user", uid, "quota").String()
+	httpReq, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		return fmt.Errorf("unable to create request: %w", err)
+	}
+
+	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+
+	logRequest := logAPIRequest(ctx, httpReq)
+	httpResp, err := c.client.Do(httpReq)
+	logRequest(httpResp, err)
+	if err != nil {
+		return fmt.Errorf("unable to make request to Ceph API: %w", err)
+	}
+	defer httpResp.Body.Close() //nolint:errcheck
+
+	if httpResp.StatusCode == http.StatusNotFound {
+		return ErrNotFound
+	}
+
+	// The proxy responds with the raw admin op body, not JSON; only the
+	// status matters.
+	if httpResp.StatusCode != http.StatusOK && httpResp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(httpResp.Body)
+		if dashboardErr, err := parseDashboardError(body); err == nil {
+			if rgwErr, ok := dashboardErr.RGWError(); ok {
+				if rgwErr.Code == "NoSuchUser" {
+					return ErrNotFound
+				}
+			}
+		}
+		return fmt.Errorf("ceph API returned status %d: %s", httpResp.StatusCode, string(body))
+	}
+
+	return nil
+}

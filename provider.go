@@ -226,6 +226,7 @@ func (p *CephProvider) Resources(ctx context.Context) []func() resource.Resource
 		newRGWRoleResource,
 		newRGWS3KeyResource,
 		newRGWUserResource,
+		newRGWUserQuotaResource,
 	}
 }
 
@@ -259,5 +260,6 @@ func (p *CephProvider) DataSources(ctx context.Context) []func() datasource.Data
 		newRGWSubuserDataSource,
 		newRGWSwiftKeyDataSource,
 		newRGWUserDataSource,
+		newRGWUserQuotaDataSource,
 	}
 }
