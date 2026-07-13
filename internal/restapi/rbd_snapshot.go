@@ -15,7 +15,7 @@ import (
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-block-image--image_spec--snap>
 
 func (c *Client) rbdSnapshotURL(poolName, imageName string, extra ...string) *url.URL {
-	endpoint := c.rbdImageURL(poolName, imageName).JoinPath("snap")
+	endpoint := c.rbdImageURL(poolName, "", imageName).JoinPath("snap")
 	for _, segment := range extra {
 		endpoint = endpoint.JoinPath(url.PathEscape(segment))
 	}
@@ -23,7 +23,7 @@ func (c *Client) rbdSnapshotURL(poolName, imageName string, extra ...string) *ur
 }
 
 func (c *Client) GetRBDSnapshot(ctx context.Context, poolName, imageName, snapName string) (*RBDImageSnapshot, error) {
-	image, err := c.GetRBDImage(ctx, poolName, imageName)
+	image, err := c.GetRBDImage(ctx, poolName, "", imageName)
 	if err != nil {
 		return nil, err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -41,6 +42,7 @@ type RBDImageResource struct {
 
 type RBDImageResourceModel struct {
 	PoolName        types.String   `tfsdk:"pool_name"`
+	Namespace       types.String   `tfsdk:"namespace"`
 	Name            types.String   `tfsdk:"name"`
 	Size            types.Int64    `tfsdk:"size"`
 	ObjectSize      types.Int64    `tfsdk:"object_size"`
@@ -106,6 +108,19 @@ func (r *RBDImageResource) Schema(ctx context.Context, req resource.SchemaReques
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"namespace": resourceSchema.StringAttribute{
+				MarkdownDescription: "The RBD namespace holding the image. Changing requires destroying and recreating the image.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^[^/@]+$`),
+						"must not contain '/' or '@'",
+					),
 				},
 			},
 			"name": resourceSchema.StringAttribute{
@@ -204,6 +219,9 @@ func (r *RBDImageResource) Configure(ctx context.Context, req resource.Configure
 func (r *RBDImageResource) updateModelFromAPI(ctx context.Context, data *RBDImageResourceModel, image *restapi.RBDImage) diag.Diagnostics {
 	var diags diag.Diagnostics
 
+	if !data.Namespace.IsNull() || image.Namespace != "" {
+		data.Namespace = types.StringValue(image.Namespace)
+	}
 	data.Size = types.Int64Value(image.Size)
 	data.ObjectSize = types.Int64Value(image.ObjSize)
 	data.DataPool = types.StringPointerValue(image.DataPool)
@@ -259,6 +277,10 @@ func (r *RBDImageResource) Create(ctx context.Context, req resource.CreateReques
 		Size:     data.Size.ValueInt64(),
 	}
 
+	if !data.Namespace.IsNull() && !data.Namespace.IsUnknown() {
+		createReq.Namespace = data.Namespace.ValueStringPointer()
+	}
+
 	if !data.ObjectSize.IsNull() && !data.ObjectSize.IsUnknown() {
 		createReq.ObjSize = data.ObjectSize.ValueInt64Pointer()
 	}
@@ -308,7 +330,7 @@ func (r *RBDImageResource) Create(ctx context.Context, req resource.CreateReques
 		return
 	}
 
-	image, err := r.client.GetRBDImage(ctx, data.PoolName.ValueString(), data.Name.ValueString())
+	image, err := r.client.GetRBDImage(ctx, data.PoolName.ValueString(), data.Namespace.ValueString(), data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
@@ -338,7 +360,7 @@ func (r *RBDImageResource) Read(ctx context.Context, req resource.ReadRequest, r
 		"name":      data.Name.ValueString(),
 	})
 
-	image, err := r.client.GetRBDImage(ctx, data.PoolName.ValueString(), data.Name.ValueString())
+	image, err := r.client.GetRBDImage(ctx, data.PoolName.ValueString(), data.Namespace.ValueString(), data.Name.ValueString())
 	if err != nil {
 		if errors.Is(err, restapi.ErrNotFound) {
 			tflog.Debug(ctx, "RBD image not found, removing from state", map[string]interface{}{
@@ -406,7 +428,7 @@ func (r *RBDImageResource) Update(ctx context.Context, req resource.UpdateReques
 		"name":      state.Name.ValueString(),
 	})
 
-	taskInfo, err := r.client.UpdateRBDImage(ctx, state.PoolName.ValueString(), state.Name.ValueString(), updateReq)
+	taskInfo, err := r.client.UpdateRBDImage(ctx, state.PoolName.ValueString(), state.Namespace.ValueString(), state.Name.ValueString(), updateReq)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
@@ -419,7 +441,7 @@ func (r *RBDImageResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
-	image, err := r.client.GetRBDImage(ctx, data.PoolName.ValueString(), data.Name.ValueString())
+	image, err := r.client.GetRBDImage(ctx, data.PoolName.ValueString(), data.Namespace.ValueString(), data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
@@ -458,7 +480,7 @@ func (r *RBDImageResource) Delete(ctx context.Context, req resource.DeleteReques
 		"name":      data.Name.ValueString(),
 	})
 
-	taskInfo, err := r.client.DeleteRBDImage(ctx, data.PoolName.ValueString(), data.Name.ValueString())
+	taskInfo, err := r.client.DeleteRBDImage(ctx, data.PoolName.ValueString(), data.Namespace.ValueString(), data.Name.ValueString())
 	if err != nil {
 		if errors.Is(err, restapi.ErrNotFound) {
 			return
@@ -474,15 +496,24 @@ func (r *RBDImageResource) Delete(ctx context.Context, req resource.DeleteReques
 }
 
 func (r *RBDImageResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	parts := strings.SplitN(req.ID, "/", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+	parts := strings.Split(req.ID, "/")
+	valid := len(parts) == 2 || len(parts) == 3
+	for _, part := range parts {
+		if part == "" {
+			valid = false
+		}
+	}
+	if !valid {
 		resp.Diagnostics.AddError(
 			"Invalid Import ID",
-			fmt.Sprintf("Expected format: pool_name/image_name, got: %s", req.ID),
+			fmt.Sprintf("Expected format: pool_name/image_name or pool_name/namespace/image_name, got: %s", req.ID),
 		)
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("pool_name"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), parts[1])...)
+	if len(parts) == 3 {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("namespace"), parts[1])...)
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), parts[len(parts)-1])...)
 }
