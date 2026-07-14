@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	gopath "path"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -220,6 +221,13 @@ func (r *CephFSDirectoryResource) ImportState(ctx context.Context, req resource.
 		resp.Diagnostics.AddError(
 			"Invalid Import ID",
 			fmt.Sprintf("Expected format: vol_name:/path, got: %s", req.ID),
+		)
+		return
+	}
+	if cleaned := gopath.Clean(parts[1]); cleaned != parts[1] || cleaned == "/" {
+		resp.Diagnostics.AddError(
+			"Invalid Import ID",
+			fmt.Sprintf("The path %q must be normalized (no trailing or repeated slashes, no '.' or '..' segments) and must not be the filesystem root, since the Ceph API reports normalized paths.", parts[1]),
 		)
 		return
 	}
