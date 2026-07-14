@@ -323,19 +323,22 @@ func (r *PoolResource) updateModelFromAPI(ctx context.Context, data *PoolResourc
 		data.CompressionAlgorithm = types.StringNull()
 	}
 
-	if pool.Options.CompressionRequiredRatio > 0 {
+	// Zero is both Ceph's report for an unset option and a legal explicit
+	// value meaning "use the global default", so only collapse it to null
+	// when the configuration does not pin it.
+	if (!data.CompressionRequiredRatio.IsNull() && !data.CompressionRequiredRatio.IsUnknown()) || pool.Options.CompressionRequiredRatio > 0 {
 		data.CompressionRequiredRatio = types.Float64Value(pool.Options.CompressionRequiredRatio)
 	} else {
 		data.CompressionRequiredRatio = types.Float64Null()
 	}
 
-	if pool.Options.CompressionMinBlobSize > 0 {
+	if (!data.CompressionMinBlobSize.IsNull() && !data.CompressionMinBlobSize.IsUnknown()) || pool.Options.CompressionMinBlobSize > 0 {
 		data.CompressionMinBlobSize = types.Int64Value(int64(pool.Options.CompressionMinBlobSize))
 	} else {
 		data.CompressionMinBlobSize = types.Int64Null()
 	}
 
-	if pool.Options.CompressionMaxBlobSize > 0 {
+	if (!data.CompressionMaxBlobSize.IsNull() && !data.CompressionMaxBlobSize.IsUnknown()) || pool.Options.CompressionMaxBlobSize > 0 {
 		data.CompressionMaxBlobSize = types.Int64Value(int64(pool.Options.CompressionMaxBlobSize))
 	} else {
 		data.CompressionMaxBlobSize = types.Int64Null()

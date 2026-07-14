@@ -346,6 +346,67 @@ func TestAccCephPoolResource_AutoscaleOnKeepsPinnedPgpNum(t *testing.T) {
 	})
 }
 
+// Zero is a legal value for the compression tuning options, telling Ceph to
+// fall back to the global bluestore defaults, and must round-trip instead of
+// collapsing to null.
+func TestAccCephPoolResource_CompressionZeroValues(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-compress-zero")
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_pool" "test" {
+		  name                       = %q
+		  pool_type                  = "replicated"
+		  size                       = 2
+		  min_size                   = 1
+		  pg_num                     = 32
+		  pg_autoscale_mode          = "off"
+		  compression_mode           = "passive"
+		  compression_required_ratio = 0
+		  compression_min_blob_size  = 0
+		  compression_max_blob_size  = 0
+
+		  timeouts = {
+		    create = "1m"
+		    update = "5m"
+		    delete = "1m"
+		  }
+		}
+	`, poolName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephPoolExists(t, poolName),
+					resource.TestCheckResourceAttr("ceph_pool.test", "compression_mode", "passive"),
+					resource.TestCheckResourceAttr("ceph_pool.test", "compression_required_ratio", "0"),
+					resource.TestCheckResourceAttr("ceph_pool.test", "compression_min_blob_size", "0"),
+					resource.TestCheckResourceAttr("ceph_pool.test", "compression_max_blob_size", "0"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
 func TestAccCephPoolResource_WithCompression(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
