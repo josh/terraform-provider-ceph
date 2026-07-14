@@ -673,6 +673,61 @@ func TestAccCephRBDImageResource_ConfigurationMetadata(t *testing.T) {
 	})
 }
 
+func TestAccCephRBDImageResource_RenameWithConfiguration(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-rbd-pool")
+	imageName := acctest.RandomWithPrefix("test-image")
+	renamedImageName := acctest.RandomWithPrefix("test-image-renamed")
+
+	config := func(name, configuration string) string {
+		return testAccProviderConfigBlock + testAccRBDPoolConfig(poolName) + fmt.Sprintf(`
+			resource "ceph_rbd_image" "test" {
+			  pool_name     = ceph_pool.test.name
+			  name          = %q
+			  size          = 8388608
+			  configuration = %s
+
+			  timeouts = {
+			    create = "5m"
+			    update = "5m"
+			    delete = "5m"
+			  }
+			}
+		`, name, configuration)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRBDImageDestroy(t, poolName),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(imageName, `{ rbd_qos_bps_limit = "10485760" }`),
+				Check:           checkRBDImageConfigOption(t, poolName, imageName, "rbd_qos_bps_limit", "10485760"),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(renamedImageName, `{ rbd_qos_bps_limit = "20971520" }`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_rbd_image.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkRBDImageExists(t, poolName, renamedImageName),
+					checkRBDImageConfigOption(t, poolName, renamedImageName, "rbd_qos_bps_limit", "20971520"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccCephRBDImageResource_Striping(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
