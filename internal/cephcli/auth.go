@@ -61,6 +61,26 @@ func (c *CLI) AuthSetCaps(ctx context.Context, entity string, caps map[string]st
 	return nil
 }
 
+func (c *CLI) AuthGetOrCreate(ctx context.Context, entity string, caps map[string]string) error {
+	args := []string{"--conf", c.confPath, "auth", "get-or-create", entity}
+
+	capTypes := make([]string, 0, len(caps))
+	for capType := range caps {
+		capTypes = append(capTypes, capType)
+	}
+	sort.Strings(capTypes)
+
+	for _, capType := range capTypes {
+		args = append(args, capType, caps[capType])
+	}
+
+	cmd := exec.CommandContext(ctx, "ceph", args...)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to create auth entity %s: %w", entity, err)
+	}
+	return nil
+}
+
 func (c *CLI) AuthDel(ctx context.Context, entity string) error {
 	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "auth", "del", entity)
 	_, err := cmd.Output()
