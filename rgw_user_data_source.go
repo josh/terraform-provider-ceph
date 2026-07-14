@@ -125,7 +125,11 @@ func (d *RGWUserDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 
-	data.UserID = types.StringValue(user.UserID)
+	if user.Tenant != "" {
+		data.UserID = types.StringValue(user.Tenant + "$" + user.UserID)
+	} else {
+		data.UserID = types.StringValue(user.UserID)
+	}
 	data.DisplayName = types.StringValue(user.DisplayName)
 	data.Email = types.StringValue(user.Email)
 	data.MaxBuckets = types.Int64Value(int64(user.MaxBuckets))
