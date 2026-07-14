@@ -728,6 +728,73 @@ func TestAccCephRBDImageResource_RenameWithConfiguration(t *testing.T) {
 	})
 }
 
+// A striped image carries the implicit "striping" feature bit that never
+// appears in the features config; adding an in-place-enableable feature must
+// not force a destroy/recreate because of it.
+func TestAccCephRBDImageResource_FeatureAddOnStripedImage(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-rbd-pool")
+	imageName := acctest.RandomWithPrefix("test-image-striped-feat")
+
+	config := func(features string) string {
+		return testAccProviderConfigBlock + testAccRBDPoolConfig(poolName) + fmt.Sprintf(`
+			resource "ceph_rbd_image" "test" {
+			  pool_name    = ceph_pool.test.name
+			  name         = %q
+			  size         = 8388608
+			  stripe_unit  = 65536
+			  stripe_count = 4
+			  features     = %s
+
+			  timeouts = {
+			    create = "5m"
+			    update = "5m"
+			    delete = "5m"
+			  }
+			}
+		`, imageName, features)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckRBDImageDestroy(t, poolName),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+			testAccPreCheckWaitForPGsActiveClean(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`["layering", "exclusive-lock"]`),
+				Check:           checkRBDImageExists(t, poolName, imageName),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`["layering", "exclusive-lock", "journaling"]`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_rbd_image.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rbd_image.test",
+						tfjsonpath.New("features_name"),
+						knownvalue.SetExact([]knownvalue.Check{
+							knownvalue.StringExact("exclusive-lock"),
+							knownvalue.StringExact("journaling"),
+							knownvalue.StringExact("layering"),
+							knownvalue.StringExact("striping"),
+						}),
+					),
+				},
+			},
+		},
+	})
+}
+
 func TestAccCephRBDImageResource_Striping(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
