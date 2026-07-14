@@ -184,6 +184,50 @@ func TestAccCephRGWRoleResource_customPath(t *testing.T) {
 	})
 }
 
+func TestAccCephRGWRoleResource_nonHourMaxSessionDuration(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	roleName := acctest.RandomWithPrefix("test-role")
+	principal := acctest.RandomWithPrefix("test-principal")
+	assumePolicy := fmt.Sprintf(testAccRGWRoleAssumePolicy, principal)
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_rgw_role" "test" {
+		  name                        = %q
+		  assume_role_policy_document = %s
+		  max_session_duration        = 3603
+		}
+	`, roleName, assumePolicy)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWRoleDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_rgw_role.test",
+						tfjsonpath.New("max_session_duration"),
+						knownvalue.Int64Exact(3603),
+					),
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
 func TestAccCephRGWRoleResource_invalidMaxSessionDuration(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -136,11 +137,18 @@ type rgwRoleUpdateRequest struct {
 }
 
 func (c *Client) RGWUpdateRole(ctx context.Context, name string, maxSessionDuration int64) error {
-	// The edit endpoint expects max_session_duration in hours and multiplies it
-	// back into seconds, unlike the read endpoint which reports seconds.
+	// The edit endpoint expects max_session_duration in hours and truncates
+	// int(hours * 3600) back into seconds, unlike the read endpoint which
+	// reports seconds. Plain division loses a second for many values (e.g.
+	// 3603/3600.0*3600 truncates to 3602), so nudge the quotient up until it
+	// round-trips exactly.
+	hours := float64(maxSessionDuration) / 3600.0
+	for int64(hours*3600.0) < maxSessionDuration {
+		hours = math.Nextafter(hours, math.Inf(1))
+	}
 	requestBody := rgwRoleUpdateRequest{
 		RoleName:           name,
-		MaxSessionDuration: float64(maxSessionDuration) / 3600.0,
+		MaxSessionDuration: hours,
 	}
 
 	jsonPayload, err := json.Marshal(requestBody)
