@@ -563,12 +563,43 @@ func (r *RBDImageResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
+	imageName := state.Name.ValueString()
+
+	// The dashboard applies a rename before configuration changes but then
+	// reopens the image by its old name to set the configuration, which
+	// fails. Send the rename on its own first.
+	if updateReq.Name != nil && updateReq.Configuration != nil {
+		taskInfo, err := r.client.UpdateRBDImage(ctx, state.PoolName.ValueString(), state.Namespace.ValueString(), imageName, restapi.RBDImageUpdateRequest{
+			Name: updateReq.Name,
+		})
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"API Request Error",
+				fmt.Sprintf("Unable to rename RBD image '%s' in pool '%s': %s", imageName, state.PoolName.ValueString(), err),
+			)
+			return
+		}
+		if !r.waitForTask(ctx, taskInfo, "rename", &resp.Diagnostics) {
+			return
+		}
+
+		partial := state
+		partial.Name = data.Name
+		resp.Diagnostics.Append(resp.State.Set(ctx, &partial)...)
+		if resp.Diagnostics.HasError() {
+			return
+		}
+
+		imageName = data.Name.ValueString()
+		updateReq.Name = nil
+	}
+
 	tflog.Debug(ctx, "Updating RBD image", map[string]interface{}{
 		"pool_name": state.PoolName.ValueString(),
-		"name":      state.Name.ValueString(),
+		"name":      imageName,
 	})
 
-	taskInfo, err := r.client.UpdateRBDImage(ctx, state.PoolName.ValueString(), state.Namespace.ValueString(), state.Name.ValueString(), updateReq)
+	taskInfo, err := r.client.UpdateRBDImage(ctx, state.PoolName.ValueString(), state.Namespace.ValueString(), imageName, updateReq)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
