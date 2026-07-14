@@ -56,7 +56,7 @@ type RGWUserCap struct {
 }
 
 func (c *Client) RGWGetUser(ctx context.Context, uid string) (*RGWUser, error) {
-	url := c.endpoint.JoinPath("/api/rgw/user", uid).String()
+	url := c.endpoint.JoinPath("/api/rgw/user", url.PathEscape(uid)).String()
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -204,7 +204,7 @@ func (c *Client) RGWUpdateUser(ctx context.Context, uid string, req RGWUserUpdat
 		"request_body": string(jsonPayload),
 	})
 
-	url := c.endpoint.JoinPath("/api/rgw/user", uid).String()
+	url := c.endpoint.JoinPath("/api/rgw/user", url.PathEscape(uid)).String()
 	httpReq, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return nil, fmt.Errorf("unable to create request: %w", err)
@@ -249,7 +249,7 @@ func (c *Client) RGWUpdateUser(ctx context.Context, uid string, req RGWUserUpdat
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-rgw-user-uid>
 
 func (c *Client) RGWDeleteUser(ctx context.Context, uid string) error {
-	url := c.endpoint.JoinPath("/api/rgw/user", uid).String()
+	url := c.endpoint.JoinPath("/api/rgw/user", url.PathEscape(uid)).String()
 	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return fmt.Errorf("unable to create request: %w", err)
@@ -323,7 +323,7 @@ func (c *Client) RGWCreateS3Key(ctx context.Context, uid string, subuser *string
 		"request_body": string(jsonPayload),
 	})
 
-	url := c.endpoint.JoinPath("/api/rgw/user", uid, "key").String()
+	url := c.endpoint.JoinPath("/api/rgw/user", url.PathEscape(uid), "key").String()
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return nil, fmt.Errorf("unable to create request: %w", err)
@@ -374,7 +374,7 @@ func (c *Client) RGWCreateS3Key(ctx context.Context, uid string, subuser *string
 func (c *Client) RGWDeleteS3Key(ctx context.Context, uid string, accessKey string, subuser *string) error {
 	ctx = tflog.MaskLogStrings(ctx, accessKey)
 
-	endpoint := c.endpoint.JoinPath("/api/rgw/user", uid, "key")
+	endpoint := c.endpoint.JoinPath("/api/rgw/user", url.PathEscape(uid), "key")
 	query := url.Values{}
 	query.Add("key_type", "s3")
 	query.Add("access_key", accessKey)
@@ -424,7 +424,7 @@ type RGWUserQuotas struct {
 }
 
 func (c *Client) RGWGetUserQuota(ctx context.Context, uid string) (*RGWUserQuotas, error) {
-	url := c.endpoint.JoinPath("/api/rgw/user", uid, "quota").String()
+	url := c.endpoint.JoinPath("/api/rgw/user", url.PathEscape(uid), "quota").String()
 
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -494,7 +494,7 @@ func (c *Client) RGWSetUserQuota(ctx context.Context, uid, quotaType string, ena
 		"request_body": string(jsonPayload),
 	})
 
-	url := c.endpoint.JoinPath("/api/rgw/user", uid, "quota").String()
+	url := c.endpoint.JoinPath("/api/rgw/user", url.PathEscape(uid), "quota").String()
 	httpReq, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return fmt.Errorf("unable to create request: %w", err)
@@ -548,7 +548,7 @@ func (c *Client) RGWCreateUserCap(ctx context.Context, uid, capType, perm string
 		"request_body": string(jsonPayload),
 	})
 
-	url := c.endpoint.JoinPath("/api/rgw/user", uid, "capability").String()
+	url := c.endpoint.JoinPath("/api/rgw/user", url.PathEscape(uid), "capability").String()
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return fmt.Errorf("unable to create request: %w", err)
@@ -588,7 +588,7 @@ func (c *Client) RGWCreateUserCap(ctx context.Context, uid, capType, perm string
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-rgw-user--uid--capability>
 
 func (c *Client) RGWDeleteUserCap(ctx context.Context, uid, capType, perm string) error {
-	endpoint := c.endpoint.JoinPath("/api/rgw/user", uid, "capability")
+	endpoint := c.endpoint.JoinPath("/api/rgw/user", url.PathEscape(uid), "capability")
 	query := url.Values{}
 	query.Add("type", capType)
 	query.Add("perm", perm)

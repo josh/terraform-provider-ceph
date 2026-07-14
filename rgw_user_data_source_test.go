@@ -77,6 +77,38 @@ func TestAccCephRGWUserDataSource_tenant(t *testing.T) {
 	})
 }
 
+func TestAccCephRGWUserDataSource_percentInUserID(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	// Only percent sequences that are not valid hex escapes: the dashboard
+	// stack percent-decodes path segments twice, so a uid containing a valid
+	// escape like "%50" is unaddressable through its API no matter how the
+	// client encodes it.
+	testUID := acctest.RandomWithPrefix("test-user") + "-50%off"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			createTestRGWUser(t, testUID, "Percent User")
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					data "ceph_rgw_user" "test" {
+					  user_id = %q
+					}
+				`, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "user_id", testUID),
+					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "display_name", "Percent User"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccCephRGWUserDataSource_nonExistent(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
