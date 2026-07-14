@@ -14,16 +14,16 @@ import (
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-block-image--image_spec--snap>
 
-func (c *Client) rbdSnapshotURL(poolName, imageName string, extra ...string) *url.URL {
-	endpoint := c.rbdImageURL(poolName, "", imageName).JoinPath("snap")
+func (c *Client) rbdSnapshotURL(poolName, namespace, imageName string, extra ...string) *url.URL {
+	endpoint := c.rbdImageURL(poolName, namespace, imageName).JoinPath("snap")
 	for _, segment := range extra {
 		endpoint = endpoint.JoinPath(url.PathEscape(segment))
 	}
 	return endpoint
 }
 
-func (c *Client) GetRBDSnapshot(ctx context.Context, poolName, imageName, snapName string) (*RBDImageSnapshot, error) {
-	image, err := c.GetRBDImage(ctx, poolName, "", imageName)
+func (c *Client) GetRBDSnapshot(ctx context.Context, poolName, namespace, imageName, snapName string) (*RBDImageSnapshot, error) {
+	image, err := c.GetRBDImage(ctx, poolName, namespace, imageName)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +37,7 @@ func (c *Client) GetRBDSnapshot(ctx context.Context, poolName, imageName, snapNa
 	return nil, ErrNotFound
 }
 
-func (c *Client) CreateRBDSnapshot(ctx context.Context, poolName, imageName, snapName string) (*TaskInfo, error) {
+func (c *Client) CreateRBDSnapshot(ctx context.Context, poolName, namespace, imageName, snapName string) (*TaskInfo, error) {
 	jsonPayload, err := json.Marshal(map[string]any{
 		"snapshot_name":       snapName,
 		"mirrorImageSnapshot": false,
@@ -50,7 +50,7 @@ func (c *Client) CreateRBDSnapshot(ctx context.Context, poolName, imageName, sna
 		"request_body": string(jsonPayload),
 	})
 
-	url := c.rbdSnapshotURL(poolName, imageName).String()
+	url := c.rbdSnapshotURL(poolName, namespace, imageName).String()
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return nil, fmt.Errorf("unable to create request: %w", err)
@@ -91,7 +91,7 @@ type RBDSnapshotUpdateRequest struct {
 	IsProtected *bool   `json:"is_protected,omitempty"`
 }
 
-func (c *Client) UpdateRBDSnapshot(ctx context.Context, poolName, imageName, snapName string, req RBDSnapshotUpdateRequest) (*TaskInfo, error) {
+func (c *Client) UpdateRBDSnapshot(ctx context.Context, poolName, namespace, imageName, snapName string, req RBDSnapshotUpdateRequest) (*TaskInfo, error) {
 	jsonPayload, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("unable to encode request payload: %w", err)
@@ -101,7 +101,7 @@ func (c *Client) UpdateRBDSnapshot(ctx context.Context, poolName, imageName, sna
 		"request_body": string(jsonPayload),
 	})
 
-	url := c.rbdSnapshotURL(poolName, imageName, snapName).String()
+	url := c.rbdSnapshotURL(poolName, namespace, imageName, snapName).String()
 	httpReq, err := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(jsonPayload))
 	if err != nil {
 		return nil, fmt.Errorf("unable to create request: %w", err)
@@ -141,8 +141,8 @@ func (c *Client) UpdateRBDSnapshot(ctx context.Context, poolName, imageName, sna
 
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-block-image--image_spec--snap--snapshot_name->
 
-func (c *Client) DeleteRBDSnapshot(ctx context.Context, poolName, imageName, snapName string) (*TaskInfo, error) {
-	url := c.rbdSnapshotURL(poolName, imageName, snapName).String()
+func (c *Client) DeleteRBDSnapshot(ctx context.Context, poolName, namespace, imageName, snapName string) (*TaskInfo, error) {
+	url := c.rbdSnapshotURL(poolName, namespace, imageName, snapName).String()
 	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create request: %w", err)

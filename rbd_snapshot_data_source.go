@@ -22,6 +22,7 @@ type RBDSnapshotDataSource struct {
 
 type RBDSnapshotDataSourceModel struct {
 	PoolName    types.String `tfsdk:"pool_name"`
+	Namespace   types.String `tfsdk:"namespace"`
 	ImageName   types.String `tfsdk:"image_name"`
 	Name        types.String `tfsdk:"name"`
 	IsProtected types.Bool   `tfsdk:"is_protected"`
@@ -40,6 +41,10 @@ func (d *RBDSnapshotDataSource) Schema(ctx context.Context, req datasource.Schem
 			"pool_name": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The name of the pool holding the image",
 				Required:            true,
+			},
+			"namespace": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The RBD namespace holding the image",
+				Optional:            true,
 			},
 			"image_name": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The name of the image",
@@ -92,11 +97,11 @@ func (d *RBDSnapshotDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
-	snap, err := d.client.GetRBDSnapshot(ctx, data.PoolName.ValueString(), data.ImageName.ValueString(), data.Name.ValueString())
+	snap, err := d.client.GetRBDSnapshot(ctx, data.PoolName.ValueString(), data.Namespace.ValueString(), data.ImageName.ValueString(), data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
-			fmt.Sprintf("Unable to get snapshot '%s' of RBD image '%s/%s' from Ceph API: %s", data.Name.ValueString(), data.PoolName.ValueString(), data.ImageName.ValueString(), err),
+			fmt.Sprintf("Unable to get snapshot '%s' of RBD image '%s' from Ceph API: %s", data.Name.ValueString(), rbdImageSpec(data.PoolName.ValueString(), data.Namespace.ValueString(), data.ImageName.ValueString()), err),
 		)
 		return
 	}
