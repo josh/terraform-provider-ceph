@@ -694,6 +694,66 @@ func TestAccCephCrushRuleResource_FailureDomainMismatchWithProfile(t *testing.T)
 	})
 }
 
+func TestAccCephCrushRuleResource_erasureProfileDeviceClass(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	profileName := acctest.RandomWithPrefix("test-ec-profile-dc")
+	ruleName := acctest.RandomWithPrefix("test-crush-rule-dc")
+	mismatchRuleName := acctest.RandomWithPrefix("test-crush-rule-dc-miss")
+
+	profileConfig := fmt.Sprintf(`
+		resource "ceph_erasure_code_profile" "test" {
+			name                 = %q
+			k                    = 2
+			m                    = 1
+			crush_failure_domain = "osd"
+			crush_device_class   = "hdd"
+		}
+	`, profileName)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephCrushRuleDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckCephHealth(t)
+		},
+		Steps: []resource.TestStep{
+			// Omitting device_class must fail with a clear mismatch error,
+			// since the mon builds the erasure rule from the profile alone.
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + profileConfig + fmt.Sprintf(`
+					resource "ceph_crush_rule" "test" {
+						name           = %q
+						pool_type      = "erasure"
+						failure_domain = "osd"
+						profile        = ceph_erasure_code_profile.test.name
+					}
+				`, mismatchRuleName),
+				ExpectError: regexp.MustCompile(`Device Class Mismatch`),
+			},
+			// A matching device_class applies cleanly.
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + profileConfig + fmt.Sprintf(`
+					resource "ceph_crush_rule" "test" {
+						name           = %q
+						pool_type      = "erasure"
+						failure_domain = "osd"
+						device_class   = "hdd"
+						profile        = ceph_erasure_code_profile.test.name
+					}
+				`, ruleName),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("ceph_crush_rule.test", "device_class", "hdd"),
+					resource.TestCheckResourceAttr("ceph_crush_rule.test", "root", "default"),
+				),
+			},
+		},
+	})
+}
+
 func TestAccCephCrushRuleResource_importOutOfBand(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
