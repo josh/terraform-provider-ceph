@@ -79,9 +79,12 @@ func rbdImageFeaturesRequireReplace(ctx context.Context, req planmodifier.SetReq
 		return
 	}
 
-	var currentNames, planned []string
+	var currentNames, planned, declared []string
 	resp.Diagnostics.Append(current.ElementsAs(ctx, &currentNames, false)...)
 	resp.Diagnostics.Append(req.PlanValue.ElementsAs(ctx, &planned, false)...)
+	if !req.StateValue.IsNull() && !req.StateValue.IsUnknown() {
+		resp.Diagnostics.Append(req.StateValue.ElementsAs(ctx, &declared, false)...)
+	}
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -92,8 +95,12 @@ func rbdImageFeaturesRequireReplace(ctx context.Context, req planmodifier.SetReq
 			return
 		}
 	}
-	for _, feature := range currentNames {
-		if !slices.Contains(planned, feature) && !rbdImageDisableableFeatures[feature] {
+	// Only features the configuration previously declared count as removals:
+	// implicit bits like "striping" or "data-pool" never appear in the
+	// config, and the dashboard silently skips un-disableable features it is
+	// not asked about, so they stay on the image either way.
+	for _, feature := range declared {
+		if !slices.Contains(planned, feature) && slices.Contains(currentNames, feature) && !rbdImageDisableableFeatures[feature] {
 			resp.RequiresReplace = true
 			return
 		}
