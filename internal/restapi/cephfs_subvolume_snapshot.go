@@ -43,7 +43,7 @@ func (c *Client) CephFSSubvolumeSnapshotInfo(ctx context.Context, volName, subvo
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -104,7 +104,7 @@ func (c *Client) CephFSSubvolumeSnapshotCreate(ctx context.Context, req Subvolum
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -140,7 +140,7 @@ func (c *Client) CephFSSubvolumeSnapshotDelete(ctx context.Context, volName, sub
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)

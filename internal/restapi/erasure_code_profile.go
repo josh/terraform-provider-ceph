@@ -66,7 +66,7 @@ func (c *Client) CreateErasureCodeProfile(ctx context.Context, req ErasureCodePr
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -95,7 +95,7 @@ func (c *Client) DeleteErasureCodeProfile(ctx context.Context, name string) erro
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -129,7 +129,7 @@ func (c *Client) GetErasureCodeProfile(ctx context.Context, name string) (*Erasu
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)

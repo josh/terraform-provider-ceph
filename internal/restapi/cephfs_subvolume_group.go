@@ -43,7 +43,7 @@ func (c *Client) CephFSSubvolumeGroupInfo(ctx context.Context, volName string, g
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -102,7 +102,7 @@ func (c *Client) CephFSSubvolumeGroupCreate(ctx context.Context, req SubvolumeGr
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -138,7 +138,7 @@ func (c *Client) CephFSSubvolumeGroupUpdate(ctx context.Context, volName string,
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -169,7 +169,7 @@ func (c *Client) CephFSSubvolumeGroupDelete(ctx context.Context, volName string,
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)

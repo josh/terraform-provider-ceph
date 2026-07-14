@@ -88,7 +88,7 @@ func (c *Client) CreatePool(ctx context.Context, req PoolCreateRequest) (*TaskIn
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -125,7 +125,7 @@ func (c *Client) DeletePool(ctx context.Context, poolName string) (*TaskInfo, er
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -167,7 +167,7 @@ func (c *Client) GetPool(ctx context.Context, poolName string) (*Pool, error) {
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -216,7 +216,7 @@ func (c *Client) ListPools(ctx context.Context) ([]Pool, error) {
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -285,7 +285,7 @@ func (c *Client) UpdatePool(ctx context.Context, poolName string, req PoolUpdate
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)

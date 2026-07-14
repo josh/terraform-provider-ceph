@@ -37,7 +37,7 @@ func (c *Client) ClusterListConf(ctx context.Context) ([]ClusterConf, error) {
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -85,7 +85,7 @@ func (c *Client) ClusterGetConf(ctx context.Context, name string) (*ClusterConf,
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -157,7 +157,7 @@ func (c *Client) ClusterUpdateConf(ctx context.Context, name string, section str
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -191,7 +191,7 @@ func (c *Client) ClusterDeleteConf(ctx context.Context, name string, section str
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)

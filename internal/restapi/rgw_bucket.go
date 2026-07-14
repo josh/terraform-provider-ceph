@@ -71,7 +71,7 @@ func (c *Client) RGWGetBucket(ctx context.Context, bucketName string) (*RGWBucke
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -135,7 +135,7 @@ func (c *Client) RGWGetBucketWithRetry(ctx context.Context, bucketName string) (
 
 		httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 		httpReq.Header.Set("Content-Type", "application/json")
-		httpReq.Header.Set("Authorization", "Bearer "+c.token)
+		c.setAuthHeader(httpReq)
 
 		logRequest := logAPIRequest(ctx, httpReq)
 		httpResp, err := c.client.Do(httpReq)
@@ -241,7 +241,7 @@ func (c *Client) RGWCreateBucket(ctx context.Context, req RGWBucketCreateRequest
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -315,7 +315,7 @@ func (c *Client) RGWUpdateBucket(ctx context.Context, bucketName string, req RGW
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)
@@ -356,7 +356,7 @@ func (c *Client) RGWDeleteBucket(ctx context.Context, bucketName string) error {
 
 	httpReq.Header.Set("Accept", "application/vnd.ceph.api.v1.0+json")
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	c.setAuthHeader(httpReq)
 
 	logRequest := logAPIRequest(ctx, httpReq)
 	httpResp, err := c.client.Do(httpReq)

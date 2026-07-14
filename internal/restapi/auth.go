@@ -43,9 +43,16 @@ func (c *Client) Configure(ctx context.Context, endpoints []*url.URL, username, 
 	if c.client == nil {
 		c.client = &http.Client{}
 	}
+	if _, ok := c.client.Transport.(*refreshTransport); !ok {
+		base := c.client.Transport
+		if base == nil {
+			base = http.DefaultTransport
+		}
+		c.client.Transport = &refreshTransport{client: c, base: base}
+	}
 
 	if token != "" {
-		c.token = token
+		c.setToken(token)
 
 		valid, err := c.AuthCheck(ctx)
 		if err != nil {
@@ -58,7 +65,10 @@ func (c *Client) Configure(ctx context.Context, endpoints []*url.URL, username, 
 		if err != nil {
 			return fmt.Errorf("failed to sign JWT token: %w", err)
 		}
-		c.token = signedToken
+		c.setToken(signedToken)
+		c.jwtSecret = jwtSecret
+		c.jwtUsername = jwtUsername
+		c.jwtExpiry = jwtExpiry
 
 		valid, err := c.AuthCheck(ctx)
 		if err != nil {
@@ -72,12 +82,45 @@ func (c *Client) Configure(ctx context.Context, endpoints []*url.URL, username, 
 			return fmt.Errorf("failed to authenticate with credentials: %w", err)
 		}
 
-		c.token = authToken
+		c.setToken(authToken)
+		c.username = username
+		c.password = password
 	} else {
 		return fmt.Errorf("either token, jwt_secret, or username/password must be provided")
 	}
 
 	return nil
+}
+
+// refreshToken obtains a replacement for a token the API rejected. Requests
+// racing on the same expiry refresh once: the first caller re-authenticates
+// and later callers reuse its token.
+func (c *Client) refreshToken(ctx context.Context, staleToken string) (string, error) {
+	c.refreshMu.Lock()
+	defer c.refreshMu.Unlock()
+
+	if current := c.currentToken(); current != staleToken {
+		return current, nil
+	}
+
+	switch {
+	case c.jwtSecret != "":
+		token, err := signJWTToken(c.jwtSecret, c.jwtUsername, c.jwtExpiry)
+		if err != nil {
+			return "", fmt.Errorf("failed to sign JWT token: %w", err)
+		}
+		c.setToken(token)
+		return token, nil
+	case c.username != "" && c.password != "":
+		token, err := c.Auth(ctx, c.username, c.password)
+		if err != nil {
+			return "", err
+		}
+		c.setToken(token)
+		return token, nil
+	}
+
+	return "", errors.New("statically configured token cannot be refreshed")
 }
 
 func queryEndpoints(ctx context.Context, endpoints []*url.URL) (*url.URL, error) {
@@ -123,8 +166,9 @@ type authCheckResponse struct {
 }
 
 func (c *Client) AuthCheck(ctx context.Context) (bool, error) {
-	url := c.endpoint.JoinPath("/api/auth/check").String() + "?token=" + c.token
-	ctx = tflog.MaskLogStrings(ctx, c.token)
+	token := c.currentToken()
+	url := c.endpoint.JoinPath("/api/auth/check").String() + "?token=" + token
+	ctx = tflog.MaskLogStrings(ctx, token)
 	jsonPayload := []byte("{}")
 
 	tflog.Trace(ctx, "Ceph API request body", map[string]any{
