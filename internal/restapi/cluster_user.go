@@ -79,19 +79,23 @@ func (c *Client) ClusterExportUser(ctx context.Context, entity string) (string, 
 		return "", fmt.Errorf("unable to decode JSON response: %w", err)
 	}
 
-	users, err := keyring.Parse(keyringRaw)
-	if err == nil {
+	// Only log the body when the keys inside it could be masked; a keyring
+	// the parser rejects would otherwise leak its key material.
+	if users, err := keyring.Parse(keyringRaw); err == nil {
 		for _, user := range users {
 			if user.Key != "" {
 				ctx = tflog.MaskLogStrings(ctx, user.Key)
 			}
 		}
+		tflog.Trace(ctx, "Ceph API response body", map[string]any{
+			"response_body": string(body),
+			"status_code":   httpResp.StatusCode,
+		})
+	} else {
+		tflog.Trace(ctx, "Ceph API response body withheld from log: unparsable keyring", map[string]any{
+			"status_code": httpResp.StatusCode,
+		})
 	}
-
-	tflog.Trace(ctx, "Ceph API response body", map[string]any{
-		"response_body": string(body),
-		"status_code":   httpResp.StatusCode,
-	})
 
 	return keyringRaw, nil
 }
@@ -191,17 +195,20 @@ func (c *Client) ClusterImportUser(ctx context.Context, importData string) error
 		return fmt.Errorf("unable to encode request payload: %w", err)
 	}
 
+	// Only log the body when the keys inside it could be masked; a keyring
+	// the parser rejects would otherwise leak its key material.
 	if users, err := keyring.Parse(importData); err == nil {
 		for _, user := range users {
 			if user.Key != "" {
 				ctx = tflog.MaskLogStrings(ctx, user.Key)
 			}
 		}
+		tflog.Trace(ctx, "Ceph API request body", map[string]any{
+			"request_body": string(jsonPayload),
+		})
+	} else {
+		tflog.Trace(ctx, "Ceph API request body withheld from log: unparsable keyring")
 	}
-
-	tflog.Trace(ctx, "Ceph API request body", map[string]any{
-		"request_body": string(jsonPayload),
-	})
 
 	url := c.endpoint.JoinPath("/api/cluster/user").String()
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(jsonPayload))

@@ -170,16 +170,23 @@ func (c *Client) RGWCreateUser(ctx context.Context, req RGWUserCreateRequest) (*
 		return nil, fmt.Errorf("unable to read response body: %w", err)
 	}
 
-	tflog.Trace(ctx, "Ceph API response body", map[string]any{
-		"response_body": string(body),
-		"status_code":   httpResp.StatusCode,
-	})
-
 	var user RGWUser
 	err = json.Unmarshal(body, &user)
 	if err != nil {
 		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
 	}
+
+	for _, key := range user.Keys {
+		ctx = tflog.MaskLogStrings(ctx, key.AccessKey, key.SecretKey)
+	}
+	for _, key := range user.SwiftKeys {
+		ctx = tflog.MaskLogStrings(ctx, key.SecretKey)
+	}
+
+	tflog.Trace(ctx, "Ceph API response body", map[string]any{
+		"response_body": string(body),
+		"status_code":   httpResp.StatusCode,
+	})
 
 	return &user, nil
 }
@@ -234,16 +241,23 @@ func (c *Client) RGWUpdateUser(ctx context.Context, uid string, req RGWUserUpdat
 		return nil, fmt.Errorf("unable to read response body: %w", err)
 	}
 
-	tflog.Trace(ctx, "Ceph API response body", map[string]any{
-		"response_body": string(body),
-		"status_code":   httpResp.StatusCode,
-	})
-
 	var user RGWUser
 	err = json.Unmarshal(body, &user)
 	if err != nil {
 		return nil, fmt.Errorf("unable to decode JSON response: %w", err)
 	}
+
+	for _, key := range user.Keys {
+		ctx = tflog.MaskLogStrings(ctx, key.AccessKey, key.SecretKey)
+	}
+	for _, key := range user.SwiftKeys {
+		ctx = tflog.MaskLogStrings(ctx, key.SecretKey)
+	}
+
+	tflog.Trace(ctx, "Ceph API response body", map[string]any{
+		"response_body": string(body),
+		"status_code":   httpResp.StatusCode,
+	})
 
 	return &user, nil
 }
