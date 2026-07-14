@@ -43,6 +43,53 @@ provider "ceph" {
 }
 `
 
+// Caps with embedded quotes round-trip through ceph auth export, which
+// escapes them, so the keyring parser must un-escape or every plan diffs.
+func TestAccCephAuthResource_quotedCommandCaps(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testEntity := acctest.RandomWithPrefix("client.test-auth-quoted")
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_auth" "quoted" {
+		  entity = %q
+		  caps = {
+		    mon = "allow command \"auth get\""
+		  }
+		}
+	`, testEntity)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephAuthDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"ceph_auth.quoted",
+						tfjsonpath.New("caps"),
+						knownvalue.ObjectExact(map[string]knownvalue.Check{
+							"mon": knownvalue.StringExact(`allow command "auth get"`),
+						}),
+					),
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
 func TestAccCephAuthResource(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()

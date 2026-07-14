@@ -103,9 +103,11 @@ func TestParseClientFooKeyring(t *testing.T) {
 }
 
 func TestParseQuotedCommandCapsKeyring(t *testing.T) {
+	// ceph auth export escapes embedded quotes (KeyRing::print replaces
+	// `"` with `\"`).
 	text := `[client.foo]
 	key = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
-	caps mon = "allow command "osd blacklist""
+	caps mon = "allow command \"osd blacklist\""
 `
 
 	expected := []User{
@@ -311,5 +313,43 @@ func TestFormatParseRoundTrip(t *testing.T) {
 	reserialized := Format(parsed)
 	if reserialized != serialized {
 		t.Errorf("Re-serialization changed output:\nFirst:  %q\nSecond: %q", serialized, reserialized)
+	}
+}
+
+func TestFormatQuotedCommandCaps(t *testing.T) {
+	users := []User{
+		{
+			Entity: "client.foo",
+			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+			Caps:   MustCapsFromMap(map[string]string{"mon": `allow command "osd blacklist"`}),
+		},
+	}
+
+	expected := `[client.foo]
+	key = AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+	caps mon = "allow command \"osd blacklist\""
+`
+
+	if actual := Format(users); actual != expected {
+		t.Errorf("Format() = %q, want %q", actual, expected)
+	}
+}
+
+func TestFormatParseRoundTripQuotedCaps(t *testing.T) {
+	original := []User{
+		{
+			Entity: "client.foo",
+			Key:    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+			Caps:   MustCapsFromMap(map[string]string{"mon": `allow command "osd blacklist"`}),
+		},
+	}
+
+	parsed, err := Parse(Format(original))
+	if err != nil {
+		t.Fatalf("Parse() error = %v, wantErr nil", err)
+	}
+
+	if !reflect.DeepEqual(parsed, original) {
+		t.Errorf("Round-trip failed: got %v, want %v", parsed, original)
 	}
 }
