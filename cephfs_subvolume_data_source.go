@@ -21,12 +21,13 @@ type CephFSSubvolumeDataSource struct {
 }
 
 type CephFSSubvolumeDataSourceModel struct {
-	Name     types.String `tfsdk:"name"`
-	VolName  types.String `tfsdk:"vol_name"`
-	Size     types.Int64  `tfsdk:"size"`
-	Path     types.String `tfsdk:"path"`
-	DataPool types.String `tfsdk:"data_pool"`
-	State    types.String `tfsdk:"state"`
+	Name      types.String `tfsdk:"name"`
+	VolName   types.String `tfsdk:"vol_name"`
+	GroupName types.String `tfsdk:"group_name"`
+	Size      types.Int64  `tfsdk:"size"`
+	Path      types.String `tfsdk:"path"`
+	DataPool  types.String `tfsdk:"data_pool"`
+	State     types.String `tfsdk:"state"`
 }
 
 func (d *CephFSSubvolumeDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -44,6 +45,10 @@ func (d *CephFSSubvolumeDataSource) Schema(ctx context.Context, req datasource.S
 			"vol_name": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The name of the CephFS filesystem.",
 				Required:            true,
+			},
+			"group_name": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The subvolume group holding the subvolume. When not set, the subvolume is looked up in the default group.",
+				Optional:            true,
 			},
 			"size": dataSourceSchema.Int64Attribute{
 				MarkdownDescription: "The quota size in bytes.",
@@ -92,7 +97,7 @@ func (d *CephFSSubvolumeDataSource) Read(ctx context.Context, req datasource.Rea
 		return
 	}
 
-	info, err := d.client.CephFSSubvolumeInfo(ctx, data.VolName.ValueString(), data.Name.ValueString(), "")
+	info, err := d.client.CephFSSubvolumeInfo(ctx, data.VolName.ValueString(), data.Name.ValueString(), data.GroupName.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
