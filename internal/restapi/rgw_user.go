@@ -195,6 +195,8 @@ type RGWUserUpdateRequest struct {
 }
 
 func (c *Client) RGWUpdateUser(ctx context.Context, uid string, req RGWUserUpdateRequest) (*RGWUser, error) {
+	defer c.lockRGWUser(uid)()
+
 	jsonPayload, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("unable to encode request payload: %w", err)
@@ -249,6 +251,8 @@ func (c *Client) RGWUpdateUser(ctx context.Context, uid string, req RGWUserUpdat
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-rgw-user-uid>
 
 func (c *Client) RGWDeleteUser(ctx context.Context, uid string) error {
+	defer c.lockRGWUser(uid)()
+
 	url := c.endpoint.JoinPath("/api/rgw/user", uid).String()
 	httpReq, err := http.NewRequestWithContext(ctx, "DELETE", url, nil)
 	if err != nil {
@@ -298,6 +302,8 @@ type rgwS3KeyCreateRequest struct {
 }
 
 func (c *Client) RGWCreateS3Key(ctx context.Context, uid string, subuser *string, accessKey *string, secretKey *string, generateKey *bool) ([]RGWS3Key, error) {
+	defer c.lockRGWUser(uid)()
+
 	if accessKey != nil {
 		ctx = tflog.MaskLogStrings(ctx, *accessKey)
 	}
@@ -372,6 +378,8 @@ func (c *Client) RGWCreateS3Key(ctx context.Context, uid string, subuser *string
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-rgw-user-uid-key>
 
 func (c *Client) RGWDeleteS3Key(ctx context.Context, uid string, accessKey string, subuser *string) error {
+	defer c.lockRGWUser(uid)()
+
 	ctx = tflog.MaskLogStrings(ctx, accessKey)
 
 	endpoint := c.endpoint.JoinPath("/api/rgw/user", uid, "key")
@@ -480,6 +488,8 @@ func (c *Client) RGWGetUserQuota(ctx context.Context, uid string) (*RGWUserQuota
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#put--api-rgw-user--uid--quota>
 
 func (c *Client) RGWSetUserQuota(ctx context.Context, uid, quotaType string, enabled bool, maxSizeKB, maxObjects int64) error {
+	defer c.lockRGWUser(uid)()
+
 	jsonPayload, err := json.Marshal(map[string]any{
 		"quota_type":  quotaType,
 		"enabled":     enabled,
@@ -536,6 +546,8 @@ func (c *Client) RGWSetUserQuota(ctx context.Context, uid, quotaType string, ena
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#post--api-rgw-user--uid--capability>
 
 func (c *Client) RGWCreateUserCap(ctx context.Context, uid, capType, perm string) error {
+	defer c.lockRGWUser(uid)()
+
 	jsonPayload, err := json.Marshal(map[string]string{
 		"type": capType,
 		"perm": perm,
@@ -588,6 +600,8 @@ func (c *Client) RGWCreateUserCap(ctx context.Context, uid, capType, perm string
 // <https://docs.ceph.com/en/latest/mgr/ceph_api/#delete--api-rgw-user--uid--capability>
 
 func (c *Client) RGWDeleteUserCap(ctx context.Context, uid, capType, perm string) error {
+	defer c.lockRGWUser(uid)()
+
 	endpoint := c.endpoint.JoinPath("/api/rgw/user", uid, "capability")
 	query := url.Values{}
 	query.Add("type", capType)
