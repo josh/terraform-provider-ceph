@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -203,6 +204,28 @@ func (r *CrushRuleResource) Create(ctx context.Context, req resource.CreateReque
 						"Ceph ignores the crush rule's failure_domain for erasure pools, using the profile's setting instead.",
 					data.FailureDomain.ValueString(),
 					profile.CrushFailureDomain,
+				),
+			)
+			return
+		} else if profile.CrushDeviceClass != data.DeviceClass.ValueString() {
+			resp.Diagnostics.AddError(
+				"Device Class Mismatch",
+				fmt.Sprintf(
+					"The crush rule's device_class (%q) must match the erasure code profile's crush_device_class (%q). "+
+						"Ceph ignores the crush rule's device_class for erasure pools, using the profile's setting instead.",
+					data.DeviceClass.ValueString(),
+					profile.CrushDeviceClass,
+				),
+			)
+			return
+		} else if profileRoot := cmp.Or(profile.CrushRoot, "default"); profileRoot != data.Root.ValueString() {
+			resp.Diagnostics.AddError(
+				"Root Mismatch",
+				fmt.Sprintf(
+					"The crush rule's root (%q) must match the erasure code profile's crush_root (%q). "+
+						"Ceph ignores the crush rule's root for erasure pools, using the profile's setting instead.",
+					data.Root.ValueString(),
+					profileRoot,
 				),
 			)
 			return
