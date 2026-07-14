@@ -39,12 +39,20 @@ type RBDSnapshotResource struct {
 
 type RBDSnapshotResourceModel struct {
 	PoolName    types.String   `tfsdk:"pool_name"`
+	Namespace   types.String   `tfsdk:"namespace"`
 	ImageName   types.String   `tfsdk:"image_name"`
 	Name        types.String   `tfsdk:"name"`
 	IsProtected types.Bool     `tfsdk:"is_protected"`
 	Size        types.Int64    `tfsdk:"size"`
 	Timestamp   types.String   `tfsdk:"timestamp"`
 	Timeouts    timeouts.Value `tfsdk:"timeouts"`
+}
+
+func rbdImageSpec(poolName, namespace, imageName string) string {
+	if namespace != "" {
+		return poolName + "/" + namespace + "/" + imageName
+	}
+	return poolName + "/" + imageName
 }
 
 func (r *RBDSnapshotResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
@@ -60,6 +68,19 @@ func (r *RBDSnapshotResource) Schema(ctx context.Context, req resource.SchemaReq
 				Required:            true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+			},
+			"namespace": resourceSchema.StringAttribute{
+				MarkdownDescription: "The RBD namespace holding the image. Changing requires destroying and recreating the snapshot.",
+				Optional:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^[^/@]+$`),
+						"must not contain '/' or '@'",
+					),
 				},
 			},
 			"image_name": resourceSchema.StringAttribute{
@@ -169,14 +190,16 @@ func (r *RBDSnapshotResource) Create(ctx context.Context, req resource.CreateReq
 	defer cancel()
 
 	poolName := data.PoolName.ValueString()
+	namespace := data.Namespace.ValueString()
 	imageName := data.ImageName.ValueString()
 	snapName := data.Name.ValueString()
+	imageSpec := rbdImageSpec(poolName, namespace, imageName)
 
-	taskInfo, err := r.client.CreateRBDSnapshot(ctx, poolName, imageName, snapName)
+	taskInfo, err := r.client.CreateRBDSnapshot(ctx, poolName, namespace, imageName, snapName)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
-			fmt.Sprintf("Unable to create snapshot '%s' of RBD image '%s/%s': %s", snapName, poolName, imageName, err),
+			fmt.Sprintf("Unable to create snapshot '%s' of RBD image '%s': %s", snapName, imageSpec, err),
 		)
 		return
 	}
@@ -197,13 +220,13 @@ func (r *RBDSnapshotResource) Create(ctx context.Context, req resource.CreateReq
 
 	if data.IsProtected.ValueBool() {
 		protect := true
-		taskInfo, err := r.client.UpdateRBDSnapshot(ctx, poolName, imageName, snapName, restapi.RBDSnapshotUpdateRequest{
+		taskInfo, err := r.client.UpdateRBDSnapshot(ctx, poolName, namespace, imageName, snapName, restapi.RBDSnapshotUpdateRequest{
 			IsProtected: &protect,
 		})
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"API Request Error",
-				fmt.Sprintf("Unable to protect snapshot '%s' of RBD image '%s/%s': %s", snapName, poolName, imageName, err),
+				fmt.Sprintf("Unable to protect snapshot '%s' of RBD image '%s': %s", snapName, imageSpec, err),
 			)
 			return
 		}
@@ -212,11 +235,11 @@ func (r *RBDSnapshotResource) Create(ctx context.Context, req resource.CreateReq
 		}
 	}
 
-	snap, err := r.client.GetRBDSnapshot(ctx, poolName, imageName, snapName)
+	snap, err := r.client.GetRBDSnapshot(ctx, poolName, namespace, imageName, snapName)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
-			fmt.Sprintf("Unable to read snapshot '%s' of RBD image '%s/%s' after creation: %s", snapName, poolName, imageName, err),
+			fmt.Sprintf("Unable to read snapshot '%s' of RBD image '%s' after creation: %s", snapName, imageSpec, err),
 		)
 		return
 	}
@@ -234,7 +257,7 @@ func (r *RBDSnapshotResource) Read(ctx context.Context, req resource.ReadRequest
 		return
 	}
 
-	snap, err := r.client.GetRBDSnapshot(ctx, data.PoolName.ValueString(), data.ImageName.ValueString(), data.Name.ValueString())
+	snap, err := r.client.GetRBDSnapshot(ctx, data.PoolName.ValueString(), data.Namespace.ValueString(), data.ImageName.ValueString(), data.Name.ValueString())
 	if err != nil {
 		if errors.Is(err, restapi.ErrNotFound) {
 			resp.State.RemoveResource(ctx)
@@ -242,7 +265,7 @@ func (r *RBDSnapshotResource) Read(ctx context.Context, req resource.ReadRequest
 		}
 		resp.Diagnostics.AddError(
 			"API Request Error",
-			fmt.Sprintf("Unable to read snapshot '%s' of RBD image '%s/%s': %s", data.Name.ValueString(), data.PoolName.ValueString(), data.ImageName.ValueString(), err),
+			fmt.Sprintf("Unable to read snapshot '%s' of RBD image '%s': %s", data.Name.ValueString(), rbdImageSpec(data.PoolName.ValueString(), data.Namespace.ValueString(), data.ImageName.ValueString()), err),
 		)
 		return
 	}
@@ -276,7 +299,9 @@ func (r *RBDSnapshotResource) Update(ctx context.Context, req resource.UpdateReq
 	defer cancel()
 
 	poolName := state.PoolName.ValueString()
+	namespace := state.Namespace.ValueString()
 	imageName := state.ImageName.ValueString()
+	imageSpec := rbdImageSpec(poolName, namespace, imageName)
 
 	updateReq := restapi.RBDSnapshotUpdateRequest{}
 	if !data.Name.Equal(state.Name) {
@@ -286,11 +311,11 @@ func (r *RBDSnapshotResource) Update(ctx context.Context, req resource.UpdateReq
 		updateReq.IsProtected = data.IsProtected.ValueBoolPointer()
 	}
 
-	taskInfo, err := r.client.UpdateRBDSnapshot(ctx, poolName, imageName, state.Name.ValueString(), updateReq)
+	taskInfo, err := r.client.UpdateRBDSnapshot(ctx, poolName, namespace, imageName, state.Name.ValueString(), updateReq)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
-			fmt.Sprintf("Unable to update snapshot '%s' of RBD image '%s/%s': %s", state.Name.ValueString(), poolName, imageName, err),
+			fmt.Sprintf("Unable to update snapshot '%s' of RBD image '%s': %s", state.Name.ValueString(), imageSpec, err),
 		)
 		return
 	}
@@ -299,11 +324,11 @@ func (r *RBDSnapshotResource) Update(ctx context.Context, req resource.UpdateReq
 		return
 	}
 
-	snap, err := r.client.GetRBDSnapshot(ctx, poolName, imageName, data.Name.ValueString())
+	snap, err := r.client.GetRBDSnapshot(ctx, poolName, namespace, imageName, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
-			fmt.Sprintf("Unable to read snapshot '%s' of RBD image '%s/%s' after update: %s", data.Name.ValueString(), poolName, imageName, err),
+			fmt.Sprintf("Unable to read snapshot '%s' of RBD image '%s' after update: %s", data.Name.ValueString(), imageSpec, err),
 		)
 		return
 	}
@@ -331,18 +356,20 @@ func (r *RBDSnapshotResource) Delete(ctx context.Context, req resource.DeleteReq
 	defer cancel()
 
 	poolName := data.PoolName.ValueString()
+	namespace := data.Namespace.ValueString()
 	imageName := data.ImageName.ValueString()
 	snapName := data.Name.ValueString()
+	imageSpec := rbdImageSpec(poolName, namespace, imageName)
 
 	if data.IsProtected.ValueBool() {
 		unprotect := false
-		taskInfo, err := r.client.UpdateRBDSnapshot(ctx, poolName, imageName, snapName, restapi.RBDSnapshotUpdateRequest{
+		taskInfo, err := r.client.UpdateRBDSnapshot(ctx, poolName, namespace, imageName, snapName, restapi.RBDSnapshotUpdateRequest{
 			IsProtected: &unprotect,
 		})
 		if err != nil && !errors.Is(err, restapi.ErrNotFound) {
 			resp.Diagnostics.AddError(
 				"API Request Error",
-				fmt.Sprintf("Unable to unprotect snapshot '%s' of RBD image '%s/%s' before deletion: %s. Note that snapshots with dependent clones cannot be unprotected.", snapName, poolName, imageName, err),
+				fmt.Sprintf("Unable to unprotect snapshot '%s' of RBD image '%s' before deletion: %s. Note that snapshots with dependent clones cannot be unprotected.", snapName, imageSpec, err),
 			)
 			return
 		}
@@ -351,14 +378,14 @@ func (r *RBDSnapshotResource) Delete(ctx context.Context, req resource.DeleteReq
 		}
 	}
 
-	taskInfo, err := r.client.DeleteRBDSnapshot(ctx, poolName, imageName, snapName)
+	taskInfo, err := r.client.DeleteRBDSnapshot(ctx, poolName, namespace, imageName, snapName)
 	if err != nil {
 		if errors.Is(err, restapi.ErrNotFound) {
 			return
 		}
 		resp.Diagnostics.AddError(
 			"API Request Error",
-			fmt.Sprintf("Unable to delete snapshot '%s' of RBD image '%s/%s': %s", snapName, poolName, imageName, err),
+			fmt.Sprintf("Unable to delete snapshot '%s' of RBD image '%s': %s", snapName, imageSpec, err),
 		)
 		return
 	}
@@ -367,16 +394,25 @@ func (r *RBDSnapshotResource) Delete(ctx context.Context, req resource.DeleteReq
 }
 
 func (r *RBDSnapshotResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	parts := strings.SplitN(req.ID, "/", 3)
-	if len(parts) != 3 || parts[0] == "" || parts[1] == "" || parts[2] == "" {
+	parts := strings.Split(req.ID, "/")
+	valid := len(parts) == 3 || len(parts) == 4
+	for _, part := range parts {
+		if part == "" {
+			valid = false
+		}
+	}
+	if !valid {
 		resp.Diagnostics.AddError(
 			"Invalid Import ID",
-			fmt.Sprintf("Expected format: pool_name/image_name/snapshot_name, got: %s", req.ID),
+			fmt.Sprintf("Expected format: pool_name/image_name/snapshot_name or pool_name/namespace/image_name/snapshot_name, got: %s", req.ID),
 		)
 		return
 	}
 
 	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("pool_name"), parts[0])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("image_name"), parts[1])...)
-	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), parts[2])...)
+	if len(parts) == 4 {
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("namespace"), parts[1])...)
+	}
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("image_name"), parts[len(parts)-2])...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), parts[len(parts)-1])...)
 }
