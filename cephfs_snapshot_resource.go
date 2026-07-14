@@ -160,6 +160,15 @@ func (r *CephFSSnapshotResource) Create(ctx context.Context, req resource.Create
 		return
 	}
 
+	// The snapshot exists from here on, so record it before the read-back to
+	// keep a failure there from orphaning it from state.
+	partial := data
+	partial.Created = types.StringNull()
+	resp.Diagnostics.Append(resp.State.Set(ctx, &partial)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	snap, err := r.client.CephFSGetSnapshot(ctx, fs.ID, dirPath, snapName)
 	if err != nil {
 		resp.Diagnostics.AddError(

@@ -173,6 +173,18 @@ func (r *RGWUserResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	// The user exists from here on, so record it before applying
+	// capabilities to keep a failure there from orphaning it from state.
+	partial := data
+	resp.Diagnostics.Append(updateModelFromAPIUser(ctx, &partial, user)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &partial)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	if !data.Caps.IsNull() && !data.Caps.IsUnknown() {
 		var caps map[string]string
 		resp.Diagnostics.Append(data.Caps.ElementsAs(ctx, &caps, false)...)

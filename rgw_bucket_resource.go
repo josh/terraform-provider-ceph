@@ -249,6 +249,18 @@ func (r *RGWBucketResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
+	// The bucket exists from here on, so record it before enabling
+	// versioning to keep a failure there from orphaning it from state.
+	partial := data
+	resp.Diagnostics.Append(updateModelFromAPIBucket(ctx, &partial, bucket)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &partial)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// Versioning cannot be set at creation time.
 	if data.VersioningState.ValueString() == "Enabled" && bucket.Versioning != "Enabled" {
 		versioning := "Enabled"
