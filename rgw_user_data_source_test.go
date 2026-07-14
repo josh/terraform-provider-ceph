@@ -46,6 +46,37 @@ func TestAccCephRGWUserDataSource(t *testing.T) {
 	})
 }
 
+func TestAccCephRGWUserDataSource_tenant(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	tenant := "testtenant" + acctest.RandString(8)
+	user := acctest.RandomWithPrefix("user-ds")
+	testUID := tenant + "$" + user
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck: func() {
+			createTestRGWUser(t, testUID, "Tenanted User DataSource")
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					data "ceph_rgw_user" "test" {
+					  user_id = %q
+					}
+				`, testUID),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "user_id", testUID),
+					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "display_name", "Tenanted User DataSource"),
+					resource.TestCheckResourceAttr("data.ceph_rgw_user.test", "tenant", tenant),
+				),
+			},
+		},
+	})
+}
+
 func TestAccCephRGWUserDataSource_nonExistent(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
