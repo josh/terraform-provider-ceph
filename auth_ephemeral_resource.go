@@ -103,6 +103,22 @@ func (r *AuthEphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequ
 		return
 	}
 
+	// Close deletes the entity, so never adopt one this resource did not
+	// create: destroying a pre-existing entity's key would be data loss.
+	if _, err := r.client.ClusterExportUser(ctx, entity); err == nil {
+		resp.Diagnostics.AddError(
+			"Entity Already Exists",
+			fmt.Sprintf("The entity %q already exists and would be deleted when this ephemeral resource closes. Use the ceph_auth data source to read an existing entity's credentials, or choose an unused entity name.", entity),
+		)
+		return
+	} else if !errors.Is(err, restapi.ErrNotFound) {
+		resp.Diagnostics.AddError(
+			"API Request Error",
+			fmt.Sprintf("Unable to check whether entity %q already exists: %s", entity, err),
+		)
+		return
+	}
+
 	err := r.client.ClusterCreateUser(ctx, entity, caps)
 	if err != nil {
 		resp.Diagnostics.AddError(
