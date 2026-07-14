@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	resourceSchema "github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -80,8 +81,12 @@ func (r *DashboardUserResource) Schema(ctx context.Context, req resource.SchemaR
 				Default:             booldefault.StaticBool(true),
 			},
 			"pwd_expiration_date": resourceSchema.Int64Attribute{
-				MarkdownDescription: "The password expiration date as epoch seconds.",
+				MarkdownDescription: "The password expiration date as epoch seconds. When not set, the dashboard computes it from the user password expiration span policy, if enabled.",
 				Optional:            true,
+				Computed:            true,
+				PlanModifiers: []planmodifier.Int64{
+					int64planmodifier.UseStateForUnknown(),
+				},
 			},
 			"pwd_update_required": resourceSchema.BoolAttribute{
 				MarkdownDescription: "Whether the user must change their password before using the dashboard or API. Defaults to false, since a pending password change blocks all API access for the user.",
@@ -154,8 +159,10 @@ func (r *DashboardUserResource) Create(ctx context.Context, req resource.CreateR
 		Email:             data.Email.ValueStringPointer(),
 		Roles:             r.rolesFromModel(ctx, &data, &resp.Diagnostics),
 		Enabled:           data.Enabled.ValueBool(),
-		PwdExpirationDate: data.PwdExpirationDate.ValueInt64Pointer(),
 		PwdUpdateRequired: data.PwdUpdateRequired.ValueBool(),
+	}
+	if !data.PwdExpirationDate.IsUnknown() {
+		createReq.PwdExpirationDate = data.PwdExpirationDate.ValueInt64Pointer()
 	}
 	if resp.Diagnostics.HasError() {
 		return
@@ -227,8 +234,10 @@ func (r *DashboardUserResource) Update(ctx context.Context, req resource.UpdateR
 		Email:             data.Email.ValueStringPointer(),
 		Roles:             r.rolesFromModel(ctx, &data, &resp.Diagnostics),
 		Enabled:           data.Enabled.ValueBool(),
-		PwdExpirationDate: data.PwdExpirationDate.ValueInt64Pointer(),
 		PwdUpdateRequired: data.PwdUpdateRequired.ValueBool(),
+	}
+	if !data.PwdExpirationDate.IsUnknown() {
+		updateReq.PwdExpirationDate = data.PwdExpirationDate.ValueInt64Pointer()
 	}
 	if resp.Diagnostics.HasError() {
 		return

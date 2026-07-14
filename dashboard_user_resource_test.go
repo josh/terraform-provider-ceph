@@ -171,6 +171,48 @@ func TestAccCephDashboardUserResource(t *testing.T) {
 	})
 }
 
+func TestAccCephDashboardUserResource_pwdExpirationSpan(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	username := acctest.RandomWithPrefix("test-dash-user-exp")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckDashboardUserDestroy(t),
+		PreCheck: func() {
+			if err := cephTestClusterCLI.DashboardSettingSet(t.Context(), "USER_PWD_EXPIRATION_SPAN", "600"); err != nil {
+				t.Fatalf("Failed to set USER_PWD_EXPIRATION_SPAN: %v", err)
+			}
+			testCleanup(t, func(ctx context.Context) {
+				if err := cephTestClusterCLI.DashboardSettingReset(ctx, "USER_PWD_EXPIRATION_SPAN"); err != nil {
+					t.Logf("Warning: failed to reset USER_PWD_EXPIRATION_SPAN: %v", err)
+				}
+			})
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_dashboard_user" "test" {
+					  username = %q
+					  password = %q
+					}
+				`, username, testAccDashboardUserPassword),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					resource.TestCheckResourceAttrSet("ceph_dashboard_user.test", "pwd_expiration_date"),
+					checkDashboardUser(t, username, func(user *cephcli.DashboardUser) error {
+						if user.PwdExpirationDate == nil {
+							return fmt.Errorf("expected pwdExpirationDate to be set by the expiration policy")
+						}
+						return nil
+					}),
+				),
+			},
+		},
+	})
+}
+
 func TestAccCephDashboardUserResource_Import(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
