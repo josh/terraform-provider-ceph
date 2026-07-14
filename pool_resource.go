@@ -341,10 +341,14 @@ func (r *PoolResource) updateModelFromAPI(ctx context.Context, data *PoolResourc
 		data.CompressionMaxBlobSize = types.Int64Null()
 	}
 
-	if len(pool.ApplicationMetadata) > 0 {
-		apps, d := types.SetValueFrom(ctx, types.StringType, pool.ApplicationMetadata)
+	if !data.ApplicationMetadata.IsNull() || len(pool.ApplicationMetadata) > 0 {
+		apps := pool.ApplicationMetadata
+		if apps == nil {
+			apps = []string{}
+		}
+		applications, d := types.SetValueFrom(ctx, types.StringType, apps)
 		diags.Append(d...)
-		data.ApplicationMetadata = apps
+		data.ApplicationMetadata = applications
 	} else {
 		data.ApplicationMetadata = types.SetNull(types.StringType)
 	}
@@ -787,7 +791,7 @@ func (r *PoolResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	}
 
 	if !data.ApplicationMetadata.IsNull() && !data.ApplicationMetadata.IsUnknown() {
-		var apps []string
+		apps := []string{}
 		data.ApplicationMetadata.ElementsAs(ctx, &apps, false)
 		updateReq.ApplicationMetadata = apps
 	}

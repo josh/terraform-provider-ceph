@@ -260,8 +260,10 @@ type PoolUpdateRequest struct {
 	CompressionRequiredRatio *float64 `json:"compression_required_ratio,omitempty"`
 	CompressionMinBlobSize   *int     `json:"compression_min_blob_size,omitempty"`
 	CompressionMaxBlobSize   *int     `json:"compression_max_blob_size,omitempty"`
-	ApplicationMetadata      []string `json:"application_metadata,omitempty"`
-	Flags                    []string `json:"flags,omitempty"`
+	// nil is omitted as null (no change); an empty slice is sent as []
+	// so the dashboard disables every enabled application.
+	ApplicationMetadata []string `json:"application_metadata"`
+	Flags               []string `json:"flags,omitempty"`
 	// Additive: present keys are set, null values are removed, absent
 	// keys are left untouched.
 	Configuration map[string]*string `json:"configuration,omitempty"`

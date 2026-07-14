@@ -768,6 +768,99 @@ func TestAccCephPoolResource_ApplicationMultiple(t *testing.T) {
 	})
 }
 
+func TestAccCephPoolResource_ApplicationEmpty(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	poolName := acctest.RandomWithPrefix("test-pool-no-app")
+
+	config := func(applicationMetadata string) string {
+		return testAccProviderConfigBlock + fmt.Sprintf(`
+			resource "ceph_pool" "test" {
+			  name                 = %q
+			  pool_type            = "replicated"
+			  size                 = 2
+			  min_size             = 1
+			  pg_num               = 32
+			  pg_autoscale_mode    = "off"
+			  application_metadata = %s
+
+			  timeouts = {
+			    create = "1m"
+			    update = "5m"
+			    delete = "1m"
+			  }
+			}
+		`, poolName, applicationMetadata)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephPoolDestroy(t),
+		PreCheck: func() {
+			testAccPreCheckWaitForTasks(t)
+		},
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`[]`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephPoolExists(t, poolName),
+					checkCephPoolApplicationsEmpty(t, poolName),
+					resource.TestCheckResourceAttr("ceph_pool.test", "application_metadata.#", "0"),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`[]`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`["rbd"]`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: checkCephPoolApplication(t, poolName, "rbd"),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`[]`),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_pool.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephPoolApplicationsEmpty(t, poolName),
+					resource.TestCheckResourceAttr("ceph_pool.test", "application_metadata.#", "0"),
+				),
+			},
+		},
+	})
+}
+
+func checkCephPoolApplicationsEmpty(t *testing.T, poolName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		apps, err := cephTestClusterCLI.PoolApplicationGet(t.Context(), poolName)
+		if err != nil {
+			return fmt.Errorf("failed to get applications from Ceph CLI: %w", err)
+		}
+
+		if len(apps) > 0 {
+			return fmt.Errorf("expected no enabled applications on pool, got: %v", apps)
+		}
+
+		return nil
+	}
+}
+
 func TestAccCephPoolResource_CompressionModes(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
