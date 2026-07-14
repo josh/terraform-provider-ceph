@@ -102,6 +102,8 @@ func Parse(content string) ([]User, error) {
 				capsValue := strings.TrimSpace(matches[2])
 				if len(capsValue) >= 2 && strings.HasPrefix(capsValue, `"`) && strings.HasSuffix(capsValue, `"`) {
 					capsValue = capsValue[1 : len(capsValue)-1]
+					// ceph auth export escapes embedded quotes.
+					capsValue = strings.ReplaceAll(capsValue, `\"`, `"`)
 				}
 
 				lower := strings.ToLower(capType)
@@ -137,6 +139,11 @@ func Parse(content string) ([]User, error) {
 func Format(users []User) string {
 	var result strings.Builder
 
+	// Escape embedded quotes the same way ceph auth export does.
+	escape := func(caps string) string {
+		return strings.ReplaceAll(caps, `"`, `\"`)
+	}
+
 	for i, user := range users {
 		if i > 0 {
 			result.WriteString("\n")
@@ -146,16 +153,16 @@ func Format(users []User) string {
 		result.WriteString(fmt.Sprintf("\tkey = %s\n", user.Key))
 
 		if user.Caps.MDS != "" {
-			result.WriteString(fmt.Sprintf("\tcaps mds = \"%s\"\n", user.Caps.MDS))
+			result.WriteString(fmt.Sprintf("\tcaps mds = \"%s\"\n", escape(user.Caps.MDS)))
 		}
 		if user.Caps.MGR != "" {
-			result.WriteString(fmt.Sprintf("\tcaps mgr = \"%s\"\n", user.Caps.MGR))
+			result.WriteString(fmt.Sprintf("\tcaps mgr = \"%s\"\n", escape(user.Caps.MGR)))
 		}
 		if user.Caps.MON != "" {
-			result.WriteString(fmt.Sprintf("\tcaps mon = \"%s\"\n", user.Caps.MON))
+			result.WriteString(fmt.Sprintf("\tcaps mon = \"%s\"\n", escape(user.Caps.MON)))
 		}
 		if user.Caps.OSD != "" {
-			result.WriteString(fmt.Sprintf("\tcaps osd = \"%s\"\n", user.Caps.OSD))
+			result.WriteString(fmt.Sprintf("\tcaps osd = \"%s\"\n", escape(user.Caps.OSD)))
 		}
 	}
 
