@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -68,6 +69,17 @@ type Client struct {
 	endpoint *url.URL
 	token    string
 	client   *http.Client
+
+	rgwUserLocks sync.Map
+}
+
+// RGW mutations on one user all rewrite the same user metadata object, and
+// racing writers lose with 409 ConcurrentModification (surfaced by the
+// dashboard proxy as an opaque 500), so serialize them per uid.
+func (c *Client) lockRGWUser(uid string) func() {
+	mu, _ := c.rgwUserLocks.LoadOrStore(uid, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+	return mu.(*sync.Mutex).Unlock
 }
 
 func logAPIRequest(ctx context.Context, req *http.Request) func(*http.Response, error) {
