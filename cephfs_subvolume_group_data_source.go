@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
@@ -24,6 +25,10 @@ type CephFSSubvolumeGroupDataSourceModel struct {
 	Name     types.String `tfsdk:"name"`
 	VolName  types.String `tfsdk:"vol_name"`
 	Size     types.Int64  `tfsdk:"size"`
+	Path     types.String `tfsdk:"path"`
+	Mode     types.String `tfsdk:"mode"`
+	UID      types.Int64  `tfsdk:"uid"`
+	GID      types.Int64  `tfsdk:"gid"`
 	DataPool types.String `tfsdk:"data_pool"`
 }
 
@@ -45,6 +50,22 @@ func (d *CephFSSubvolumeGroupDataSource) Schema(ctx context.Context, req datasou
 			},
 			"size": dataSourceSchema.Int64Attribute{
 				MarkdownDescription: "The quota size in bytes.",
+				Computed:            true,
+			},
+			"path": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The path of the subvolume group within the filesystem.",
+				Computed:            true,
+			},
+			"mode": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The octal file mode of the subvolume group directory.",
+				Computed:            true,
+			},
+			"uid": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "The owner user id of the subvolume group directory.",
+				Computed:            true,
+			},
+			"gid": dataSourceSchema.Int64Attribute{
+				MarkdownDescription: "The owner group id of the subvolume group directory.",
 				Computed:            true,
 			},
 			"data_pool": dataSourceSchema.StringAttribute{
@@ -97,6 +118,12 @@ func (d *CephFSSubvolumeGroupDataSource) Read(ctx context.Context, req datasourc
 		data.Size = types.Int64Null()
 	}
 
+	// Info returns the full st_mode; only the permission bits are the
+	// configured mode.
+	data.Mode = types.StringValue(strconv.FormatInt(int64(info.Mode)&0o7777, 8))
+	data.UID = types.Int64Value(int64(info.UID))
+	data.GID = types.Int64Value(int64(info.GID))
+	data.Path = types.StringValue(info.Path)
 	data.DataPool = types.StringValue(info.DataPool)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

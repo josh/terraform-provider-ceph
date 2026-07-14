@@ -54,6 +54,11 @@ func TestAccCephFSSubvolumeGroupDataSource(t *testing.T) {
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("data.ceph_cephfs_subvolume_group.test", "name", groupName),
 					resource.TestCheckResourceAttr("data.ceph_cephfs_subvolume_group.test", "vol_name", fsName),
+					resource.TestCheckResourceAttr("data.ceph_cephfs_subvolume_group.test", "path", "/volumes/"+groupName),
+					resource.TestCheckResourceAttr("data.ceph_cephfs_subvolume_group.test", "mode", "755"),
+					resource.TestCheckResourceAttr("data.ceph_cephfs_subvolume_group.test", "uid", "0"),
+					resource.TestCheckResourceAttr("data.ceph_cephfs_subvolume_group.test", "gid", "0"),
+					resource.TestCheckResourceAttrSet("data.ceph_cephfs_subvolume_group.test", "data_pool"),
 				),
 			},
 		},
