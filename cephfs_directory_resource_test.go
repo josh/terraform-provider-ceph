@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"testing"
 	"time"
 
@@ -219,6 +220,17 @@ func TestAccCephFSDirectoryResource_Import(t *testing.T) {
 				ImportStateId:                        fsName + ":" + dirPath,
 				ImportStateVerify:                    true,
 				ImportStateVerifyIdentifierAttribute: "path",
+			},
+			// An un-normalized path would never match the normalized paths
+			// the API reports, so the next Read would silently drop the
+			// resource from state; reject it at import time instead.
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          testAccCephFSDirectoryConfig(fsName, dirPath),
+				ResourceName:    "ceph_cephfs_directory.test",
+				ImportState:     true,
+				ImportStateId:   fsName + ":" + dirPath + "/",
+				ExpectError:     regexp.MustCompile(`(?i)normalized`),
 			},
 		},
 	})
