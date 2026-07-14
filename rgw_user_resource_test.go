@@ -512,6 +512,43 @@ func TestAccCephRGWUserResource_noKeys(t *testing.T) {
 	})
 }
 
+func TestAccCephRGWUserResource_invalidCapDoesNotOrphan(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-user-badcap")
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_rgw_user" "test" {
+		  user_id      = %q
+		  display_name = "Bad Cap User"
+		  caps = {
+		    "not-a-real-cap" = "read"
+		  }
+		}
+	`, testUID)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWUserDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ExpectError:     regexp.MustCompile(`(?i)unable to add capability`),
+			},
+			// The user created before the capability failure must be tracked
+			// in state, so the retry replaces it instead of failing with
+			// "user already exists".
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ExpectError:     regexp.MustCompile(`(?i)unable to add capability`),
+			},
+		},
+	})
+}
+
 func TestAccCephRGWUserResource_tenant(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()

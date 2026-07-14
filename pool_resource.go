@@ -512,6 +512,18 @@ func (r *PoolResource) Create(ctx context.Context, req resource.CreateRequest, r
 		return
 	}
 
+	// The pool exists from here on, so record it before reasserting pg_num
+	// to keep a failure there from orphaning it from state.
+	partial := data
+	resp.Diagnostics.Append(r.updateModelFromAPI(ctx, &partial, pool)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	resp.Diagnostics.Append(resp.State.Set(ctx, &partial)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	// The dashboard turns pg_autoscale_mode off only after the pool exists,
 	// so the autoscaler can move pg_num_target during that window. If the
 	// requested value did not survive, set it again now that autoscaling is

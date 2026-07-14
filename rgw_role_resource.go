@@ -169,6 +169,24 @@ func (r *RGWRoleResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
+	role, err := r.client.RGWGetRole(ctx, name)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"API Request Error",
+			fmt.Sprintf("Unable to read RGW role after creation: %s", err),
+		)
+		return
+	}
+
+	// The role exists from here on, so record it before setting the session
+	// duration to keep a failure there from orphaning it from state.
+	partial := data
+	updateModelFromAPIRole(&partial, role)
+	resp.Diagnostics.Append(resp.State.Set(ctx, &partial)...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	if data.MaxSessionDuration.ValueInt64() != 3600 {
 		if err := r.client.RGWUpdateRole(ctx, name, data.MaxSessionDuration.ValueInt64()); err != nil {
 			resp.Diagnostics.AddError(
@@ -177,15 +195,15 @@ func (r *RGWRoleResource) Create(ctx context.Context, req resource.CreateRequest
 			)
 			return
 		}
-	}
 
-	role, err := r.client.RGWGetRole(ctx, name)
-	if err != nil {
-		resp.Diagnostics.AddError(
-			"API Request Error",
-			fmt.Sprintf("Unable to read RGW role after creation: %s", err),
-		)
-		return
+		role, err = r.client.RGWGetRole(ctx, name)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"API Request Error",
+				fmt.Sprintf("Unable to read RGW role after setting max session duration: %s", err),
+			)
+			return
+		}
 	}
 
 	updateModelFromAPIRole(&data, role)
