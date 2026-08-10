@@ -18,30 +18,39 @@ type RgwRoleInfo struct {
 	CreateDate               string `json:"CreateDate"`
 	MaxSessionDuration       int64  `json:"MaxSessionDuration"`
 	AssumeRolePolicyDocument string `json:"AssumeRolePolicyDocument"`
+	AccountID                string `json:"AccountId"`
 }
 
 type rgwRoleGetOutput struct {
 	Role RgwRoleInfo `json:"role"`
 }
 
-func (c *CLI) RGWRoleCreate(ctx context.Context, name, path, assumePolicyDoc string) error {
+func (c *CLI) RGWRoleCreate(ctx context.Context, accountID, name, path, assumePolicyDoc string) error {
 	args := []string{"--conf", c.confPath, "--format=json", "role", "create",
 		"--role-name=" + name, "--path=" + path, "--assume-role-policy-doc=" + assumePolicyDoc}
+	if accountID != "" {
+		args = append(args, "--account-id="+accountID)
+	}
 
 	cmd := exec.CommandContext(ctx, "radosgw-admin", args...)
 	if _, err := cmd.Output(); err != nil {
 		return fmt.Errorf("failed to create rgw role %s: %w", name, err)
 	}
 
-	if _, err := c.RGWRoleGet(ctx, name); err != nil {
+	if _, err := c.RGWRoleGet(ctx, accountID, name); err != nil {
 		return fmt.Errorf("failed to verify rgw role creation: %w", err)
 	}
 
 	return nil
 }
 
-func (c *CLI) RGWRoleGet(ctx context.Context, name string) (*RgwRoleInfo, error) {
-	cmd := exec.CommandContext(ctx, "radosgw-admin", "--conf", c.confPath, "--format=json", "role", "get", "--role-name="+name)
+func (c *CLI) RGWRoleGet(ctx context.Context, accountID, name string) (*RgwRoleInfo, error) {
+	args := []string{"--conf", c.confPath, "--format=json", "role", "get", "--role-name=" + name}
+	if accountID != "" {
+		args = append(args, "--account-id="+accountID)
+	}
+
+	cmd := exec.CommandContext(ctx, "radosgw-admin", args...)
 	output, err := cmd.Output()
 	if err != nil {
 		if _, ok := err.(*exec.ExitError); ok {
@@ -63,8 +72,8 @@ func (c *CLI) RGWRoleGet(ctx context.Context, name string) (*RgwRoleInfo, error)
 	return &wrapped.Role, nil
 }
 
-func (c *CLI) RGWRoleExists(ctx context.Context, name string) (bool, error) {
-	_, err := c.RGWRoleGet(ctx, name)
+func (c *CLI) RGWRoleExists(ctx context.Context, accountID, name string) (bool, error) {
+	_, err := c.RGWRoleGet(ctx, accountID, name)
 	if err != nil {
 		if errors.Is(err, ErrRGWRoleNotFound) {
 			return false, nil
@@ -75,8 +84,13 @@ func (c *CLI) RGWRoleExists(ctx context.Context, name string) (bool, error) {
 	return true, nil
 }
 
-func (c *CLI) RGWRoleDelete(ctx context.Context, name string) error {
-	cmd := exec.CommandContext(ctx, "radosgw-admin", "--conf", c.confPath, "role", "delete", "--role-name="+name)
+func (c *CLI) RGWRoleDelete(ctx context.Context, accountID, name string) error {
+	args := []string{"--conf", c.confPath, "role", "delete", "--role-name=" + name}
+	if accountID != "" {
+		args = append(args, "--account-id="+accountID)
+	}
+
+	cmd := exec.CommandContext(ctx, "radosgw-admin", args...)
 	if _, err := cmd.Output(); err != nil {
 		return fmt.Errorf("failed to delete rgw role %s: %w", name, err)
 	}

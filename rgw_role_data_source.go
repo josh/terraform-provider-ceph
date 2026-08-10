@@ -5,8 +5,10 @@ import (
 	"fmt"
 
 	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	dataSourceSchema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
@@ -76,8 +78,12 @@ func (d *RGWRoleDataSource) Schema(ctx context.Context, req datasource.SchemaReq
 				Computed:            true,
 			},
 			"account_id": dataSourceSchema.StringAttribute{
-				MarkdownDescription: "The account id the role belongs to.",
+				MarkdownDescription: "The RGW account ID that scopes the role. Omit for legacy global roles on Squid and Tentacle 20.2.2; set for account-scoped roles on Tentacle 20.2.3 and later.",
+				Optional:            true,
 				Computed:            true,
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(rgwRoleAccountIDPattern, "must be RGW followed by 17 digits"),
+				},
 			},
 			"description": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The description of the role. Not settable through the dashboard API.",
@@ -120,7 +126,8 @@ func (d *RGWRoleDataSource) Read(ctx context.Context, req datasource.ReadRequest
 		return
 	}
 
-	role, err := d.client.RGWGetRole(ctx, data.Name.ValueString())
+	accountID := rgwRoleAccountID(data.AccountID)
+	role, err := d.client.RGWGetRole(ctx, accountID, data.Name.ValueString())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
@@ -137,7 +144,9 @@ func (d *RGWRoleDataSource) Read(ctx context.Context, req datasource.ReadRequest
 	data.RoleID = types.StringValue(role.RoleID)
 	data.Arn = types.StringValue(role.Arn)
 	data.CreateDate = types.StringValue(role.CreateDate)
-	data.AccountID = types.StringValue(role.AccountID)
+	if role.AccountID != "" || accountID == "" {
+		data.AccountID = types.StringValue(role.AccountID)
+	}
 	data.Description = types.StringValue(role.Description)
 	if policies := string(role.PermissionPolicies); policies != "" && policies != "null" {
 		data.PermissionPolicies = jsontypes.NewNormalizedValue(policies)
