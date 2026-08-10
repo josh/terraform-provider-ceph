@@ -13,13 +13,14 @@ func TestAccCephRGWRoleDataSource(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
+	accountID := testAccRGWRoleAccount(t)
 	roleName := acctest.RandomWithPrefix("test-role-ds")
-	assumePolicy := `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"arn:aws:iam:::user/someuser"},"Action":"sts:AssumeRole"}]}`
+	assumePolicy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":"arn:aws:iam::%s:user/someuser"},"Action":"sts:AssumeRole"}]}`, accountID)
 
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		PreCheck: func() {
-			createTestRGWRoleDirectly(t, roleName, "/", assumePolicy)
+			createTestRGWRoleDirectly(t, accountID, roleName, "/", assumePolicy)
 		},
 		Steps: []resource.TestStep{
 			{
@@ -27,11 +28,13 @@ func TestAccCephRGWRoleDataSource(t *testing.T) {
 				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					data "ceph_rgw_role" "test" {
 					  name = %q
+					%s
 					}
-				`, roleName),
+				`, roleName, testAccRGWRoleAccountAttribute(accountID)),
 				Check: resource.ComposeAggregateTestCheckFunc(
 					resource.TestCheckResourceAttr("data.ceph_rgw_role.test", "name", roleName),
 					resource.TestCheckResourceAttr("data.ceph_rgw_role.test", "id", roleName),
+					resource.TestCheckResourceAttr("data.ceph_rgw_role.test", "account_id", accountID),
 					resource.TestCheckResourceAttr("data.ceph_rgw_role.test", "path", "/"),
 					resource.TestCheckResourceAttr("data.ceph_rgw_role.test", "max_session_duration", "3600"),
 					resource.TestCheckResourceAttrSet("data.ceph_rgw_role.test", "arn"),
@@ -49,17 +52,19 @@ func TestAccCephRGWRoleDataSource_nonExistent(t *testing.T) {
 	detachLogs := cephDaemonLogs.AttachTestFunction(t)
 	defer detachLogs()
 
+	accountID := testAccRGWRoleAccount(t)
 	resource.Test(t, resource.TestCase{
 		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				ConfigVariables: testAccProviderConfig(),
-				Config: testAccProviderConfigBlock + `
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
 					data "ceph_rgw_role" "nonexistent" {
 					  name = "nonexistent-role-12345"
+					%s
 					}
-				`,
-				ExpectError: regexp.MustCompile(`(?i)unable to get rgw role from ceph api`),
+				`, testAccRGWRoleAccountAttribute(accountID)),
+				ExpectError: regexp.MustCompile(`(?i)ceph API returned status 404: resource\s+not found`),
 			},
 		},
 	})

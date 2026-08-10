@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"regexp"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
@@ -22,8 +24,9 @@ import (
 )
 
 var (
-	_ resource.Resource                = &RGWRoleResource{}
-	_ resource.ResourceWithImportState = &RGWRoleResource{}
+	_                       resource.Resource                = &RGWRoleResource{}
+	_                       resource.ResourceWithImportState = &RGWRoleResource{}
+	rgwRoleAccountIDPattern                                  = regexp.MustCompile(`^RGW[0-9]{17}$`)
 )
 
 func newRGWRoleResource() resource.Resource {
@@ -118,10 +121,15 @@ func (r *RGWRoleResource) Schema(ctx context.Context, req resource.SchemaRequest
 				},
 			},
 			"account_id": resourceSchema.StringAttribute{
-				MarkdownDescription: "The account id the role belongs to.",
+				MarkdownDescription: "The RGW account ID that scopes the role. Omit for legacy global roles on Squid and Tentacle 20.2.2; set for account-scoped roles on Tentacle 20.2.3 and later. Changing requires destroying and recreating the role.",
+				Optional:            true,
 				Computed:            true,
+				Default:             stringdefault.StaticString(""),
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(rgwRoleAccountIDPattern, "must be RGW followed by 17 digits"),
+				},
 				PlanModifiers: []planmodifier.String{
-					stringplanmodifier.UseStateForUnknown(),
+					stringplanmodifier.RequiresReplace(),
 				},
 			},
 		},
@@ -156,7 +164,8 @@ func (r *RGWRoleResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	name := data.Name.ValueString()
-	err := r.client.RGWCreateRole(ctx, restapi.RGWRoleCreateRequest{
+	accountID := rgwRoleAccountID(data.AccountID)
+	err := r.client.RGWCreateRole(ctx, accountID, restapi.RGWRoleCreateRequest{
 		RoleName:            name,
 		RolePath:            data.Path.ValueString(),
 		RoleAssumePolicyDoc: data.AssumeRolePolicyDocument.ValueString(),
@@ -169,7 +178,7 @@ func (r *RGWRoleResource) Create(ctx context.Context, req resource.CreateRequest
 		return
 	}
 
-	role, err := r.client.RGWGetRole(ctx, name)
+	role, err := r.client.RGWGetRole(ctx, accountID, name)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
@@ -188,7 +197,7 @@ func (r *RGWRoleResource) Create(ctx context.Context, req resource.CreateRequest
 	}
 
 	if data.MaxSessionDuration.ValueInt64() != 3600 {
-		if err := r.client.RGWUpdateRole(ctx, name, data.MaxSessionDuration.ValueInt64()); err != nil {
+		if err := r.client.RGWUpdateRole(ctx, accountID, name, data.MaxSessionDuration.ValueInt64()); err != nil {
 			resp.Diagnostics.AddError(
 				"API Request Error",
 				fmt.Sprintf("Unable to set max session duration on RGW role: %s", err),
@@ -196,7 +205,7 @@ func (r *RGWRoleResource) Create(ctx context.Context, req resource.CreateRequest
 			return
 		}
 
-		role, err = r.client.RGWGetRole(ctx, name)
+		role, err = r.client.RGWGetRole(ctx, accountID, name)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"API Request Error",
@@ -220,7 +229,8 @@ func (r *RGWRoleResource) Read(ctx context.Context, req resource.ReadRequest, re
 		return
 	}
 
-	role, err := r.client.RGWGetRole(ctx, data.Name.ValueString())
+	accountID := rgwRoleAccountID(data.AccountID)
+	role, err := r.client.RGWGetRole(ctx, accountID, data.Name.ValueString())
 	if err != nil {
 		if errors.Is(err, restapi.ErrNotFound) {
 			resp.State.RemoveResource(ctx)
@@ -248,7 +258,8 @@ func (r *RGWRoleResource) Update(ctx context.Context, req resource.UpdateRequest
 	}
 
 	name := data.Name.ValueString()
-	err := r.client.RGWUpdateRole(ctx, name, data.MaxSessionDuration.ValueInt64())
+	accountID := rgwRoleAccountID(data.AccountID)
+	err := r.client.RGWUpdateRole(ctx, accountID, name, data.MaxSessionDuration.ValueInt64())
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
@@ -257,7 +268,7 @@ func (r *RGWRoleResource) Update(ctx context.Context, req resource.UpdateRequest
 		return
 	}
 
-	role, err := r.client.RGWGetRole(ctx, name)
+	role, err := r.client.RGWGetRole(ctx, accountID, name)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
@@ -280,7 +291,7 @@ func (r *RGWRoleResource) Delete(ctx context.Context, req resource.DeleteRequest
 		return
 	}
 
-	err := r.client.RGWDeleteRole(ctx, data.Name.ValueString())
+	err := r.client.RGWDeleteRole(ctx, rgwRoleAccountID(data.AccountID), data.Name.ValueString())
 	if err != nil {
 		if errors.Is(err, restapi.ErrNotFound) {
 			return
@@ -294,7 +305,39 @@ func (r *RGWRoleResource) Delete(ctx context.Context, req resource.DeleteRequest
 }
 
 func (r *RGWRoleResource) ImportState(ctx context.Context, req resource.ImportStateRequest, resp *resource.ImportStateResponse) {
-	resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
+	if req.ID == "" {
+		resp.Diagnostics.AddError(
+			"Invalid RGW Role Import ID",
+			"The import ID must be a role name or account_id/role_name.",
+		)
+		return
+	}
+
+	accountID, name, scoped := strings.Cut(req.ID, "/")
+	if !scoped {
+		resource.ImportStatePassthroughID(ctx, path.Root("name"), req, resp)
+		resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("account_id"), "")...)
+		return
+	}
+
+	if !rgwRoleAccountIDPattern.MatchString(accountID) || name == "" || strings.Contains(name, "/") {
+		resp.Diagnostics.AddError(
+			"Invalid RGW Role Import ID",
+			fmt.Sprintf("Expected account_id/role_name with an account ID matching %s, got %q.", rgwRoleAccountIDPattern, req.ID),
+		)
+		return
+	}
+
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("name"), name)...)
+	resp.Diagnostics.Append(resp.State.SetAttribute(ctx, path.Root("account_id"), accountID)...)
+}
+
+func rgwRoleAccountID(value types.String) string {
+	if value.IsNull() || value.IsUnknown() {
+		return ""
+	}
+
+	return value.ValueString()
 }
 
 func updateModelFromAPIRole(data *RGWRoleResourceModel, role *restapi.RGWRole) {
@@ -305,7 +348,9 @@ func updateModelFromAPIRole(data *RGWRoleResourceModel, role *restapi.RGWRole) {
 	data.RoleID = types.StringValue(role.RoleID)
 	data.Arn = types.StringValue(role.Arn)
 	data.CreateDate = types.StringValue(role.CreateDate)
-	data.AccountID = types.StringValue(role.AccountID)
+	if role.AccountID != "" || rgwRoleAccountID(data.AccountID) == "" {
+		data.AccountID = types.StringValue(role.AccountID)
+	}
 
 	// Preserve the configured document when it is semantically equal to the
 	// value returned by Ceph to avoid perpetual diffs from JSON formatting.
