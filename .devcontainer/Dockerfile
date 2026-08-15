@@ -19,7 +19,7 @@ RUN curl --fail --silent --show-error --location https://go.dev/dl/go${GO_VERSIO
     ln --symbolic /usr/local/go/bin/go /usr/local/bin/go && \
     ln --symbolic /usr/local/go/bin/gofmt /usr/local/bin/gofmt
 
-ARG TERRAFORM_VERSION=1.13.3
+ARG TERRAFORM_VERSION=1.15.8
 RUN wget --quiet https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
     unzip terraform_${TERRAFORM_VERSION}_linux_amd64.zip && \
     mv terraform /usr/local/bin/ && \
