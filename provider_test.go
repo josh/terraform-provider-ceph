@@ -332,7 +332,12 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 	}
 
 	monmapPath := filepath.Join(tmpDir, "monmap")
-	cmd := exec.CommandContext(ctx, "monmaptool", "--conf", confPath, monmapPath, "--create", "--fsid", fsid)
+	createArgs := []string{"--conf", confPath, monmapPath, "--create", "--fsid", fsid}
+	if monmaptoolSupportsAuthCiphers(ctx) {
+		// ceph 19.2.6+ creates aes256k-only monmaps that reject the legacy keyring keys
+		createArgs = append(createArgs, "--auth-allowed-ciphers", "aes,aes256k")
+	}
+	cmd := exec.CommandContext(ctx, "monmaptool", createArgs...)
 	cmd.Stdout = out
 	cmd.Stderr = out
 	if err := cmd.Run(); err != nil {
@@ -359,6 +364,11 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 	}
 
 	return confPath, nil
+}
+
+func monmaptoolSupportsAuthCiphers(ctx context.Context) bool {
+	output, _ := exec.CommandContext(ctx, "monmaptool", "--help").CombinedOutput()
+	return bytes.Contains(output, []byte("--auth-allowed-ciphers"))
 }
 
 func generateINIConfig(config map[string]map[string]string) string {
