@@ -32,6 +32,7 @@ var (
 	testDashboardURL     = "http://127.0.0.1:8080/"
 	testClusterWG        *sync.WaitGroup
 	testConfPath         string
+	testAdminKey         string
 	testSharedCephFSName string
 	cephTestClusterCLI   *cephcli.CLI
 	testTimeout          = flag.Duration("timeout", 0, "test timeout")
@@ -241,32 +242,43 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 		},
 	}
 
+	// ceph-authtool emits whatever key type the installed release prefers:
+	// aes before 19.2.6/20.2.4, aes256k after.
+	var keyErr error
+	newKey := func() string {
+		output, err := exec.CommandContext(ctx, "ceph-authtool", "--gen-print-key").Output()
+		if err != nil && keyErr == nil {
+			keyErr = fmt.Errorf("failed to generate cephx key: %w", err)
+		}
+		return strings.TrimSpace(string(output))
+	}
+
 	keyringConfig := map[string]map[string]string{
 		"mon.": {
-			"key":      "AQBDm89oNP7bAxAA6TgZ1toOkhDjUNEkRL18Gg==",
+			"key":      newKey(),
 			"caps mon": "allow *",
 		},
 		"client.admin": {
-			"key":      "AQB5m89objcKIxAAda2ULz/l3NH+mv9XzKePHQ==",
+			"key":      newKey(),
 			"caps mon": "allow *",
 			"caps mds": "allow *",
 			"caps osd": "allow *",
 			"caps mgr": "allow *",
 		},
 		"mgr.mgr1": {
-			"key":      "AQCDm89oNP7bAxAA6TgZ1toOkhDjUNEkRL18Gg==",
+			"key":      newKey(),
 			"caps mon": "allow *",
 			"caps osd": "allow *",
 			"caps mds": "allow *",
 		},
 		"client.rgw.rgw1": {
-			"key":      "AQDRm89oNP7bAxAA6TgZ1toOkhDjUNEkRL18Gg==",
+			"key":      newKey(),
 			"caps mon": "allow rw",
 			"caps osd": "allow rwx",
 			"caps mgr": "allow rw",
 		},
 		"mds.mds1": {
-			"key":      "AQDFm89oNP7bAxAA6TgZ1toOkhDjUNEkRL18Gg==",
+			"key":      newKey(),
 			"caps mon": "allow profile mds",
 			"caps osd": "allow rwx",
 			"caps mds": "allow",
@@ -275,12 +287,16 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 
 	for i := range testNumOsds {
 		keyringConfig[fmt.Sprintf("osd.%d", i)] = map[string]string{
-			"key":      "AQCzsPFolNPNNhAAkglWKcr2qZB4lCK/u9A1Zw==",
+			"key":      newKey(),
 			"caps mon": "allow profile osd",
 			"caps mgr": "allow profile osd",
 			"caps osd": "allow *",
 		}
 	}
+	if keyErr != nil {
+		return confPath, keyErr
+	}
+	testAdminKey = keyringConfig["client.admin"]["key"]
 
 	err := os.MkdirAll(filepath.Join(tmpDir, "mon"), 0o755)
 	if err != nil {
@@ -334,7 +350,8 @@ func setupCephDir(ctx context.Context, tmpDir string, out io.Writer) (string, er
 	monmapPath := filepath.Join(tmpDir, "monmap")
 	createArgs := []string{"--conf", confPath, monmapPath, "--create", "--fsid", fsid}
 	if monmaptoolSupportsAuthCiphers(ctx) {
-		// ceph 19.2.6+ creates aes256k-only monmaps that reject the legacy keyring keys
+		// ceph 19.2.6+ creates aes256k-only monmaps; keep aes allowed so tests
+		// can still import legacy keys, as a mid-migration cluster would
 		createArgs = append(createArgs, "--auth-allowed-ciphers", "aes,aes256k")
 	}
 	cmd := exec.CommandContext(ctx, "monmaptool", createArgs...)
