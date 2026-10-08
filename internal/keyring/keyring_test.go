@@ -6,6 +6,66 @@ import (
 	"testing"
 )
 
+func TestKeyTypeKnownAESKey(t *testing.T) {
+	got, err := KeyType("AQB5m89objcKIxAAda2ULz/l3NH+mv9XzKePHQ==")
+	if err != nil {
+		t.Fatalf("KeyType() error = %v", err)
+	}
+	if got != KeyTypeAES {
+		t.Errorf("KeyType() = %q, want %q", got, KeyTypeAES)
+	}
+}
+
+func TestGenerateKeyRoundTrip(t *testing.T) {
+	cases := []struct {
+		keyType string
+		length  int
+		prefix  string
+	}{
+		{KeyTypeAES, 40, "AQ"},
+		{KeyTypeAES256K, 60, "Ag"},
+	}
+	for _, tc := range cases {
+		key, err := GenerateKey(tc.keyType)
+		if err != nil {
+			t.Fatalf("GenerateKey(%q) error = %v", tc.keyType, err)
+		}
+		if len(key) != tc.length || !strings.HasPrefix(key, tc.prefix) {
+			t.Errorf("GenerateKey(%q) = %q, want %d chars starting %q", tc.keyType, key, tc.length, tc.prefix)
+		}
+		got, err := KeyType(key)
+		if err != nil {
+			t.Fatalf("KeyType(%q) error = %v", key, err)
+		}
+		if got != tc.keyType {
+			t.Errorf("KeyType() = %q, want %q", got, tc.keyType)
+		}
+		other, _ := GenerateKey(tc.keyType)
+		if other == key {
+			t.Errorf("GenerateKey(%q) returned the same key twice", tc.keyType)
+		}
+	}
+}
+
+func TestGenerateKeyUnsupportedType(t *testing.T) {
+	if _, err := GenerateKey("rc4"); err == nil {
+		t.Error("GenerateKey(\"rc4\") error = nil, want error")
+	}
+}
+
+func TestKeyTypeMalformed(t *testing.T) {
+	for _, key := range []string{
+		"",
+		"not base64!",
+		"AAAA",
+		"AwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+	} {
+		if _, err := KeyType(key); err == nil {
+			t.Errorf("KeyType(%q) error = nil, want error", key)
+		}
+	}
+}
+
 func TestEmptyKeyring(t *testing.T) {
 	_, err := Parse("")
 	if err == nil {

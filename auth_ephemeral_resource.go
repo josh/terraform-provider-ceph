@@ -12,6 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/ephemeral/schema"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
+	"github.com/josh/terraform-provider-ceph/internal/keyring"
 	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
@@ -32,6 +33,7 @@ type AuthEphemeralResourceModel struct {
 	Entity  types.String `tfsdk:"entity"`
 	Caps    types.Map    `tfsdk:"caps"`
 	Key     types.String `tfsdk:"key"`
+	KeyType types.String `tfsdk:"key_type"`
 	Keyring types.String `tfsdk:"keyring"`
 }
 
@@ -59,6 +61,14 @@ func (r *AuthEphemeralResource) Schema(ctx context.Context, req ephemeral.Schema
 				MarkdownDescription: "The generated cephx key of the entity.",
 				Computed:            true,
 				Sensitive:           true,
+			},
+			"key_type": schema.StringAttribute{
+				MarkdownDescription: "The cephx key type: `aes` (legacy) or `aes256k` (Ceph 19.2.6+/20.2.4+). If not specified, Ceph picks its preferred cipher.",
+				Optional:            true,
+				Computed:            true,
+				Validators: []validator.String{
+					stringvalidator.OneOf(keyring.KeyTypeAES, keyring.KeyTypeAES256K),
+				},
 			},
 			"keyring": schema.StringAttribute{
 				MarkdownDescription: "The complete cephx keyring as JSON",
@@ -119,11 +129,22 @@ func (r *AuthEphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequ
 		return
 	}
 
-	err := r.client.ClusterCreateUser(ctx, entity, caps)
+	var err error
+	var key string
+	if !data.KeyType.IsNull() && !data.KeyType.IsUnknown() {
+		key, err = keyring.GenerateKey(data.KeyType.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Key Generation Error", err.Error())
+			return
+		}
+		err = r.client.ClusterImportUser(ctx, keyring.Format([]keyring.User{{Entity: entity, Key: key, Caps: caps}}))
+	} else {
+		err = r.client.ClusterCreateUser(ctx, entity, caps)
+	}
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
-			fmt.Sprintf("Unable to create user in Ceph API: %s", err),
+			fmt.Sprintf("Unable to create user in Ceph API: %s%s", err, keyTypeHint(key)),
 		)
 		return
 	}
@@ -155,8 +176,7 @@ func (r *AuthEphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequ
 		return
 	}
 
-	resourceModel := AuthResourceModel(data)
-
+	var resourceModel AuthResourceModel
 	updateAuthModelFromCephExport(ctx, r.client, entity, &resourceModel, &resp.Diagnostics)
 	if resp.Diagnostics.HasError() {
 		return
@@ -164,6 +184,7 @@ func (r *AuthEphemeralResource) Open(ctx context.Context, req ephemeral.OpenRequ
 
 	data.Caps = resourceModel.Caps
 	data.Key = resourceModel.Key
+	data.KeyType = resourceModel.KeyType
 	data.Keyring = resourceModel.Keyring
 
 	resp.Diagnostics.Append(resp.Result.Set(ctx, &data)...)
