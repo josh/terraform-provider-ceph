@@ -33,7 +33,7 @@ func TestAccCephAuthDataSource(t *testing.T) {
 					statecheck.ExpectKnownValue(
 						"data.ceph_auth.client_admin",
 						tfjsonpath.New("key"),
-						knownvalue.StringExact("AQB5m89objcKIxAAda2ULz/l3NH+mv9XzKePHQ=="),
+						knownvalue.StringExact(testAdminKey),
 					),
 					statecheck.ExpectKnownValue(
 						"data.ceph_auth.client_admin",
