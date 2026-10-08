@@ -36,6 +36,7 @@ type AuthResourceModel struct {
 	Entity  types.String `tfsdk:"entity"`
 	Caps    types.Map    `tfsdk:"caps"`
 	Key     types.String `tfsdk:"key"`
+	KeyType types.String `tfsdk:"key_type"`
 	Keyring types.String `tfsdk:"keyring"`
 }
 
@@ -63,10 +64,21 @@ func (r *AuthResource) Schema(ctx context.Context, req resource.SchemaRequest, r
 				},
 			},
 			"key": resourceSchema.StringAttribute{
-				MarkdownDescription: "The cephx key of the entity. If not specified, Ceph will generate a random key.",
+				MarkdownDescription: "The cephx key of the entity. If not specified, Ceph will generate a random key. Conflicts with `key_type`.",
 				Optional:            true,
 				Computed:            true,
 				Sensitive:           true,
+				Validators: []validator.String{
+					stringvalidator.ConflictsWith(path.MatchRoot("key_type")),
+				},
+			},
+			"key_type": resourceSchema.StringAttribute{
+				MarkdownDescription: "The cephx key type: `aes` (legacy) or `aes256k` (Ceph 19.2.6+/20.2.4+). If not specified, Ceph picks its preferred cipher. Changing it generates a new key in place.",
+				Optional:            true,
+				Computed:            true,
+				Validators: []validator.String{
+					stringvalidator.OneOf(keyring.KeyTypeAES, keyring.KeyTypeAES256K),
+				},
 			},
 			"keyring": resourceSchema.StringAttribute{
 				MarkdownDescription: "The complete cephx keyring as JSON",
@@ -113,6 +125,13 @@ func (r *AuthResource) Create(ctx context.Context, req resource.CreateRequest, r
 
 	key := data.Key.ValueString()
 	var err error
+	if key == "" && !data.KeyType.IsNull() && !data.KeyType.IsUnknown() {
+		key, err = keyring.GenerateKey(data.KeyType.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Key Generation Error", err.Error())
+			return
+		}
+	}
 	if key != "" {
 		users := []keyring.User{
 			{
@@ -129,7 +148,7 @@ func (r *AuthResource) Create(ctx context.Context, req resource.CreateRequest, r
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
-			fmt.Sprintf("Unable to create user in Ceph API: %s", err),
+			fmt.Sprintf("Unable to create user in Ceph API: %s%s", err, keyTypeHint(key)),
 		)
 		return
 	}
@@ -193,7 +212,18 @@ func (r *AuthResource) Update(ctx context.Context, req resource.UpdateRequest, r
 
 	var err error
 	key := data.Key.ValueString()
-	if !data.Key.IsNull() && !data.Key.IsUnknown() && key != "" && key != state.Key.ValueString() {
+	explicitKey := !data.Key.IsNull() && !data.Key.IsUnknown() && key != "" && key != state.Key.ValueString()
+	// key_type is unknown in the plan on a caps-only change when it is not
+	// configured, which must not count as a change.
+	rotate := !explicitKey && !data.KeyType.IsUnknown() && !data.KeyType.Equal(state.KeyType)
+	if rotate {
+		key, err = keyring.GenerateKey(data.KeyType.ValueString())
+		if err != nil {
+			resp.Diagnostics.AddError("Key Generation Error", err.Error())
+			return
+		}
+	}
+	if explicitKey || rotate {
 		// ceph auth import replaces both the key and the caps of an
 		// existing entity; a plain caps update can never change the key.
 		users := []keyring.User{
@@ -210,7 +240,7 @@ func (r *AuthResource) Update(ctx context.Context, req resource.UpdateRequest, r
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"API Request Error",
-			fmt.Sprintf("Unable to update user in Ceph API: %s", err),
+			fmt.Sprintf("Unable to update user in Ceph API: %s%s", err, keyTypeHint(key)),
 		)
 		return
 	}
@@ -285,9 +315,23 @@ func updateAuthModelFromKeyring(ctx context.Context, keyringRaw string, data *Au
 	}
 	keyringUser := keyringUsers[0]
 
+	keyType, err := keyring.KeyType(keyringUser.Key)
+	if err != nil {
+		diagnostics.AddError("Unable to decode key type", err.Error())
+		return
+	}
+
 	data.Caps = cephCapsToMapValue(ctx, keyringUser.Caps, diagnostics)
 	data.Key = types.StringValue(keyringUser.Key)
+	data.KeyType = types.StringValue(keyType)
 	data.Keyring = types.StringValue(keyringRaw)
+}
+
+func keyTypeHint(key string) string {
+	if keyType, err := keyring.KeyType(key); err == nil && keyType == keyring.KeyTypeAES256K {
+		return " (aes256k keys require Ceph 19.2.6 or 20.2.4 and newer)"
+	}
+	return ""
 }
 
 func mapAttrToCephCaps(ctx context.Context, caps types.Map, diags *diag.Diagnostics) (keyring.Caps, bool) {

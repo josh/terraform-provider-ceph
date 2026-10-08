@@ -1,10 +1,67 @@
 package keyring
 
 import (
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 )
+
+const (
+	KeyTypeAES     = "aes"
+	KeyTypeAES256K = "aes256k"
+)
+
+// A cephx key is base64 of Ceph's CryptoKey encoding: u16 type, u32 sec,
+// u32 nsec, u16 secret length, secret bytes; all little-endian.
+func GenerateKey(keyType string) (string, error) {
+	var typeID uint16
+	var secretLen int
+	switch keyType {
+	case KeyTypeAES:
+		typeID, secretLen = 1, 16
+	case KeyTypeAES256K:
+		typeID, secretLen = 2, 32
+	default:
+		return "", fmt.Errorf("unsupported cephx key type %q", keyType)
+	}
+
+	secret := make([]byte, secretLen)
+	if _, err := rand.Read(secret); err != nil {
+		return "", fmt.Errorf("unable to generate cephx key: %w", err)
+	}
+
+	now := time.Now()
+	buf := binary.LittleEndian.AppendUint16(nil, typeID)
+	buf = binary.LittleEndian.AppendUint32(buf, uint32(now.Unix()))
+	buf = binary.LittleEndian.AppendUint32(buf, uint32(now.Nanosecond()))
+	buf = binary.LittleEndian.AppendUint16(buf, uint16(secretLen))
+	buf = append(buf, secret...)
+	return base64.StdEncoding.EncodeToString(buf), nil
+}
+
+func KeyType(key string) (string, error) {
+	raw, err := base64.StdEncoding.DecodeString(key)
+	if err != nil {
+		return "", fmt.Errorf("invalid cephx key: %w", err)
+	}
+	if len(raw) < 12 {
+		return "", fmt.Errorf("invalid cephx key: %d bytes is too short", len(raw))
+	}
+	switch typeID := binary.LittleEndian.Uint16(raw); typeID {
+	case 0:
+		return "none", nil
+	case 1:
+		return KeyTypeAES, nil
+	case 2:
+		return KeyTypeAES256K, nil
+	default:
+		return "", fmt.Errorf("unsupported cephx key type %d", typeID)
+	}
+}
 
 type Caps struct {
 	MDS string `json:"mds,omitempty"`

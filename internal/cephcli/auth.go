@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"reflect"
 	"sort"
+	"strings"
 )
 
 type AuthInfo struct {
@@ -77,6 +78,15 @@ func (c *CLI) AuthGetOrCreate(ctx context.Context, entity string, caps map[strin
 	cmd := exec.CommandContext(ctx, "ceph", args...)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create auth entity %s: %w", entity, err)
+	}
+	return nil
+}
+
+func (c *CLI) AuthImport(ctx context.Context, keyringText string) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "auth", "import", "-i", "/dev/stdin")
+	cmd.Stdin = strings.NewReader(keyringText)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("ceph auth import failed: %s: %w", string(output), err)
 	}
 	return nil
 }

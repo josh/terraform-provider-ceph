@@ -26,6 +26,7 @@ type AuthDataSourceModel struct {
 	Entity  types.String `tfsdk:"entity"`
 	Caps    types.Map    `tfsdk:"caps"`
 	Key     types.String `tfsdk:"key"`
+	KeyType types.String `tfsdk:"key_type"`
 	Keyring types.String `tfsdk:"keyring"`
 }
 
@@ -50,6 +51,10 @@ func (d *AuthDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 				MarkdownDescription: "The cephx key of the entity",
 				Computed:            true,
 				Sensitive:           true,
+			},
+			"key_type": dataSourceSchema.StringAttribute{
+				MarkdownDescription: "The cephx key type: `aes` (legacy) or `aes256k`",
+				Computed:            true,
 			},
 			"keyring": dataSourceSchema.StringAttribute{
 				MarkdownDescription: "The complete cephx keyring as JSON",
@@ -119,8 +124,15 @@ func (d *AuthDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	}
 	keyringUser := keyringUsers[0]
 
+	keyType, err := keyring.KeyType(keyringUser.Key)
+	if err != nil {
+		resp.Diagnostics.AddError("Unable to decode key type", err.Error())
+		return
+	}
+
 	data.Caps = cephCapsToMapValue(ctx, keyringUser.Caps, &resp.Diagnostics)
 	data.Key = types.StringValue(keyringUser.Key)
+	data.KeyType = types.StringValue(keyType)
 	data.Keyring = types.StringValue(keyringRaw)
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)

@@ -124,3 +124,45 @@ func TestAccCephAuthEphemeralResource(t *testing.T) {
 		},
 	})
 }
+
+func TestAccCephAuthEphemeralResource_keyType(t *testing.T) {
+	testAccSkipUnlessAES256K(t)
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testEntity := acctest.RandomWithPrefix("client.test-ephemeral-key-type")
+
+	resource.Test(t, resource.TestCase{
+		TerraformVersionChecks: []tfversion.TerraformVersionCheck{
+			tfversion.SkipBelow(tfversion.Version1_10_0),
+		},
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactoriesWithEcho,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					ephemeral "ceph_auth_ephemeral" "test" {
+					  entity   = %q
+					  key_type = "aes256k"
+					  caps = {
+					    mon = "allow r"
+					  }
+					}
+
+					provider "echo" {
+					  data = ephemeral.ceph_auth_ephemeral.test
+					}
+
+					resource "echo" "test" {}
+				`, testEntity),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(
+						"echo.test",
+						tfjsonpath.New("data").AtMapKey("key_type"),
+						knownvalue.StringExact("aes256k"),
+					),
+				},
+			},
+		},
+	})
+}

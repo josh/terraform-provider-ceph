@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+	"github.com/josh/terraform-provider-ceph/internal/keyring"
 )
 
 func testAccProviderConfig() config.Variables {
@@ -460,6 +461,11 @@ func TestAccCephAuthResource_staticKey(t *testing.T) {
 						tfjsonpath.New("key"),
 						knownvalue.StringExact("AQBvaBVesCMcKRAAoKhLdz8Qh/qPNqF9UGKYfg=="),
 					),
+					statecheck.ExpectKnownValue(
+						"ceph_auth.foo",
+						tfjsonpath.New("key_type"),
+						knownvalue.StringExact("aes"),
+					),
 				},
 				Check: resource.ComposeAggregateTestCheckFunc(
 					checkCephAuthExists(t, testEntity),
@@ -696,6 +702,219 @@ func TestAccCephAuthResource_OutOfBandDeletionDestroy(t *testing.T) {
 				},
 				ConfigVariables: testAccProviderConfig(),
 				Config:          testAccProviderConfigBlock,
+			},
+		},
+	})
+}
+
+func checkCephAuthHasKeyType(t *testing.T, entity string, expected string) resource.TestCheckFunc {
+	t.Helper()
+	return func(s *terraform.State) error {
+		authInfo, err := cephTestClusterCLI.AuthGet(t.Context(), entity)
+		if err != nil {
+			return fmt.Errorf("auth entity %s does not exist: %w", entity, err)
+		}
+
+		actual, err := keyring.KeyType(authInfo.Key)
+		if err != nil {
+			return fmt.Errorf("unable to decode key type for entity %s: %w", entity, err)
+		}
+		if actual != expected {
+			return fmt.Errorf("key type mismatch for entity %s: expected %q, got %q", entity, expected, actual)
+		}
+		return nil
+	}
+}
+
+func captureStateAttr(name, attr string, dst *string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[name]
+		if !ok {
+			return fmt.Errorf("resource %s not found in state", name)
+		}
+		*dst = rs.Primary.Attributes[attr]
+		return nil
+	}
+}
+
+func checkStateAttrChanged(name, attr string, previous *string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		rs, ok := s.RootModule().Resources[name]
+		if !ok {
+			return fmt.Errorf("resource %s not found in state", name)
+		}
+		if rs.Primary.Attributes[attr] == *previous {
+			return fmt.Errorf("%s.%s did not change", name, attr)
+		}
+		return nil
+	}
+}
+
+func testAccSkipUnlessAES256K(t *testing.T) {
+	t.Helper()
+	if !monmaptoolSupportsAuthCiphers(t.Context()) {
+		t.Skip("cluster lacks aes256k cephx keys (Ceph < 19.2.6)")
+	}
+}
+
+func TestAccCephAuthResource_keyType(t *testing.T) {
+	testAccSkipUnlessAES256K(t)
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testEntity := acctest.RandomWithPrefix("client.test-key-type")
+	var firstKey string
+
+	config := func(keyType, monCap string) string {
+		return testAccProviderConfigBlock + fmt.Sprintf(`
+			resource "ceph_auth" "foo" {
+			  entity   = %q
+			  key_type = %q
+			  caps = {
+			    mon = %q
+			  }
+			}
+		`, testEntity, keyType, monCap)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephAuthDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config("aes256k", "allow r"),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("ceph_auth.foo", tfjsonpath.New("key_type"), knownvalue.StringExact("aes256k")),
+					statecheck.ExpectKnownValue("ceph_auth.foo", tfjsonpath.New("key"), knownvalue.StringRegexp(regexp.MustCompile(`^Ag.{58}$`))),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephAuthHasKeyType(t, testEntity, "aes256k"),
+					captureStateAttr("ceph_auth.foo", "key", &firstKey),
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config("aes256k", "allow r"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{plancheck.ExpectEmptyPlan()},
+				},
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config("aes256k", "allow rw"),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephAuthHasCaps(t, testEntity, map[string]string{"mon": "allow rw"}),
+					func(s *terraform.State) error {
+						return checkCephAuthHasKey(t, testEntity, firstKey)(s)
+					},
+				),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config("aes", "allow rw"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_auth.foo", plancheck.ResourceActionUpdate),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("ceph_auth.foo", tfjsonpath.New("key_type"), knownvalue.StringExact("aes")),
+				},
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephAuthHasKeyType(t, testEntity, "aes"),
+					checkStateAttrChanged("ceph_auth.foo", "key", &firstKey),
+				),
+			},
+			{
+				ConfigVariables:                      testAccProviderConfig(),
+				Config:                               config("aes", "allow rw"),
+				ResourceName:                         "ceph_auth.foo",
+				ImportState:                          true,
+				ImportStateId:                        testEntity,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "entity",
+			},
+		},
+	})
+}
+
+func TestAccCephAuthResource_keyTypeDrift(t *testing.T) {
+	testAccSkipUnlessAES256K(t)
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testEntity := acctest.RandomWithPrefix("client.test-key-type-drift")
+	caps := keyring.MustCapsFromMap(map[string]string{"mon": "allow r"})
+
+	config := testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_auth" "foo" {
+		  entity   = %q
+		  key_type = "aes256k"
+		  caps = {
+		    mon = "allow r"
+		  }
+		}
+	`, testEntity)
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephAuthDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				Check:           checkCephAuthHasKeyType(t, testEntity, "aes256k"),
+			},
+			{
+				PreConfig: func() {
+					aesKey, err := keyring.GenerateKey("aes")
+					if err != nil {
+						t.Fatal(err)
+					}
+					err = cephTestClusterCLI.AuthImport(t.Context(), keyring.Format([]keyring.User{{Entity: testEntity, Key: aesKey, Caps: caps}}))
+					if err != nil {
+						t.Fatal(err)
+					}
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config,
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_auth.foo", plancheck.ResourceActionUpdate),
+					},
+				},
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("ceph_auth.foo", tfjsonpath.New("key_type"), knownvalue.StringExact("aes256k")),
+				},
+				Check: checkCephAuthHasKeyType(t, testEntity, "aes256k"),
+			},
+		},
+	})
+}
+
+func TestAccCephAuthResource_keyConflicts(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testEntity := acctest.RandomWithPrefix("client.test-key-conflict")
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccProviderConfigBlock + fmt.Sprintf(`
+					resource "ceph_auth" "foo" {
+					  entity   = %q
+					  key      = "AQBvaBVesCMcKRAAoKhLdz8Qh/qPNqF9UGKYfg=="
+					  key_type = "aes"
+					  caps = {
+					    mon = "allow r"
+					  }
+					}
+				`, testEntity),
+				ExpectError: regexp.MustCompile(`(?i)invalid attribute combination`),
 			},
 		},
 	})
