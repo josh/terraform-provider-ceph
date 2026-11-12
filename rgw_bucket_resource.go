@@ -8,7 +8,9 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework-jsontypes/jsontypes"
 	"github.com/hashicorp/terraform-plugin-framework-validators/int64validator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/mapvalidator"
 	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
+	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -18,6 +20,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/int64planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/mapplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
@@ -48,6 +51,7 @@ type RGWBucketResourceModel struct {
 	LockMode                 types.String         `tfsdk:"lock_mode"`
 	LockRetentionPeriodDays  types.Int64          `tfsdk:"lock_retention_period_days"`
 	LockRetentionPeriodYears types.Int64          `tfsdk:"lock_retention_period_years"`
+	LifecycleRules           types.Map            `tfsdk:"lifecycle_rules"`
 	Zonegroup                types.String         `tfsdk:"zonegroup"`
 	PlacementRule            types.String         `tfsdk:"placement_rule"`
 	ID                       types.String         `tfsdk:"id"`
@@ -55,6 +59,20 @@ type RGWBucketResourceModel struct {
 	ACL                      types.String         `tfsdk:"acl"`
 	Bid                      types.String         `tfsdk:"bid"`
 }
+
+type RGWBucketLifecycleRuleModel struct {
+	Enabled                            types.Bool   `tfsdk:"enabled"`
+	Prefix                             types.String `tfsdk:"prefix"`
+	ExpirationDays                     types.Int64  `tfsdk:"expiration_days"`
+	AbortIncompleteMultipartUploadDays types.Int64  `tfsdk:"abort_incomplete_multipart_upload_days"`
+}
+
+var rgwBucketLifecycleRuleType = types.ObjectType{AttrTypes: map[string]attr.Type{
+	"enabled":                                types.BoolType,
+	"prefix":                                 types.StringType,
+	"expiration_days":                        types.Int64Type,
+	"abort_incomplete_multipart_upload_days": types.Int64Type,
+}}
 
 func (r *RGWBucketResource) Metadata(ctx context.Context, req resource.MetadataRequest, resp *resource.MetadataResponse) {
 	resp.TypeName = req.ProviderTypeName + "_rgw_bucket"
@@ -144,6 +162,47 @@ func (r *RGWBucketResource) Schema(ctx context.Context, req resource.SchemaReque
 				},
 				PlanModifiers: []planmodifier.Int64{
 					int64planmodifier.UseStateForUnknown(),
+				},
+			},
+			"lifecycle_rules": resourceSchema.MapNestedAttribute{
+				MarkdownDescription: "The S3 lifecycle rules of the bucket, keyed by rule ID. " +
+					"When omitted, the lifecycle is not managed: whatever is configured on the bucket is left in place, and removing the attribute leaves the existing rules untouched. " +
+					"Set to an empty map to delete the lifecycle configuration. " +
+					"Rules may only use the settings below; an update is refused if a managed rule has gained other settings (such as a tag filter or a transition) outside of Terraform.",
+				Optional: true,
+				Validators: []validator.Map{
+					mapvalidator.KeysAre(stringvalidator.LengthBetween(1, 255)),
+				},
+				NestedObject: resourceSchema.NestedAttributeObject{
+					Attributes: map[string]resourceSchema.Attribute{
+						"enabled": resourceSchema.BoolAttribute{
+							MarkdownDescription: "Whether the rule is applied. Defaults to true.",
+							Optional:            true,
+							Computed:            true,
+							Default:             booldefault.StaticBool(true),
+						},
+						"prefix": resourceSchema.StringAttribute{
+							MarkdownDescription: "Only objects whose key starts with this prefix are affected. Defaults to an empty prefix, which matches the whole bucket.",
+							Optional:            true,
+							Computed:            true,
+							Default:             stringdefault.StaticString(""),
+						},
+						"expiration_days": resourceSchema.Int64Attribute{
+							MarkdownDescription: "Delete objects this many days after creation. At least one of `expiration_days` and `abort_incomplete_multipart_upload_days` must be set.",
+							Optional:            true,
+							Validators: []validator.Int64{
+								int64validator.AtLeast(1),
+								int64validator.AtLeastOneOf(path.MatchRelative().AtParent().AtName("abort_incomplete_multipart_upload_days")),
+							},
+						},
+						"abort_incomplete_multipart_upload_days": resourceSchema.Int64Attribute{
+							MarkdownDescription: "Abort incomplete multipart uploads this many days after they were started.",
+							Optional:            true,
+							Validators: []validator.Int64{
+								int64validator.AtLeast(1),
+							},
+						},
+					},
 				},
 			},
 			"zonegroup": resourceSchema.StringAttribute{
@@ -249,10 +308,10 @@ func (r *RGWBucketResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	// The bucket exists from here on, so record it before enabling
-	// versioning to keep a failure there from orphaning it from state.
+	// The bucket exists from here on, so record it before the follow-up
+	// update to keep a failure there from orphaning it from state.
 	partial := data
-	resp.Diagnostics.Append(updateModelFromAPIBucket(ctx, &partial, bucket)...)
+	resp.Diagnostics.Append(updateModelFromAPIBucket(ctx, &partial, bucket, false)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -261,18 +320,29 @@ func (r *RGWBucketResource) Create(ctx context.Context, req resource.CreateReque
 		return
 	}
 
-	// Versioning cannot be set at creation time.
+	// Versioning and lifecycle rules cannot be set at creation time.
+	followUp := restapi.RGWBucketUpdateRequest{
+		BucketID: bucket.ID,
+		UID:      data.Owner.ValueString(),
+	}
 	if data.VersioningState.ValueString() == "Enabled" && bucket.Versioning != "Enabled" {
 		versioning := "Enabled"
-		err = r.client.RGWUpdateBucket(ctx, bucketName, restapi.RGWBucketUpdateRequest{
-			BucketID:        bucket.ID,
-			UID:             data.Owner.ValueString(),
-			VersioningState: &versioning,
-		})
+		followUp.VersioningState = &versioning
+	}
+	rules, diags := lifecycleRulesFromModel(ctx, data.LifecycleRules)
+	resp.Diagnostics.Append(diags...)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+	if lifecycleXML := restapi.LifecycleRulesToXML(rules); lifecycleXML != "" {
+		followUp.Lifecycle = &lifecycleXML
+	}
+	if followUp.VersioningState != nil || followUp.Lifecycle != nil {
+		err = r.client.RGWUpdateBucket(ctx, bucketName, followUp)
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"API Request Error",
-				fmt.Sprintf("Unable to enable versioning on RGW bucket '%s': %s", bucketName, err),
+				fmt.Sprintf("Unable to set versioning and lifecycle rules on RGW bucket '%s': %s", bucketName, err),
 			)
 			return
 		}
@@ -280,13 +350,13 @@ func (r *RGWBucketResource) Create(ctx context.Context, req resource.CreateReque
 		if err != nil {
 			resp.Diagnostics.AddError(
 				"API Request Error",
-				fmt.Sprintf("Unable to read RGW bucket after enabling versioning: %s", err),
+				fmt.Sprintf("Unable to read RGW bucket after setting versioning and lifecycle rules: %s", err),
 			)
 			return
 		}
 	}
 
-	resp.Diagnostics.Append(updateModelFromAPIBucket(ctx, &data, bucket)...)
+	resp.Diagnostics.Append(updateModelFromAPIBucket(ctx, &data, bucket, false)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -303,6 +373,10 @@ func (r *RGWBucketResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
+	// ImportState sets only the bucket name, so a state without a
+	// bucket ID is a fresh import.
+	imported := data.ID.IsNull()
+
 	bucketName := data.Bucket.ValueString()
 	bucket, err := r.client.RGWGetBucketWithRetry(ctx, bucketName)
 	if err != nil {
@@ -317,7 +391,7 @@ func (r *RGWBucketResource) Read(ctx context.Context, req resource.ReadRequest, 
 		return
 	}
 
-	resp.Diagnostics.Append(updateModelFromAPIBucket(ctx, &data, bucket)...)
+	resp.Diagnostics.Append(updateModelFromAPIBucket(ctx, &data, bucket, imported)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -346,7 +420,8 @@ func (r *RGWBucketResource) Update(ctx context.Context, req resource.UpdateReque
 
 	// The set endpoint always needs bucket_id and uid, and deletes the
 	// lifecycle and encryption configuration when they are omitted, so
-	// the current values are carried through.
+	// the current values are carried through unless lifecycle rules are
+	// managed.
 	updateReq := restapi.RGWBucketUpdateRequest{
 		BucketID: current.ID,
 		UID:      data.Owner.ValueString(),
@@ -368,7 +443,34 @@ func (r *RGWBucketResource) Update(ctx context.Context, req resource.UpdateReque
 		encryption := "true"
 		updateReq.EncryptionState = &encryption
 	}
-	if lifecycle := string(current.Lifecycle); lifecycle != "" && lifecycle != "null" && lifecycle != "{}" {
+	if !data.LifecycleRules.IsNull() && !data.LifecycleRules.IsUnknown() {
+		rules, diags := lifecycleRulesFromModel(ctx, data.LifecycleRules)
+		resp.Diagnostics.Append(diags...)
+		_, unsupported, err := current.LifecycleRules()
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"API Response Error",
+				fmt.Sprintf("Unable to read the lifecycle of RGW bucket '%s': %s", bucketName, err),
+			)
+		}
+		// Rewriting such a rule would strip settings the plan never
+		// showed. A rule absent from the plan is shown as removed.
+		for _, id := range unsupported {
+			if _, planned := data.LifecycleRules.Elements()[id]; planned {
+				resp.Diagnostics.AddAttributeError(
+					path.Root("lifecycle_rules").AtMapKey(id),
+					"Unsupported Lifecycle Rule Settings",
+					fmt.Sprintf("Lifecycle rule '%s' on RGW bucket '%s' has settings this provider does not manage, and updating it would remove them. Remove those settings from the bucket, or remove lifecycle_rules from the configuration to stop managing the lifecycle.", id, bucketName),
+				)
+			}
+		}
+		if resp.Diagnostics.HasError() {
+			return
+		}
+		if lifecycleXML := restapi.LifecycleRulesToXML(rules); lifecycleXML != "" {
+			updateReq.Lifecycle = &lifecycleXML
+		}
+	} else if lifecycle := string(current.Lifecycle); lifecycle != "" && lifecycle != "null" && lifecycle != "{}" {
 		lifecycleXML, err := restapi.LifecycleJSONToXML(current.Lifecycle)
 		if err != nil {
 			resp.Diagnostics.AddError(
@@ -410,7 +512,7 @@ func (r *RGWBucketResource) Update(ctx context.Context, req resource.UpdateReque
 		return
 	}
 
-	resp.Diagnostics.Append(updateModelFromAPIBucket(ctx, &data, bucket)...)
+	resp.Diagnostics.Append(updateModelFromAPIBucket(ctx, &data, bucket, false)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -509,7 +611,7 @@ func (r *RGWBucketResource) ValidateConfig(ctx context.Context, req resource.Val
 	}
 }
 
-func updateModelFromAPIBucket(ctx context.Context, data *RGWBucketResourceModel, bucket *restapi.RGWBucket) diag.Diagnostics {
+func updateModelFromAPIBucket(ctx context.Context, data *RGWBucketResourceModel, bucket *restapi.RGWBucket, imported bool) diag.Diagnostics {
 	var diags diag.Diagnostics
 
 	data.Bucket = types.StringValue(bucket.Bucket)
@@ -549,7 +651,60 @@ func updateModelFromAPIBucket(ctx context.Context, data *RGWBucketResourceModel,
 		data.LockRetentionPeriodYears = types.Int64Null()
 	}
 
+	// An unmanaged lifecycle stays out of state, so configurations
+	// that never set lifecycle_rules see no diff.
+	if imported || !data.LifecycleRules.IsNull() {
+		rules, unsupported, err := bucket.LifecycleRules()
+		if err != nil {
+			diags.AddError("API Response Error", fmt.Sprintf("Unable to read the lifecycle of RGW bucket '%s': %s", bucket.Bucket, err))
+			return diags
+		}
+		if imported && (len(rules) == 0 || len(unsupported) > 0) {
+			return diags
+		}
+		for _, id := range unsupported {
+			diags.AddAttributeWarning(
+				path.Root("lifecycle_rules").AtMapKey(id),
+				"Unsupported Lifecycle Rule Settings",
+				fmt.Sprintf("Lifecycle rule '%s' on RGW bucket '%s' has settings this provider does not manage. They are not shown in plans.", id, bucket.Bucket),
+			)
+		}
+		models := make(map[string]RGWBucketLifecycleRuleModel, len(rules))
+		for _, rule := range rules {
+			models[rule.ID] = RGWBucketLifecycleRuleModel{
+				Enabled:                            types.BoolValue(rule.Enabled),
+				Prefix:                             types.StringValue(rule.Prefix),
+				ExpirationDays:                     types.Int64PointerValue(rule.ExpirationDays),
+				AbortIncompleteMultipartUploadDays: types.Int64PointerValue(rule.AbortIncompleteMultipartUploadDays),
+			}
+		}
+		lifecycleRules, d := types.MapValueFrom(ctx, rgwBucketLifecycleRuleType, models)
+		diags.Append(d...)
+		data.LifecycleRules = lifecycleRules
+	}
+
 	return diags
+}
+
+func lifecycleRulesFromModel(ctx context.Context, lifecycleRules types.Map) ([]restapi.RGWLifecycleRule, diag.Diagnostics) {
+	if lifecycleRules.IsNull() || lifecycleRules.IsUnknown() {
+		return nil, nil
+	}
+
+	var models map[string]RGWBucketLifecycleRuleModel
+	diags := lifecycleRules.ElementsAs(ctx, &models, false)
+
+	rules := make([]restapi.RGWLifecycleRule, 0, len(models))
+	for id, model := range models {
+		rules = append(rules, restapi.RGWLifecycleRule{
+			ID:                                 id,
+			Enabled:                            model.Enabled.ValueBool(),
+			Prefix:                             model.Prefix.ValueString(),
+			ExpirationDays:                     model.ExpirationDays.ValueInt64Pointer(),
+			AbortIncompleteMultipartUploadDays: model.AbortIncompleteMultipartUploadDays.ValueInt64Pointer(),
+		})
+	}
+	return rules, diags
 }
 
 func int64FromPointer(value *int64) int64 {

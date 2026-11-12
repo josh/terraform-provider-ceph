@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -102,6 +103,130 @@ func writeXMLElement(builder *strings.Builder, name string, value any) {
 	builder.WriteString("<" + name + ">")
 	writeXMLValue(builder, value)
 	builder.WriteString("</" + name + ">")
+}
+
+type RGWLifecycleRule struct {
+	ID                                 string
+	Enabled                            bool
+	Prefix                             string
+	ExpirationDays                     *int64
+	AbortIncompleteMultipartUploadDays *int64
+}
+
+func LifecycleRulesToXML(rules []RGWLifecycleRule) string {
+	if len(rules) == 0 {
+		return ""
+	}
+	rules = append([]RGWLifecycleRule(nil), rules...)
+	sort.Slice(rules, func(i, j int) bool { return rules[i].ID < rules[j].ID })
+
+	var builder strings.Builder
+	builder.WriteString("<LifecycleConfiguration>")
+	for _, rule := range rules {
+		status := "Disabled"
+		if rule.Enabled {
+			status = "Enabled"
+		}
+		builder.WriteString("<Rule><ID>")
+		_ = xml.EscapeText(&builder, []byte(rule.ID))
+		builder.WriteString("</ID><Status>" + status + "</Status><Filter><Prefix>")
+		_ = xml.EscapeText(&builder, []byte(rule.Prefix))
+		builder.WriteString("</Prefix></Filter>")
+		if rule.ExpirationDays != nil {
+			fmt.Fprintf(&builder, "<Expiration><Days>%d</Days></Expiration>", *rule.ExpirationDays)
+		}
+		if rule.AbortIncompleteMultipartUploadDays != nil {
+			fmt.Fprintf(&builder, "<AbortIncompleteMultipartUpload><DaysAfterInitiation>%d</DaysAfterInitiation></AbortIncompleteMultipartUpload>", *rule.AbortIncompleteMultipartUploadDays)
+		}
+		builder.WriteString("</Rule>")
+	}
+	builder.WriteString("</LifecycleConfiguration>")
+	return builder.String()
+}
+
+// LifecycleRules decodes the reported lifecycle, which is the S3 XML
+// parsed into JSON: every scalar is a string, empty elements are null,
+// and squid reports a lone rule as an object instead of a list. The
+// second result lists the IDs of rules carrying settings that
+// RGWLifecycleRule cannot express.
+func (b *RGWBucket) LifecycleRules() ([]RGWLifecycleRule, []string, error) {
+	var doc struct {
+		LifecycleConfiguration struct {
+			Rule any
+		}
+	}
+	if len(b.Lifecycle) > 0 {
+		if err := json.Unmarshal(b.Lifecycle, &doc); err != nil {
+			return nil, nil, fmt.Errorf("unable to decode lifecycle: %w", err)
+		}
+	}
+
+	days := func(value any, name string) (*int64, bool) {
+		fields, ok := value.(map[string]any)
+		if !ok || len(fields) != 1 {
+			return nil, false
+		}
+		text, ok := fields[name].(string)
+		if !ok {
+			return nil, false
+		}
+		n, err := strconv.ParseInt(text, 10, 64)
+		if err != nil {
+			return nil, false
+		}
+		return &n, true
+	}
+
+	entries, isList := doc.LifecycleConfiguration.Rule.([]any)
+	if !isList && doc.LifecycleConfiguration.Rule != nil {
+		entries = []any{doc.LifecycleConfiguration.Rule}
+	}
+
+	var rules []RGWLifecycleRule
+	var unsupported []string
+	for _, entry := range entries {
+		fields, ok := entry.(map[string]any)
+		if !ok {
+			return nil, nil, fmt.Errorf("unexpected lifecycle rule: %v", entry)
+		}
+		rule := RGWLifecycleRule{}
+		supported := true
+		for name, value := range fields {
+			ok := true
+			switch name {
+			case "ID":
+				rule.ID, ok = value.(string)
+			case "Status":
+				rule.Enabled = value == "Enabled"
+			case "Prefix":
+				if value != nil {
+					rule.Prefix, ok = value.(string)
+				}
+			case "Filter":
+				if filter, isMap := value.(map[string]any); isMap {
+					prefix, hasPrefix := filter["Prefix"]
+					ok = len(filter) == 1 && hasPrefix
+					if text, isText := prefix.(string); isText {
+						rule.Prefix = text
+					}
+				} else {
+					ok = value == nil
+				}
+			case "Expiration":
+				rule.ExpirationDays, ok = days(value, "Days")
+			case "AbortIncompleteMultipartUpload":
+				rule.AbortIncompleteMultipartUploadDays, ok = days(value, "DaysAfterInitiation")
+			default:
+				ok = false
+			}
+			supported = supported && ok
+		}
+		if !supported {
+			unsupported = append(unsupported, rule.ID)
+		}
+		rules = append(rules, rule)
+	}
+	return rules, unsupported, nil
 }
 
 func (c *Client) RGWGetBucket(ctx context.Context, bucketName string) (*RGWBucket, error) {

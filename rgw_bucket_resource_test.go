@@ -917,3 +917,211 @@ func TestAccCephRGWBucketResource_LifecycleCarryThrough(t *testing.T) {
 		},
 	})
 }
+
+func checkCephRGWBucketNoLifecycle(t *testing.T, bucketName string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		lc, err := cephTestClusterCLI.RgwLcGet(t.Context(), bucketName)
+		if err == nil && strings.Contains(lc, `"id"`) {
+			return fmt.Errorf("bucket %q lifecycle: expected none, got %s", bucketName, lc)
+		}
+		return nil
+	}
+}
+
+func testAccRGWBucketLifecycleConfig(testUID, testBucket, attributes string) string {
+	return testAccProviderConfigBlock + fmt.Sprintf(`
+		resource "ceph_rgw_user" "test" {
+		  user_id      = %q
+		  display_name = "Lifecycle Test User"
+		}
+
+		resource "ceph_rgw_s3_key" "test" {
+		  user_id = ceph_rgw_user.test.user_id
+		}
+
+		resource "ceph_rgw_bucket" "test" {
+		  bucket     = %q
+		  owner      = ceph_rgw_user.test.user_id
+		  depends_on = [ceph_rgw_s3_key.test]
+		  %s
+		}
+	`, testUID, testBucket, attributes)
+}
+
+func TestAccCephRGWBucketResource_Lifecycle(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-bucket-lc-owner")
+	testBucket := acctest.RandomWithPrefix("test-bucket-lc")
+
+	config := func(attributes string) string {
+		return testAccRGWBucketLifecycleConfig(testUID, testBucket, attributes)
+	}
+
+	expire7 := `lifecycle_rules = {
+		expire = {
+		  expiration_days                        = 7
+		  abort_incomplete_multipart_upload_days = 1
+		}
+	}`
+	expire14 := `lifecycle_rules = {
+		expire = {
+		  expiration_days                        = 14
+		  abort_incomplete_multipart_upload_days = 1
+		}
+		tmp = {
+		  prefix          = "tmp/"
+		  enabled         = false
+		  expiration_days = 1
+		}
+	}`
+	emptyPlan := resource.ConfigPlanChecks{
+		PreApply: []plancheck.PlanCheck{
+			plancheck.ExpectEmptyPlan(),
+		},
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWBucketDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(expire7),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWBucketLifecycle(t, testBucket, `"id":"expire"`, `"status":"Enabled"`, `"expiration":{"days":"7"`, `"mp_expiration":{"days":"1"`, `"filter":{"prefix":""`),
+					resource.TestCheckResourceAttr("ceph_rgw_bucket.test", "lifecycle_rules.expire.enabled", "true"),
+					resource.TestCheckResourceAttr("ceph_rgw_bucket.test", "lifecycle_rules.expire.prefix", ""),
+				),
+			},
+			{
+				ConfigVariables:  testAccProviderConfig(),
+				Config:           config(expire7),
+				ConfigPlanChecks: emptyPlan,
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(expire14),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction("ceph_rgw_bucket.test", plancheck.ResourceActionUpdate),
+					},
+				},
+				Check: checkCephRGWBucketLifecycle(t, testBucket, `"expiration":{"days":"14"`, `"id":"tmp"`, `"status":"Disabled"`, `"filter":{"prefix":"tmp/"`),
+			},
+			{
+				ConfigVariables:  testAccProviderConfig(),
+				Config:           config(expire14),
+				ConfigPlanChecks: emptyPlan,
+			},
+			{
+				ConfigVariables:                      testAccProviderConfig(),
+				Config:                               config(expire14),
+				ResourceName:                         "ceph_rgw_bucket.test",
+				ImportState:                          true,
+				ImportStateVerify:                    true,
+				ImportStateVerifyIdentifierAttribute: "bucket",
+				ImportStateId:                        testBucket,
+			},
+			{
+				// Updating other attributes must leave the rules alone.
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(expire14 + "\n" + `tags = { env = "test" }` + "\n" + `versioning_state = "Enabled"`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWBucketLifecycle(t, testBucket, `"expiration":{"days":"14"`, `"filter":{"prefix":"tmp/"`),
+					checkCephRGWBucketTags(t, testBucket, map[string]string{"env": "test"}),
+				),
+			},
+			{
+				ConfigVariables:  testAccProviderConfig(),
+				Config:           config(expire14 + "\n" + `tags = { env = "test" }` + "\n" + `versioning_state = "Enabled"`),
+				ConfigPlanChecks: emptyPlan,
+			},
+			{
+				// Dropping the attribute stops managing the lifecycle
+				// without deleting it.
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`tags = { env = "prod" }`),
+				Check: resource.ComposeAggregateTestCheckFunc(
+					checkCephRGWBucketLifecycle(t, testBucket, `"expiration":{"days":"14"`, `"filter":{"prefix":"tmp/"`),
+					resource.TestCheckNoResourceAttr("ceph_rgw_bucket.test", "lifecycle_rules.%"),
+				),
+			},
+			{
+				ConfigVariables:  testAccProviderConfig(),
+				Config:           config(`tags = { env = "prod" }`),
+				ConfigPlanChecks: emptyPlan,
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`lifecycle_rules = {}`),
+				Check:           checkCephRGWBucketNoLifecycle(t, testBucket),
+			},
+			{
+				ConfigVariables:  testAccProviderConfig(),
+				Config:           config(`lifecycle_rules = {}`),
+				ConfigPlanChecks: emptyPlan,
+			},
+		},
+	})
+}
+
+func TestAccCephRGWBucketResource_LifecycleRuleWithoutAction(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config: testAccRGWBucketLifecycleConfig("test-bucket-lc-owner", "test-bucket-lc", `lifecycle_rules = {
+					noop = { prefix = "tmp/" }
+				}`),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`(?s)At least one attribute out of.*expiration_days`),
+			},
+		},
+	})
+}
+
+func TestAccCephRGWBucketResource_LifecycleUnsupportedSettings(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-bucket-lc-owner")
+	testBucket := acctest.RandomWithPrefix("test-bucket-lc")
+
+	config := func(days int) string {
+		return testAccRGWBucketLifecycleConfig(testUID, testBucket, fmt.Sprintf(`lifecycle_rules = {
+			expire = { expiration_days = %d }
+		}`, days))
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWBucketDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(7),
+			},
+			{
+				// A tag filter added outside of Terraform cannot be
+				// expressed, so rewriting the rule must be refused.
+				PreConfig: func() {
+					testAccRGWBucketSetLifecycle(t, testBucket, `<LifecycleConfiguration><Rule><ID>expire</ID><Status>Enabled</Status><Filter><Tag><Key>tier</Key><Value>cold</Value></Tag></Filter><Expiration><Days>7</Days></Expiration></Rule></LifecycleConfiguration>`)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(14),
+				ExpectError:     regexp.MustCompile(`Unsupported Lifecycle Rule Settings`),
+			},
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(7),
+				Check:           checkCephRGWBucketLifecycle(t, testBucket, `"tagset":{"tier":"cold"}`, `"expiration":{"days":"7"`),
+			},
+		},
+	})
+}
