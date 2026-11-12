@@ -61,6 +61,49 @@ func TagsMapToXML(tags map[string]string) string {
 	return builder.String()
 }
 
+// The dashboard reports a lifecycle as its XML parsed into JSON, and its
+// own JSON-to-XML conversion drops rule filters, so a lifecycle read from
+// the API is rendered back to XML before being sent again.
+func LifecycleJSONToXML(lifecycle json.RawMessage) (string, error) {
+	var doc any
+	if err := json.Unmarshal(lifecycle, &doc); err != nil {
+		return "", fmt.Errorf("unable to decode lifecycle: %w", err)
+	}
+
+	var builder strings.Builder
+	writeXMLValue(&builder, doc)
+	return builder.String(), nil
+}
+
+func writeXMLValue(builder *strings.Builder, value any) {
+	switch value := value.(type) {
+	case nil:
+	case map[string]any:
+		names := make([]string, 0, len(value))
+		for name := range value {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			writeXMLElement(builder, name, value[name])
+		}
+	default:
+		_ = xml.EscapeText(builder, []byte(fmt.Sprint(value)))
+	}
+}
+
+func writeXMLElement(builder *strings.Builder, name string, value any) {
+	if items, ok := value.([]any); ok {
+		for _, item := range items {
+			writeXMLElement(builder, name, item)
+		}
+		return
+	}
+	builder.WriteString("<" + name + ">")
+	writeXMLValue(builder, value)
+	builder.WriteString("</" + name + ">")
+}
+
 func (c *Client) RGWGetBucket(ctx context.Context, bucketName string) (*RGWBucket, error) {
 	url := c.endpoint.JoinPath("/api/rgw/bucket", bucketName).String()
 
@@ -280,7 +323,7 @@ func (c *Client) RGWCreateBucket(ctx context.Context, req RGWBucketCreateRequest
 // The set endpoint deletes the bucket's lifecycle and encryption
 // configuration when they are omitted from a request, so updates must
 // carry them through, and it dereferences uid unconditionally, so uid
-// must always be sent.
+// must always be sent. Lifecycle is an XML document.
 
 type RGWBucketUpdateRequest struct {
 	BucketID        string  `json:"bucket_id"`

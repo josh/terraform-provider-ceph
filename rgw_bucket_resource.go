@@ -369,7 +369,15 @@ func (r *RGWBucketResource) Update(ctx context.Context, req resource.UpdateReque
 		updateReq.EncryptionState = &encryption
 	}
 	if lifecycle := string(current.Lifecycle); lifecycle != "" && lifecycle != "null" && lifecycle != "{}" {
-		updateReq.Lifecycle = &lifecycle
+		lifecycleXML, err := restapi.LifecycleJSONToXML(current.Lifecycle)
+		if err != nil {
+			resp.Diagnostics.AddError(
+				"API Response Error",
+				fmt.Sprintf("Unable to carry through the lifecycle of RGW bucket '%s': %s", bucketName, err),
+			)
+			return
+		}
+		updateReq.Lifecycle = &lifecycleXML
 	}
 	// The server only applies lock settings on lock-enabled buckets.
 	if current.LockEnabled {

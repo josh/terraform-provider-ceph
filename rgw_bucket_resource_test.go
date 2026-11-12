@@ -2,8 +2,11 @@ package main
 
 import (
 	"fmt"
+	"net/url"
 	"regexp"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-testing/compare"
 	"github.com/hashicorp/terraform-plugin-testing/helper/acctest"
@@ -13,6 +16,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/statecheck"
 	"github.com/hashicorp/terraform-plugin-testing/terraform"
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
+	"github.com/josh/terraform-provider-ceph/internal/restapi"
 )
 
 func TestAccCephRGWBucketResource(t *testing.T) {
@@ -824,4 +828,92 @@ func checkCephRGWBucketTags(t *testing.T, bucketName string, want map[string]str
 		}
 		return nil
 	}
+}
+
+func testAccRGWBucketSetLifecycle(t *testing.T, bucketName, lifecycleXML string) {
+	t.Helper()
+	ctx := t.Context()
+
+	client := &restapi.Client{}
+	endpoint, err := url.Parse(testDashboardURL)
+	if err != nil {
+		t.Fatalf("parse dashboard URL: %v", err)
+	}
+	if err := client.Configure(ctx, []*url.URL{endpoint}, "admin", "password", "", "", "", time.Hour); err != nil {
+		t.Fatalf("configure client: %v", err)
+	}
+	bucket, err := client.RGWGetBucket(ctx, bucketName)
+	if err != nil {
+		t.Fatalf("read bucket: %v", err)
+	}
+	err = client.RGWUpdateBucket(ctx, bucketName, restapi.RGWBucketUpdateRequest{
+		BucketID:  bucket.ID,
+		UID:       bucket.Owner,
+		Lifecycle: &lifecycleXML,
+	})
+	if err != nil {
+		t.Fatalf("set lifecycle out of band: %v", err)
+	}
+}
+
+func checkCephRGWBucketLifecycle(t *testing.T, bucketName string, want ...string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		lc, err := cephTestClusterCLI.RgwLcGet(t.Context(), bucketName)
+		if err != nil {
+			return err
+		}
+		for _, w := range want {
+			if !strings.Contains(lc, w) {
+				return fmt.Errorf("bucket %q lifecycle: expected %q in %s", bucketName, w, lc)
+			}
+		}
+		return nil
+	}
+}
+
+func TestAccCephRGWBucketResource_LifecycleCarryThrough(t *testing.T) {
+	detachLogs := cephDaemonLogs.AttachTestFunction(t)
+	defer detachLogs()
+
+	testUID := acctest.RandomWithPrefix("test-bucket-lc-owner")
+	testBucket := acctest.RandomWithPrefix("test-bucket-lc")
+
+	config := func(tags string) string {
+		return testAccProviderConfigBlock + fmt.Sprintf(`
+			resource "ceph_rgw_user" "test" {
+			  user_id      = %q
+			  display_name = "Lifecycle Test User"
+			}
+
+			resource "ceph_rgw_s3_key" "test" {
+			  user_id = ceph_rgw_user.test.user_id
+			}
+
+			resource "ceph_rgw_bucket" "test" {
+			  bucket     = %q
+			  owner      = ceph_rgw_user.test.user_id
+			  tags       = %s
+			  depends_on = [ceph_rgw_s3_key.test]
+			}
+		`, testUID, testBucket, tags)
+	}
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		CheckDestroy:             testAccCheckCephRGWBucketDestroy(t),
+		Steps: []resource.TestStep{
+			{
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`{ env = "test" }`),
+			},
+			{
+				PreConfig: func() {
+					testAccRGWBucketSetLifecycle(t, testBucket, `<LifecycleConfiguration><Rule><ID>logs</ID><Status>Enabled</Status><Filter><Prefix>logs/</Prefix></Filter><Expiration><Days>7</Days></Expiration></Rule></LifecycleConfiguration>`)
+				},
+				ConfigVariables: testAccProviderConfig(),
+				Config:          config(`{ env = "prod" }`),
+				Check:           checkCephRGWBucketLifecycle(t, testBucket, `"filter":{"prefix":"logs/"`, `"expiration":{"days":"7"`),
+			},
+		},
+	})
 }

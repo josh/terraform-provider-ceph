@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install --yes \
     ceph \
     ceph-mgr-dashboard \
     python3-setuptools \
+    python3-xmltodict \
     radosgw \
     unzip \
     wget
