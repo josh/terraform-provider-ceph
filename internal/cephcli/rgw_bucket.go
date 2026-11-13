@@ -42,3 +42,12 @@ func (c *CLI) RgwBucketRemove(ctx context.Context, bucket string, purgeObjects b
 
 	return nil
 }
+
+func (c *CLI) RgwLcGet(ctx context.Context, bucket string) (string, error) {
+	cmd := exec.CommandContext(ctx, "radosgw-admin", "--conf", c.confPath, "--format=json", "lc", "get", "--bucket="+bucket)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("failed to get rgw lifecycle for %s: %w", bucket, err)
+	}
+	return string(output), nil
+}

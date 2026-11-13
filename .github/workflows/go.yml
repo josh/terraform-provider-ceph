@@ -30,6 +30,7 @@ jobs:
             ceph \
             ceph-mgr-dashboard \
             python3-setuptools \
+            python3-xmltodict \
             radosgw
 
       - name: Print Ceph version
