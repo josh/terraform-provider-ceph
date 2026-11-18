@@ -89,6 +89,14 @@ func (c *CLI) ProgressJSON(ctx context.Context) (*ProgressJSON, error) {
 	return &progress, nil
 }
 
+func (c *CLI) ProgressClear(ctx context.Context) error {
+	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "progress", "clear")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to clear progress: %w: %s", err, output)
+	}
+	return nil
+}
+
 func (c *CLI) PGStat(ctx context.Context) (*PGStat, error) {
 	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "pg", "stat", "--format", "json")
 	output, err := cmd.Output()

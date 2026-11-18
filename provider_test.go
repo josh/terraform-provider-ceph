@@ -751,6 +751,9 @@ func testAccPreCheckWaitForTasks(t *testing.T) {
 		case <-ticker.C:
 			progress, err := cephTestClusterCLI.ProgressJSON(ctx)
 			if err != nil {
+				if ctx.Err() != nil {
+					continue
+				}
 				t.Fatalf("Failed to query task progress: %v", err)
 			}
 			currentCount := len(progress.Events)
@@ -768,6 +771,9 @@ func testAccPreCheckWaitForTasks(t *testing.T) {
 				for _, event := range progress.Events {
 					t.Logf("  - %s: %.0f%%", event.Message, event.Progress*100)
 				}
+			}
+			if clearStaleProgress(t) {
+				return
 			}
 			t.Fatalf("Preflight check failed: timeout waiting for tasks to complete: %v", ctx.Err())
 		}
@@ -822,6 +828,9 @@ func testAccPostCheckWaitForTasks(t *testing.T) {
 		case <-ticker.C:
 			progress, err := cephTestClusterCLI.ProgressJSON(ctx)
 			if err != nil {
+				if ctx.Err() != nil {
+					continue
+				}
 				t.Fatalf("Failed to query task progress: %v", err)
 			}
 			currentCount := len(progress.Events)
@@ -840,9 +849,29 @@ func testAccPostCheckWaitForTasks(t *testing.T) {
 					t.Logf("  - %s: %.0f%%", event.Message, event.Progress*100)
 				}
 			}
+			if clearStaleProgress(t) {
+				return
+			}
 			t.Fatalf("Post-check failed: timeout waiting for tasks to complete: %v", ctx.Err())
 		}
 	}
+}
+
+// The mgr progress module can leave a "Global Recovery Event" stuck at 0%
+// after a pool is deleted mid-recovery; it never completes on its own.
+func clearStaleProgress(t *testing.T) bool {
+	t.Helper()
+
+	info, err := cephTestClusterCLI.PGStateInfo(t.Context())
+	if err != nil || info.Total == 0 || info.ActiveClean != info.Total {
+		return false
+	}
+	if err := cephTestClusterCLI.ProgressClear(t.Context()); err != nil {
+		t.Logf("Failed to clear stale progress events: %v", err)
+		return false
+	}
+	t.Logf("Cleared stale progress events: all %d PGs are active+clean", info.Total)
+	return true
 }
 
 func testCleanup(t *testing.T, fn func(context.Context)) {
