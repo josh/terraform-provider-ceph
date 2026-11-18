@@ -11,20 +11,6 @@ This project is written in Go and uses Go modules for dependency management. The
 go mod download
 ```
 
-## Development Environment
-
-This project provides a devcontainer configuration in `.devcontainer/` for consistent development environments.
-
-The devcontainer includes Go, Terraform, Ceph with dashboard and radosgw, and golangci-lint.
-
-To use the devcontainer:
-
-- **devcontainer CLI**: Run `devcontainer up --workspace-folder .`
-- **VS Code**: Install the Dev Containers extension and reopen in container
-- **Manual**: Build the image with `docker build -f .devcontainer/Dockerfile`
-
-For CI or local testing without a devcontainer, use `scripts/run-container-tests.sh`.
-
 ## Formatting
 
 Format code with:
@@ -51,12 +37,10 @@ golangci-lint run ./...
 
 Default to acceptance tests using `terraform-plugin-testing` and the embedded Ceph harness. Reach for unit tests only for tight, algorithmic helpers (for example the keyring parser) where they provide clear value.
 
-Run the suite through `scripts/run-container-tests.sh` when possible; it builds the dev image and executes `go test` inside the container with `TF_ACC=1`. The script mounts the repository at `/workspace` in the container so you can collect artifacts like coverage reports.
-
-To capture coverage, for example:
+The harness starts a throwaway cluster, so `ceph-mon`, `ceph-osd`, `ceph-mgr` with the dashboard module, `radosgw`, and `terraform` must be on `PATH`. CI runs the suite on the Ceph runner images:
 
 ```sh
-scripts/run-container-tests.sh -cover -coverprofile=coverage.out ./...
+TF_ACC=1 go test -cover -timeout 90m
 ```
 
 For detailed debugging of API interactions, enable TRACE-level logging:
