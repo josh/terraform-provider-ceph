@@ -35,7 +35,6 @@ var (
 	testAdminKey         string
 	testSharedCephFSName string
 	cephTestClusterCLI   *cephcli.CLI
-	testTimeout          = flag.Duration("timeout", 0, "test timeout")
 	cephDaemonLogs       *LogDemux
 	testNumOsds          = 5
 )
@@ -57,11 +56,11 @@ func TestMain(m *testing.M) {
 	var code int
 
 	if os.Getenv("TF_ACC") != "" {
-		timeout := 1 * time.Hour
-		if *testTimeout > 0 {
-			timeout = *testTimeout
+		// go test passes -timeout as -test.timeout; zero means no limit.
+		ctx, cancel := context.WithCancel(context.Background())
+		if timeout := flag.Lookup("test.timeout").Value.(flag.Getter).Get().(time.Duration); timeout > 0 {
+			ctx, cancel = context.WithTimeout(ctx, timeout)
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
 		tmpDir, err := os.MkdirTemp("", "ceph-test-*")
