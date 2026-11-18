@@ -473,7 +473,17 @@ func startCephOsd(wg *sync.WaitGroup, ctx context.Context, confPath string, out 
 	for i := range testNumOsds {
 		osdID := fmt.Sprintf("%d", i)
 
-		cmd := exec.CommandContext(ctx, "ceph-osd", "--conf", confPath, "--id", osdID, "--mkfs")
+		// Register the id up front: umbrella's ceph-osd fails to boot when it
+		// has to create itself (use-after-move in mon_cmd_maybe_osd_create).
+		cmd := exec.CommandContext(ctx, "ceph", "--conf", confPath, "osd", "create")
+		cmd.Stdout = out
+		cmd.Stderr = out
+
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("failed to create OSD %s: %w", osdID, err)
+		}
+
+		cmd = exec.CommandContext(ctx, "ceph-osd", "--conf", confPath, "--id", osdID, "--mkfs")
 		cmd.Stdout = out
 		cmd.Stderr = out
 
