@@ -862,15 +862,12 @@ func testAccPostCheckWaitForTasks(t *testing.T) {
 func clearStaleProgress(t *testing.T) bool {
 	t.Helper()
 
-	info, err := cephTestClusterCLI.PGStateInfo(t.Context())
-	if err != nil || info.Total == 0 || info.ActiveClean != info.Total {
-		return false
-	}
+	testAccPreCheckWaitForPGsActiveClean(t)
 	if err := cephTestClusterCLI.ProgressClear(t.Context()); err != nil {
 		t.Logf("Failed to clear stale progress events: %v", err)
 		return false
 	}
-	t.Logf("Cleared stale progress events: all %d PGs are active+clean", info.Total)
+	t.Log("Cleared stale progress events: all PGs are active+clean")
 	return true
 }
 
