@@ -126,10 +126,20 @@ func (c *CLI) PoolSetQuota(ctx context.Context, poolName, field string, value in
 }
 
 func (c *CLI) PoolGetQuota(ctx context.Context, poolName, field string) (int64, error) {
-	cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "pool", "get-quota", poolName, "--format", "json")
-	output, err := cmd.Output()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get pool %s quota: %w", poolName, err)
+	// get-quota returns ENOENT until the mgr has reported stats for a new pool.
+	deadline := time.Now().Add(15 * time.Second)
+	var output []byte
+	for {
+		var err error
+		cmd := exec.CommandContext(ctx, "ceph", "--conf", c.confPath, "osd", "pool", "get-quota", poolName, "--format", "json")
+		output, err = cmd.Output()
+		if err == nil {
+			break
+		}
+		if ctx.Err() != nil || time.Now().After(deadline) {
+			return 0, fmt.Errorf("failed to get pool %s quota: %w", poolName, err)
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
 
 	var quotaInfo PoolQuotaInfo
